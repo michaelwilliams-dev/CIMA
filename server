@@ -1,0 +1,4099 @@
+
+/**
+ * AIVS Company Examiner Backend - server.js
+ * ISO Timestamp: 2026-05-13T15:30:00Z
+ *
+ * Change Log:
+ * - v0.1.0: first backend for  Company Examiner
+ * - v0.1.0: added /meta
+ * - v0.1.0: added /check-access using ACCESS_CODE environment variable
+ * - v0.1.0: added /extract-profile for uploaded PDF accounts/supporting documents
+ * - v0.1.0: added Companies House lookup helpers
+ * - v0.1.0: added /public-checks
+ * - v0.1.0: added /generate-report
+ * - v0.1.1: added /latest-accounts route to fetch latest official Companies House accounts PDF
+ * - v0.1.2: report and public-checks now read Companies House iXBRL/XHTML accounts where available
+ * - v0.1.2: /latest-accounts PDF route deliberately remains unchanged for browser viewing
+ * - v0.1.3: cleaned corrupted console log symbols; no route or business logic changes
+ * - v0.1.4: removed OpenAI dependency from /public-checks; full AI synopsis remains in /generate-report
+ * - v0.1.5: /generate-report now continues with Companies House evidence if OpenAI report generation fails
+ * - v0.1.6: fallback report now focuses on latest accounts synopsis using extracted iXBRL text
+ * - v0.1.7: /generate-report now sends latest Companies House accounts text directly to OpenAI and returns only the accounts analysis report
+ * - v0.1.8: backed out OpenAI report generation and paused /generate-report to restore stable Companies House backend
+ * - v0.1.9: added /send-report-email route using Mailjet exporter and PDF attachment
+ * - v0.1.10: added Granite agent startup status only; no report-generation logic changed
+ * - v0.1.11: upgraded Companies House / public checks Word report styling only; FCA report route unchanged
+ *
+ * Notes:
+ * - Public web/adverse media search is not yet connected.
+ * - This version handles uploaded supporting PDFs + Companies House public data.
+ * - Latest accounts PDF download remains official Companies House document retrieval only.
+ * - /public-checks does not call OpenAI.
+ * - Companies House profile, officer, PSC, filing history, latest accounts PDF and latest accounts iXBRL/XHTML parsing remain active.
+ * - All outputs require human review before reliance.
+ */
+
+const BUILD_ISO = "2026-05-13T15:30:00Z";
+console.log("BUILD:", BUILD_ISO);
+
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import multer from "multer";
+import pdfParse from "pdf-parse";
+import { buildChargesReport } from "./charges_agent.js";
+import OpenAI from "openai";
+import PDFDocument from "pdfkit";
+import { buildFcaFullReportByCompanyNumber } from "./fca_register_full_report.js";
+import {
+  buildFcaRegisterEmailText,
+  buildFcaRegisterWordReportBuffer,
+  buildFcaRegisterPdfReportBuffer
+} from "./fca_register_word_report_agent.js";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle
+} from "docx";
+import { Buffer } from "buffer";
+import {
+  buildDirectorDisqualificationEmailReport,
+  getDirectorDisqualificationAgentStatus
+} from "./director_disqualification_agent.js";
+import path from "path";
+import {
+  buildCompanyInsolvencyReport
+} from "./company_insolvency_report_agent.js";
+import fs from "fs/promises";
+import { buildAccountsReportFromCompanyNumber } from "./accounts_report_agent.js";
+import { buildCompanyAccountsPdfReport } from "./company_accounts_pdf_agent.js";
+import { lookupCompanyNameFromCompanyNumber } from "./company_lookup_agent.js";
+import { sendResultEmail } from "./export/mailjetExporter.js";
+
+import {
+  buildFcaCompanyNumberSummary,
+  getFcaRuntimeStatus
+} from "./fca_register_agent.js";
+
+import {
+  buildDirectorPublicIntelligenceReport
+} from "./director_public_intelligence_agent.js";
+
+import {
+  getOcrRuntimeStatus,
+  buildOcrAccountsSynopsisFromPdf
+} from "./ocr_accounts_agent.mjs";
+
+import { fileURLToPath } from "url";
+
+dotenv.config();
+
+const app = express();
+
+const PORT = Number(process.env.PORT || 10000);
+
+const ACCESS_CODE = String(process.env.ACCESS_CODE || "DEMO").trim();
+
+const COMPANIES_HOUSE_API_KEY = String(
+  process.env.COMPANIES_HOUSE_API_KEY || ""
+).trim();
+
+const OPENAI_API_KEY = String(
+  process.env.OPENAI_API_KEY || ""
+).trim();
+
+const OPENAI_MODEL = String(
+  process.env.OPENAI_MODEL || "gpt-4o-mini"
+).trim();
+
+const OPENAI_PDF_MODEL = String(
+  process.env.OPENAI_PDF_MODEL || "gpt-4o"
+).trim();
+
+const openai = OPENAI_API_KEY
+  ? new OpenAI({ apiKey: OPENAI_API_KEY })
+  : null;
+
+console.log("ENV CHECK:", {
+  openaiReady: Boolean(OPENAI_API_KEY),
+  companiesHouseReady: Boolean(COMPANIES_HOUSE_API_KEY),
+  accessCodeSet: Boolean(ACCESS_CODE),
+  openaiKeyLength: OPENAI_API_KEY.length,
+  companiesHouseKeyLength: COMPANIES_HOUSE_API_KEY.length,
+  accessCodeLength: ACCESS_CODE.length
+});
+
+let ocrRuntimeStatus = {
+  ok: false,
+  checked_at: null,
+  build_iso: BUILD_ISO,
+  pdftoppm: false,
+  tesseract: false,
+  openai: Boolean(OPENAI_API_KEY),
+  openai_model: OPENAI_MODEL,
+  openai_pdf_model: OPENAI_PDF_MODEL,
+  errors: ["OCR runtime check has not run yet."]
+};
+
+getOcrRuntimeStatus()
+  .then((status) => {
+    ocrRuntimeStatus = status;
+    console.log("OCR RUNTIME STATUS:", status);
+  })
+  .catch((err) => {
+    ocrRuntimeStatus = {
+      ok: false,
+      checked_at: new Date().toISOString(),
+      build_iso: BUILD_ISO,
+      pdftoppm: false,
+      tesseract: false,
+      openai: Boolean(OPENAI_API_KEY),
+      openai_model: OPENAI_MODEL,
+      openai_pdf_model: OPENAI_PDF_MODEL,
+      errors: [`OCR runtime check failed: ${err.message}`]
+    };
+
+    console.error("ERROR OCR runtime check failed:", err.message);
+  });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(cors());
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "public")));
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+    files: 8
+  }
+});
+
+/* -------------------------- META -------------------------- */
+
+app.get("/meta", (req, res) => {
+  res.json({
+    ok: true,
+    app: "AIVS Company Examiner",
+    build_iso: BUILD_ISO,
+    iso_timestamp: new Date().toISOString(),
+
+    openai_ready: Boolean(OPENAI_API_KEY),
+    companies_house_ready: Boolean(COMPANIES_HOUSE_API_KEY),
+    fca_ready: getFcaRuntimeStatus().ok,
+    access_ready: Boolean(ACCESS_CODE),
+    ocr: ocrRuntimeStatus,
+
+    routes: [
+
+      "/meta",
+      "/director-disqualification-status",
+      "/send-director-disqualification-report-email",
+      "/test-accounts-report-agent",
+      "/check-access",
+      "/extract-profile",
+      "/public-checks",
+      "/director-public-intelligence",
+      "/fca-register-summary",
+      "/fca-register-full-report",
+      "/send-fca-register-report-email",
+      "/send-director-appointments-report-email",
+      "/latest-accounts",
+      "/generate-report",
+      "/send-report-email",
+      "/send-ocr-accounts-report-email",
+      "/send-access-code-email"
+    ]
+  });
+});
+app.get("/director-disqualification-status", (req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      route: "/director-disqualification-status",
+      ...getDirectorDisqualificationAgentStatus()
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      route: "/director-disqualification-status",
+      error: error.message
+    });
+  }
+});
+
+app.post("/send-director-disqualification-report-email", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const companyName = String(req.body.companyName || "").trim();
+
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    const activeDirectors = Array.isArray(req.body.activeDirectors)
+      ? req.body.activeDirectors
+      : Array.isArray(req.body.directors)
+        ? req.body.directors
+        : null;
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+
+    const report = await buildDirectorDisqualificationEmailReport({
+      companyName,
+      companyNumber,
+      activeDirectors
+    });
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean);
+
+      const safeCompany =
+        report.company_name ||
+        companyName ||
+        companyNumber ||
+        "Company";
+
+    const safeFilenameCompany = String(safeCompany)
+      .replace(/[^\w.\-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "Company";
+
+    const pdfFilename = `AIVS_Director_Disqualification_Report_${safeFilenameCompany}.pdf`;
+    const docxFilename = `AIVS_Director_Disqualification_Report_${safeFilenameCompany}.docx`;
+
+    const pdfBuffer = await buildReportPdfBuffer({
+      companyName: safeCompany,
+      companyNumber,
+      riskFocus: "Director disqualification",
+      urgencyLevel: "N/A",
+      reportText: report.text
+    });
+
+    const docxBuffer = await buildReportDocxBuffer({
+      companyName: safeCompany,
+      companyNumber,
+      riskFocus: "Director disqualification",
+      urgencyLevel: "N/A",
+      reportText: report.text
+    });
+
+    const bodyText = [
+      "AIVS Director Disqualification Report attached.",
+      "",
+      `Company: ${safeCompany}`,
+      `Company number: ${companyNumber}`,
+      "",
+      "Summary:",
+      `- Directors checked: ${report.summary.total_directors_checked}`,
+      `- Red: ${report.summary.red}`,
+      `- Amber: ${report.summary.amber}`,
+      `- Green: ${report.summary.green}`,
+      "",
+      "Attached files:",
+      `- ${pdfFilename}`,
+      `- ${docxFilename}`,
+      "",
+      "This report uses the Companies House disqualified officers search and requires human review before reliance.",
+      "",
+      "AIVS Software Limited copyright 2026. All rights reserved."
+    ].join("\n");
+
+    const sent = [];
+
+    for (const recipient of recipients) {
+      const mailjetResult = await sendResultEmail({
+        toEmail: recipient,
+        subject: report.subject,
+        bodyText,
+        pdfBuffer,
+        pdfFilename,
+        docxBuffer,
+        docxFilename
+      });
+
+      sent.push({
+        to: recipient,
+        status: mailjetResult?.Status || "sent"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      agent_build_iso: report.build_iso,
+      sent_at: new Date().toISOString(),
+      route: "/send-director-disqualification-report-email",
+      companyNumber,
+      companyName: safeCompany,
+      total_directors_checked: report.summary.total_directors_checked,
+      red: report.summary.red,
+      amber: report.summary.amber,
+      green: report.summary.green,
+      email_sent: true,
+      sent,
+      pdfFilename,
+      docxFilename,
+      attachment_bytes: {
+        pdf: pdfBuffer.length,
+        docx: docxBuffer.length
+      },
+      frontend_display: false
+    });
+  } catch (err) {
+    console.error("ERROR /send-director-disqualification-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Director disqualification report email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- COMPANY LOOKUP AGENT -------------------------- */
+
+app.get("/lookup-company-name", async (req, res) => {
+  try {
+    const companyNumber = String(req.query.companyNumber || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "companyNumber query parameter required.",
+        example: "/lookup-company-name?companyNumber=11241397",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const result = await lookupCompanyNameFromCompanyNumber({
+      companyNumber
+    });
+
+    if (!result.ok) {
+      return res.status(404).json({
+        ok: false,
+        error: result.error || "Company lookup failed.",
+        company_number: result.company_number || companyNumber,
+        audit: result.audit || null,
+        build_iso: BUILD_ISO
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      company_number: result.company_number,
+      company_name: result.company_name,
+      company_status: result.company_status,
+      company_type: result.company_type,
+      incorporation_date: result.incorporation_date,
+      sic_codes: result.sic_codes,
+      registered_office_address: result.registered_office_address,
+      audit: result.audit
+    });
+  } catch (err) {
+    console.error("ERROR /lookup-company-name failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Company lookup route failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- ACCOUNTS REPORT AGENT TEST -------------------------- */
+
+app.get("/test-accounts-report-agent", async (req, res) => {
+  try {
+    const companyNumber = String(req.query.companyNumber || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "companyNumber query parameter required.",
+        example: "/test-accounts-report-agent?companyNumber=11241397",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const result = await buildAccountsReportFromCompanyNumber({
+      companyNumber
+    });
+
+    if (!result.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: result.error || "Accounts report agent failed.",
+        detail: result.detail || null,
+        evidence: result.evidence || null,
+        audit: result.audit || null,
+        build_iso: BUILD_ISO
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      generated_at: new Date().toISOString(),
+      reportText: result.reportText,
+      evidence: result.evidence,
+      audit: result.audit
+    });
+  } catch (err) {
+    console.error("ERROR /test-accounts-report-agent failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Accounts report agent test route failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- ACCESS CODE -------------------------- */
+
+app.post("/check-access", (req, res) => {
+  const submittedCode = String(req.body.accessCode || "").trim();
+
+  console.log("ACCESS CHECK:", {
+    submittedLength: submittedCode.length,
+    requiredLength: ACCESS_CODE.length,
+    accessCodeSet: Boolean(process.env.ACCESS_CODE)
+  });
+
+  if (!submittedCode) {
+    return res.status(400).json({
+      ok: false,
+      error: "Access code required.",
+      build_iso: BUILD_ISO
+    });
+  }
+
+  if (submittedCode !== ACCESS_CODE) {
+    return res.status(403).json({
+      ok: false,
+      error: "Invalid access code.",
+      build_iso: BUILD_ISO
+    });
+  }
+
+  return res.json({
+    ok: true,
+    message: "Access confirmed.",
+    build_iso: BUILD_ISO
+  });
+});
+
+/* -------------------------- EMAIL ACCESS CODE -------------------------- */
+
+app.post("/send-access-code-email", async (req, res) => {
+  try {
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean);
+
+    const subject = "AIVS Company Examiner access code";
+
+    const bodyText = [
+      "Your AIVS Company Examiner access code is:",
+      "",
+      ACCESS_CODE,
+      "",
+      "Enter this code on the first page to continue.",
+      "",
+      "This message was generated automatically.",
+      "",
+      "(c) AIVS Software Limited copyright 2026. All rights reserved."
+    ].join("\n");
+
+    const sent = [];
+
+    for (const recipient of recipients) {
+      const mailjetResult = await sendResultEmail({
+        toEmail: recipient,
+        subject,
+        bodyText
+      });
+
+      sent.push({
+        to: recipient,
+        status: mailjetResult?.Status || "sent"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      sent_at: new Date().toISOString(),
+      sent
+    });
+  } catch (err) {
+    console.error("ERROR /send-access-code-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Access code email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- UTILITIES -------------------------- */
+
+function cleanText(value = "") {
+  return String(value || "")
+    .replace(/\u0000/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function safeJsonParse(raw) {
+  try {
+    const cleaned = String(raw || "")
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
+
+    return JSON.parse(cleaned);
+  } catch (err) {
+    return null;
+  }
+}
+
+async function extractPdfTextFromBuffer(buffer, filename = "document") {
+  try {
+    const parsed = await pdfParse(buffer);
+    return cleanText(parsed.text || "");
+  } catch (err) {
+    console.warn("WARNING PDF extraction failed:", filename, err.message);
+    return "";
+  }
+}
+
+function normaliseCompanyNumber(value = "") {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase();
+}
+
+function companiesHouseHeaders(accept = "application/json") {
+  if (!COMPANIES_HOUSE_API_KEY) return {};
+
+  const token = Buffer.from(`${COMPANIES_HOUSE_API_KEY}:`).toString("base64");
+
+  return {
+    Authorization: `Basic ${token}`,
+    Accept: accept
+  };
+}
+
+function absoluteCompaniesHouseUrl(value = "") {
+  const v = String(value || "").trim();
+
+  if (!v) return "";
+
+  if (/^https?:\/\//i.test(v)) {
+    return v;
+  }
+
+  if (v.startsWith("/document/")) {
+    return `https://document-api.company-information.service.gov.uk${v}`;
+  }
+
+  return `https://api.company-information.service.gov.uk${v.startsWith("/") ? v : `/${v}`}`;
+}
+
+async function companiesHouseGet(pathname) {
+  if (!COMPANIES_HOUSE_API_KEY) {
+    return {
+      ok: false,
+      status: 0,
+      error: "COMPANIES_HOUSE_API_KEY not set.",
+      data: null
+    };
+  }
+
+  const url = `https://api.company-information.service.gov.uk${pathname}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: companiesHouseHeaders("application/json")
+    });
+
+    const text = await res.text();
+    let data = null;
+
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data?.error || data?.message || `Companies House request failed: ${res.status}`,
+        data
+      };
+    }
+
+    return {
+      ok: true,
+      status: res.status,
+      error: null,
+      data
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error: err.message,
+      data: null
+    };
+  }
+}
+
+async function companiesHouseGetUrl(urlOrPath) {
+  if (!COMPANIES_HOUSE_API_KEY) {
+    return {
+      ok: false,
+      status: 0,
+      error: "COMPANIES_HOUSE_API_KEY not set.",
+      data: null
+    };
+  }
+
+  const url = absoluteCompaniesHouseUrl(urlOrPath);
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: companiesHouseHeaders("application/json")
+    });
+
+    const text = await res.text();
+    let data = null;
+
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data?.error || data?.message || `Companies House document request failed: ${res.status}`,
+        data
+      };
+    }
+
+    return {
+      ok: true,
+      status: res.status,
+      error: null,
+      data
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error: err.message,
+      data: null
+    };
+  }
+}
+
+async function companiesHouseFetchBinary(urlOrPath, accept = "application/pdf") {
+  if (!COMPANIES_HOUSE_API_KEY) {
+    return {
+      ok: false,
+      status: 0,
+      error: "COMPANIES_HOUSE_API_KEY not set.",
+      buffer: null,
+      contentType: null
+    };
+  }
+
+  const url = absoluteCompaniesHouseUrl(urlOrPath);
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: companiesHouseHeaders(accept)
+    });
+
+    const contentType = res.headers.get("content-type") || accept;
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return {
+        ok: false,
+        status: res.status,
+        error: text || `Companies House binary request failed: ${res.status}`,
+        buffer: null,
+        contentType
+      };
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+
+    return {
+      ok: true,
+      status: res.status,
+      error: null,
+      buffer: Buffer.from(arrayBuffer),
+      contentType
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error: err.message,
+      buffer: null,
+      contentType: null
+    };
+  }
+}
+
+function fallbackProfileFromInputs({
+  companyNameInput,
+  companyNumberInput,
+  primaryText,
+  accountsFilename,
+  supportFilenames
+}) {
+  return {
+    company_name: companyNameInput || "To be extracted",
+    company_number: companyNumberInput || "To be extracted",
+    accounts_year_end: "To be extracted",
+    directors: [],
+    auditor: "To be extracted",
+    key_financial_wording: "To be extracted",
+    red_flag_wording: "To be extracted",
+    document_summary: primaryText
+      ? cleanText(primaryText.slice(0, 1200))
+      : "No extracted PDF text available.",
+    source_documents: {
+      primary_accounts: accountsFilename || null,
+      supporting_documents: supportFilenames || []
+    },
+    extraction_status: openai
+      ? "Fallback extraction used."
+      : "OpenAI key not configured; fallback profile returned."
+  };
+}
+
+/* -------------------------- PROFILE EXTRACTION -------------------------- */
+
+async function extractProfileWithOpenAI({
+  companyNameInput,
+  companyNumberInput,
+  primaryText,
+  supportText,
+  accountsFilename,
+  supportFilenames,
+  examinationWhy,
+  examinationNeed,
+  riskFocus,
+  urgencyLevel,
+  examinationPurpose
+}) {
+  if (!openai) {
+    return fallbackProfileFromInputs({
+      companyNameInput,
+      companyNumberInput,
+      primaryText,
+      accountsFilename,
+      supportFilenames
+    });
+  }
+
+  const prompt = `
+You are an evidence-first corporate due diligence extraction assistant for AIVS Software Limited.
+
+Task:
+Extract a structured company profile from uploaded accounts and supporting material.
+
+Rules:
+- Do not invent facts.
+- If not found, use "Not found in uploaded material".
+- Return strict JSON only.
+- Do not include markdown.
+- This is for corporate due diligence and human review.
+
+User known inputs:
+Company name input: ${companyNameInput || "not supplied"}
+Company number input: ${companyNumberInput || "not supplied"}
+Why: ${examinationWhy || "not supplied"}
+Need: ${examinationNeed || "not supplied"}
+Risk focus: ${riskFocus || "not supplied"}
+Urgency: ${urgencyLevel || "not supplied"}
+Purpose: ${examinationPurpose || "not supplied"}
+
+Return JSON with this shape:
+{
+  "company_name": "",
+  "company_number": "",
+  "accounts_year_end": "",
+  "directors": [],
+  "auditor": "",
+  "key_financial_wording": "",
+  "red_flag_wording": "",
+  "going_concern_indicators": [],
+  "related_party_indicators": [],
+  "debt_or_liability_indicators": [],
+  "insurance_or_cyber_indicators": [],
+  "document_summary": "",
+  "source_documents": {
+    "primary_accounts": "",
+    "supporting_documents": []
+  },
+  "extraction_status": ""
+}
+
+Primary accounts text:
+${cleanText(primaryText).slice(0, 60000)}
+
+Supporting material text:
+${cleanText(supportText).slice(0, 30000)}
+`.trim();
+
+  const completion = await openai.chat.completions.create({
+    model: OPENAI_MODEL,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.1
+  });
+
+  const raw = completion.choices?.[0]?.message?.content || "";
+  const parsed = safeJsonParse(raw);
+
+  if (!parsed) {
+    return fallbackProfileFromInputs({
+      companyNameInput,
+      companyNumberInput,
+      primaryText,
+      accountsFilename,
+      supportFilenames
+    });
+  }
+
+  parsed.company_name = parsed.company_name || companyNameInput || "To be extracted";
+  parsed.company_number = parsed.company_number || companyNumberInput || "To be extracted";
+  parsed.source_documents = parsed.source_documents || {};
+  parsed.source_documents.primary_accounts = accountsFilename || parsed.source_documents.primary_accounts || null;
+  parsed.source_documents.supporting_documents = supportFilenames || [];
+
+  return parsed;
+}
+
+app.post(
+  "/extract-profile",
+  upload.fields([
+    { name: "accounts", maxCount: 1 },
+    { name: "supporting", maxCount: 7 }
+  ]),
+  async (req, res) => {
+    try {
+      const accountsFile = req.files?.accounts?.[0] || null;
+      const supportingFiles = req.files?.supporting || [];
+
+      const companyNameInput = String(req.body.companyName || "").trim();
+      const companyNumberInput = normaliseCompanyNumber(req.body.companyNumber || "");
+
+      const examinationWhy = String(req.body.examinationWhy || "").trim();
+      const examinationNeed = String(req.body.examinationNeed || "").trim();
+      const riskFocus = String(req.body.riskFocus || "").trim();
+      const urgencyLevel = String(req.body.urgencyLevel || "").trim();
+      const examinationPurpose = String(req.body.examinationPurpose || "").trim();
+
+      let primaryText = "";
+      let supportText = "";
+
+      if (accountsFile?.buffer && accountsFile.mimetype === "application/pdf") {
+        primaryText = await extractPdfTextFromBuffer(accountsFile.buffer, accountsFile.originalname);
+      }
+
+      for (const file of supportingFiles) {
+        if (file?.buffer && file.mimetype === "application/pdf") {
+          const text = await extractPdfTextFromBuffer(file.buffer, file.originalname);
+          supportText += `\n\n--- SUPPORTING DOCUMENT: ${file.originalname} ---\n\n${text}`;
+        }
+      }
+
+      const profile = await extractProfileWithOpenAI({
+        companyNameInput,
+        companyNumberInput,
+        primaryText,
+        supportText,
+        accountsFilename: accountsFile?.originalname || null,
+        supportFilenames: supportingFiles.map(f => f.originalname),
+        examinationWhy,
+        examinationNeed,
+        riskFocus,
+        urgencyLevel,
+        examinationPurpose
+      });
+
+      return res.json({
+        ok: true,
+        build_iso: BUILD_ISO,
+        extracted_at: new Date().toISOString(),
+        profile,
+        audit: {
+          primary_document: accountsFile?.originalname || null,
+          supporting_documents: supportingFiles.map(f => f.originalname),
+          primary_text_chars: primaryText.length,
+          supporting_text_chars: supportText.length,
+          openai_used: Boolean(openai)
+        }
+      });
+    } catch (err) {
+      console.error("ERROR /extract-profile failed:", err);
+      return res.status(500).json({
+        ok: false,
+        error: "Profile extraction failed.",
+        detail: err.message,
+        build_iso: BUILD_ISO
+      });
+    }
+  }
+);
+
+/* -------------------------- COMPANIES HOUSE CHECKS -------------------------- */
+
+const MAX_OFFICERS_FOR_NETWORK_TRACE = 100;
+
+const OFFICER_NETWORK_TRACE_SKIPPED_MESSAGE =
+  "Officer appointment trace-back was not expanded because this company has a large officer/director structure. Review Companies House officer records directly if director network history is material.";
+
+async function getOfficerAppointmentsFromOfficerList(officersData) {
+  const officerItems = officersData?.items || [];
+
+  if (!officerItems.length) {
+    return [];
+  }
+
+  const appointmentResults = await Promise.all(
+    officerItems.map(async (officer) => {
+      const appointmentsPath = officer.links?.officer?.appointments || "";
+
+      if (!appointmentsPath) {
+        return {
+          officer_name: officer.name || "Unknown officer",
+          person_number: officer.person_number || null,
+          date_of_birth: officer.date_of_birth || null,
+          nationality: officer.nationality || null,
+          country_of_residence: officer.country_of_residence || null,
+          company_role: officer.officer_role || null,
+          company_appointed_on: officer.appointed_on || null,
+          appointments_path: null,
+          ok: false,
+          status: 0,
+          error: "No officer appointments link returned by Companies House.",
+          total_results: 0,
+          active_appointments: [],
+          resigned_appointments: [],
+          all_appointments: []
+        };
+      }
+
+      const separator = appointmentsPath.includes("?") ? "&" : "?";
+
+      const result = await companiesHouseGet(
+        `${appointmentsPath}${separator}items_per_page=50`
+      );
+
+      const appointmentItems = result.data?.items || [];
+
+      const cleanedAppointments = appointmentItems.map((appointment) => ({
+        company_name: appointment.appointed_to?.company_name || "",
+        company_number: appointment.appointed_to?.company_number || "",
+        company_status: appointment.appointed_to?.company_status || "",
+        company_type: appointment.appointed_to?.company_type || "",
+        role: appointment.officer_role || "",
+        appointed_on: appointment.appointed_on || "",
+        resigned_on: appointment.resigned_on || null,
+        occupation: appointment.occupation || null,
+        address: appointment.address || null,
+        links: appointment.links || null
+      }));
+
+      return {
+        officer_name: officer.name || "Unknown officer",
+        person_number: officer.person_number || null,
+        date_of_birth: officer.date_of_birth || null,
+        nationality: officer.nationality || null,
+        country_of_residence: officer.country_of_residence || null,
+        company_role: officer.officer_role || null,
+        company_appointed_on: officer.appointed_on || null,
+        appointments_path: appointmentsPath,
+        ok: result.ok,
+        status: result.status,
+        error: result.error,
+        total_results: result.data?.total_results ?? cleanedAppointments.length,
+        active_appointments: cleanedAppointments.filter((item) => !item.resigned_on),
+        resigned_appointments: cleanedAppointments.filter((item) => item.resigned_on),
+        all_appointments: cleanedAppointments
+      };
+    })
+  );
+
+  return appointmentResults;
+}
+
+async function getAllCompanyOfficers(companyNumber) {
+  const number = normaliseCompanyNumber(companyNumber);
+  const itemsPerPage = 100;
+
+  let startIndex = 0;
+  let allItems = [];
+  let firstResult = null;
+  let latestData = null;
+
+  while (true) {
+    const result = await companiesHouseGet(
+      `/company/${encodeURIComponent(number)}/officers?items_per_page=${itemsPerPage}&start_index=${startIndex}`
+    );
+
+    if (!firstResult) {
+      firstResult = result;
+    }
+
+    if (!result.ok) {
+      return result;
+    }
+
+    const data = result.data || {};
+    const items = Array.isArray(data.items) ? data.items : [];
+
+    allItems.push(...items);
+    latestData = data;
+
+    const totalResults = Number(data.total_results ?? allItems.length);
+
+    startIndex += itemsPerPage;
+
+    if (items.length === 0 || allItems.length >= totalResults) {
+      break;
+    }
+  }
+
+  return {
+    ok: firstResult?.ok ?? true,
+    status: firstResult?.status ?? 200,
+    error: firstResult?.error ?? null,
+    data: {
+      ...(latestData || {}),
+      items: allItems,
+      total_results: Number(latestData?.total_results ?? allItems.length),
+      items_per_page: itemsPerPage,
+      start_index: 0,
+      aivs_all_pages_loaded: true,
+      aivs_items_loaded: allItems.length
+    }
+  };
+}
+
+async function getCompaniesHouseBundle(companyNumber) {
+  const number = normaliseCompanyNumber(companyNumber);
+
+  if (!number) {
+    return {
+      ok: false,
+      error: "Company number required.",
+      company_number: "",
+      profile: null,
+      officers: null,
+      officer_appointments: [],
+      psc: null,
+      filing_history: null,
+      source_status: {
+        profile: { ok: false, status: 0, error: "Company number required." },
+        officers: { ok: false, status: 0, error: "Company number required." },
+        officer_appointments: { ok: false, status: 0, error: "Company number required." },
+        psc: { ok: false, status: 0, error: "Company number required." },
+        filing_history: { ok: false, status: 0, error: "Company number required." }
+      }
+    };
+  }
+
+  const [profile, psc, filingHistory] = await Promise.all([
+    companiesHouseGet(`/company/${encodeURIComponent(number)}`),
+    companiesHouseGet(`/company/${encodeURIComponent(number)}/persons-with-significant-control?items_per_page=35`),
+    companiesHouseGet(`/company/${encodeURIComponent(number)}/filing-history?items_per_page=35`)
+  ]);
+
+  const officers = await getAllCompanyOfficers(number);
+
+  const allOfficerItems = Array.isArray(officers.data?.items)
+    ? officers.data.items
+    : [];
+
+  const activeDirectorItemsForTrace = allOfficerItems
+    .filter((officer) => !officer.resigned_on)
+    .filter((officer) =>
+      String(officer.officer_role || "")
+        .toLowerCase()
+        .includes("director")
+    );
+
+  const officerTraceSkipped =
+    officers.ok &&
+    activeDirectorItemsForTrace.length > MAX_OFFICERS_FOR_NETWORK_TRACE;
+
+  const activeDirectorOfficerData = {
+    ...(officers.data || {}),
+    items: activeDirectorItemsForTrace,
+    total_results: activeDirectorItemsForTrace.length,
+    aivs_trace_scope: "active_directors_only"
+  };
+
+  const officerAppointments =
+    officers.ok && !officerTraceSkipped
+      ? await getOfficerAppointmentsFromOfficerList(activeDirectorOfficerData)
+      : [];
+
+  const officerAppointmentSourceStatus = officerTraceSkipped
+    ? {
+        ok: true,
+        status: 200,
+        error: OFFICER_NETWORK_TRACE_SKIPPED_MESSAGE,
+        skipped: true,
+        all_officer_count: allOfficerItems.length,
+        active_director_count: activeDirectorItemsForTrace.length,
+        threshold: MAX_OFFICERS_FOR_NETWORK_TRACE
+      }
+    : {
+        ok: officers.ok,
+        status: officers.status,
+        error: officers.ok
+          ? null
+          : officers.error || "Officer appointment records could not be returned.",
+        skipped: false,
+        all_officer_count: allOfficerItems.length,
+        active_director_count: activeDirectorItemsForTrace.length,
+        threshold: MAX_OFFICERS_FOR_NETWORK_TRACE
+      };
+
+  return {
+    ok: profile.ok,
+    error: profile.error,
+    company_number: number,
+    profile: profile.data,
+    officers: officers.data,
+    officer_appointments: officerAppointments,
+    officer_network_trace: {
+      skipped: officerTraceSkipped,
+      officer_count: allOfficerItems.length,
+      active_director_count: activeDirectorItemsForTrace.length,
+      threshold: MAX_OFFICERS_FOR_NETWORK_TRACE,
+      message: officerTraceSkipped ? OFFICER_NETWORK_TRACE_SKIPPED_MESSAGE : null
+    },
+    psc: psc.data,
+    filing_history: filingHistory.data,
+    source_status: {
+      profile: {
+        ok: profile.ok,
+        status: profile.status,
+        error: profile.error
+      },
+      officers: {
+        ok: officers.ok,
+        status: officers.status,
+        error: officers.error,
+        all_pages_loaded: officers.data?.aivs_all_pages_loaded === true,
+        items_loaded: officers.data?.aivs_items_loaded ?? allOfficerItems.length
+      },
+      officer_appointments: officerAppointmentSourceStatus,
+      psc: {
+        ok: psc.ok,
+        status: psc.status,
+        error: psc.error
+      },
+      filing_history: {
+        ok: filingHistory.ok,
+        status: filingHistory.status,
+        error: filingHistory.error
+      }
+    }
+  };
+}
+
+app.post("/public-checks", async (req, res) => {
+  try {
+    const companyNumber =
+      req.body.companyNumber ||
+      req.body?.profile?.company_number ||
+      "";
+
+    const bundle = await getCompaniesHouseBundle(companyNumber);
+
+    const latestAccountsResult = await getLatestAccountsIxbrlForCompany(companyNumber);
+
+    const latestAccountsSynopsis = latestAccountsResult.ok
+      ? [
+          "## Latest Companies House Accounts Status",
+          "",
+          `Source file: ${latestAccountsResult.filename || "Latest Companies House accounts document"}`,
+          `Extracted text characters: ${latestAccountsResult.text?.length || 0}`,
+          "",
+          "Status: latest Companies House accounts were retrieved and parsed.",
+          "Report generation is temporarily paused while the accounts report agent is separated from server.js.",
+          "",
+          "Human review: open and review the original filed accounts before reliance."
+        ].join("\n")
+      : [
+          "## Latest Companies House Accounts Status",
+          "",
+          "Status: latest Companies House accounts were not available for automatic review.",
+          `Reason: ${latestAccountsResult.error || "Unknown error"}.`,
+          "",
+          "Human review: obtain and review the latest filed accounts manually before reliance."
+        ].join("\n");
+
+    console.log("OFFICER APPOINTMENTS DEBUG:", {
+      companyNumber,
+      hasOfficerAppointmentsField: Object.prototype.hasOwnProperty.call(bundle, "officer_appointments"),
+      officerAppointmentsIsArray: Array.isArray(bundle.officer_appointments),
+      officerAppointmentsCount: Array.isArray(bundle.officer_appointments)
+        ? bundle.officer_appointments.length
+        : "not present"
+    });
+
+    console.log("LATEST IXBRL ACCOUNTS PUBLIC CHECKS DEBUG:", {
+      companyNumber,
+      latestAccountsOk: latestAccountsResult.ok,
+      latestAccountsFilename: latestAccountsResult.filename || null,
+      latestAccountsTextChars: latestAccountsResult.text?.length || 0,
+      latestAccountsError: latestAccountsResult.error || null
+    });
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      checked_at: new Date().toISOString(),
+      companies_house: bundle,
+      latest_accounts: {
+        ok: latestAccountsResult.ok,
+        filename: latestAccountsResult.filename || null,
+        text_chars: latestAccountsResult.text?.length || 0,
+        error: latestAccountsResult.error || null,
+        synopsis: latestAccountsSynopsis
+      },
+      debug: {
+        has_officer_appointments_field: Object.prototype.hasOwnProperty.call(bundle, "officer_appointments"),
+        officer_appointments_is_array: Array.isArray(bundle.officer_appointments),
+        officer_appointments_count: Array.isArray(bundle.officer_appointments)
+          ? bundle.officer_appointments.length
+          : "not present",
+        latest_accounts_ok: latestAccountsResult.ok,
+        latest_accounts_filename: latestAccountsResult.filename || null,
+        latest_accounts_text_chars: latestAccountsResult.text?.length || 0,
+        latest_accounts_error: latestAccountsResult.error || null
+      },
+      web_search: {
+        connected: false,
+        status: "Not yet connected. Add public web/adverse media search as the next module."
+      }
+    });
+  } catch (err) {
+    console.error("ERROR /public-checks failed:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Public checks failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- CHARGES REPORT TEST ROUTE -------------------------- */
+
+app.post("/charges-report", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const companyName = String(req.body.companyName || "").trim();
+
+    const outstandingChargeLimit =
+      req.body.outstandingChargeLimit ||
+      req.body.outstanding_charge_limit ||
+      10;
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const result = await buildChargesReport({
+      companyNumber,
+      companyName,
+      outstandingChargeLimit
+    });
+
+    return res.json({
+      ...result,
+      route_build_iso: BUILD_ISO
+    });
+  } catch (err) {
+    console.error("ERROR /charges-report failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Charges report failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- CHARGES REPORT EMAIL ROUTE -------------------------- */
+
+app.post("/send-charges-report-email", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const companyName = String(req.body.companyName || "").trim();
+
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    const outstandingChargeLimit =
+      req.body.outstandingChargeLimit ||
+      req.body.outstanding_charge_limit ||
+      10;
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const result = await buildChargesReport({
+      companyNumber,
+      companyName,
+      outstandingChargeLimit,
+      toEmail,
+      secondEmail
+    });
+
+    return res.json({
+      ok: result.ok,
+      build_iso: BUILD_ISO,
+      agent_build_iso: result.build_iso,
+      sent_at: new Date().toISOString(),
+      company_number: result.company_number,
+      company_name: result.company_name,
+      charge_display_limit: result.charge_display_limit,
+      counts: result.counts,
+      risk: result.risk,
+      email_requested: result.email_requested,
+      email_sent: result.email_sent,
+      sent: result.sent,
+      email_error: result.email_error || null
+    });
+  } catch (err) {
+    console.error("ERROR /send-charges-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Charges report email route failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- DIRECTOR PUBLIC INTELLIGENCE -------------------------- */
+/*
+ * ISO Timestamp: 2026-05-12T19:05:00Z
+ * Change:
+ * - Adds /director-public-intelligence route.
+ * - Keeps GDELT logic inside standalone director_public_intelligence_agent.js.
+ * - Server only gathers Companies House company/director data and calls the standalone agent.
+ * - Frontend button wiring comes later.
+ */
+
+function normaliseCompanyNameForPublicIntelligence(value = "") {
+  return String(value || "")
+    .replace(/\bPUBLIC LIMITED COMPANY\b/gi, "")
+    .replace(/\bPLC\b/gi, "")
+    .replace(/\bLIMITED\b/gi, "")
+    .replace(/\bLTD\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractDirectorInputsFromCompaniesHouseBundle(bundle = {}) {
+  const officers = bundle.officers || {};
+  const officerItems = Array.isArray(officers.items) ? officers.items : [];
+
+  return officerItems
+    .filter((officer) => !officer.resigned_on)
+    .filter((officer) =>
+      String(officer.officer_role || "")
+        .toLowerCase()
+        .includes("director")
+    )
+    .map((officer) => ({
+      name: officer.name || "",
+      officer_role: officer.officer_role || "",
+      appointed_on: officer.appointed_on || "",
+      date_of_birth: officer.date_of_birth || null,
+      dob_month_year: officer.date_of_birth
+        ? `${officer.date_of_birth.month || ""}/${officer.date_of_birth.year || ""}`
+        : "",
+      nationality: officer.nationality || "",
+      country_of_residence: officer.country_of_residence || "",
+      occupation: officer.occupation || "",
+      person_number: officer.person_number || "",
+      links: officer.links || null
+    }))
+    .filter((director) => director.name);
+}
+
+app.post("/director-public-intelligence", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(
+      req.body.companyNumber || ""
+    );
+
+    const submittedCompanyName = String(
+      req.body.companyName || ""
+    ).trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const bundle = await getCompaniesHouseBundle(companyNumber);
+
+    if (!bundle.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: bundle.error || "Companies House bundle failed.",
+        build_iso: BUILD_ISO,
+        companies_house: bundle
+      });
+    }
+
+    const registeredCompanyName =
+      bundle.profile?.company_name ||
+      submittedCompanyName ||
+      "";
+
+    const publicSearchName =
+      String(req.body.publicSearchName || "").trim() ||
+      normaliseCompanyNameForPublicIntelligence(registeredCompanyName) ||
+      registeredCompanyName;
+
+    const directorInputs =
+      Array.isArray(req.body.directors) && req.body.directors.length
+        ? req.body.directors
+        : extractDirectorInputsFromCompaniesHouseBundle(bundle);
+
+    const timespan = String(req.body.timespan || "3months").trim();
+
+    const maxCompanyQueries = Math.max(
+      1,
+      Math.min(2, Number(req.body.maxCompanyQueries || 1))
+    );
+
+    const maxDirectors = Math.max(
+      0,
+      Math.min(3, Number(req.body.maxDirectors ?? 0))
+    );
+
+    const maxQueriesPerDirector = Math.max(
+      1,
+      Math.min(2, Number(req.body.maxQueriesPerDirector || 1))
+    );
+
+    const maxRecordsPerQuery = Math.max(
+      1,
+      Math.min(10, Number(req.body.maxRecordsPerQuery || 5))
+    );
+
+    const gdeltDelayMs = Math.max(
+      90000,
+      Number(req.body.gdeltDelayMs || 90000)
+    );
+
+    const result = await buildDirectorPublicIntelligenceReport({
+        companyNumber,
+        companyName: registeredCompanyName,
+        publicSearchName,
+        directors: directorInputs,
+        timespan,
+        maxCompanyQueries,
+        maxDirectors,
+        maxQueriesPerDirector,
+        maxRecordsPerQuery,
+        toEmail: String(req.body.toEmail || "").trim(),
+        secondEmail: String(req.body.secondEmail || "").trim()
+        });
+        
+    return res.json({
+      ...result,
+      route_build_iso: BUILD_ISO,
+      registered_company_name: registeredCompanyName,
+      public_search_name: publicSearchName,
+      director_inputs_available: directorInputs,
+      director_inputs_available_count: directorInputs.length,
+      director_searches_requested: maxDirectors,
+      companies_house_source_status: bundle.source_status || null
+    });
+  } catch (err) {
+    console.error("ERROR /director-public-intelligence failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Director public intelligence search failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- FCA REGISTER SUMMARY -------------------------- */
+
+app.post("/fca-register-summary", async (req, res) => {
+  try {
+    const companyNumber = String(req.body?.companyNumber || "").trim();
+    const companyName = String(req.body?.companyName || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        matched: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const result = await buildFcaCompanyNumberSummary({
+      companyNumber,
+      companyName
+    });
+
+    return res.json({
+      ...result,
+      build_iso: result.build_iso || BUILD_ISO
+    });
+  } catch (err) {
+    console.error("FCA_REGISTER_SUMMARY_ROUTE_FAILED:", {
+      error: err.message,
+      at: new Date().toISOString(),
+      build_iso: BUILD_ISO
+    });
+
+    return res.status(500).json({
+      ok: false,
+      matched: false,
+      error: "FCA Register summary failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- FCA REGISTER FULL REPORT -------------------------- */
+/*
+ * ISO Timestamp: 2026-05-08T13:45:00Z
+ * Change:
+ * - /fca-register-full-report now calls the standalone FCA full report agent.
+ * - Returns full FCA report_text, report_html and structured_fca_json.
+ * - Does not use the short FCA summary agent.
+ */
+
+app.post("/fca-register-full-report", async (req, res) => {
+  try {
+    const companyNumber = String(req.body?.companyNumber || "").trim();
+    const companyName = String(req.body?.companyName || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        matched: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const result = await buildFcaFullReportByCompanyNumber({
+      companyNumber,
+      companyName
+    });
+
+    return res.json({
+      ...result,
+      report_mode: "full",
+      server_build_iso: BUILD_ISO
+    });
+  } catch (err) {
+    console.error("FCA_REGISTER_FULL_REPORT_ROUTE_FAILED:", {
+      error: err.message,
+      at: new Date().toISOString(),
+      build_iso: BUILD_ISO
+    });
+
+    return res.status(500).json({
+      ok: false,
+      matched: false,
+      error: "FCA Register full report failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+/* -------------------------- FCA REGISTER REPORT EMAIL -------------------------- */
+/*
+ * ISO Timestamp: 2026-05-10T06:45:00Z
+ * Change:
+ * - Adds new FCA-only email route.
+ * - Sends both FCA Register Word and PDF attachments.
+ * - Does not alter /send-report-email.
+ * - Does not alter Companies House reports.
+ */
+
+app.post("/send-fca-register-report-email", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const companyName = String(req.body.companyName || "").trim();
+
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const report = await buildFcaFullReportByCompanyNumber({
+      companyNumber,
+      companyName
+    });
+
+    if (!report.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: report.error || "FCA Register full report generation failed.",
+        detail: report.detail || null,
+        build_iso: BUILD_ISO,
+        fca_report: report
+      });
+    }
+
+    const safeCompany =
+      report.firm?.organisation_name ||
+      companyName ||
+      companyNumber ||
+      "Company";
+
+    const safeFilenameCompany = String(safeCompany)
+      .replace(/[^\w.\-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "Company";
+
+    const docxFilename = `AIVS_FCA_Register_Report_${safeFilenameCompany}.docx`;
+    const pdfFilename = `AIVS_FCA_Register_Report_${safeFilenameCompany}.pdf`;
+
+    const docxBuffer = await buildFcaRegisterWordReportBuffer(report);
+    const pdfBuffer = await buildFcaRegisterPdfReportBuffer(report);
+
+    const bodyText = [
+      buildFcaRegisterEmailText(report).replace("Word document", "Word and PDF documents"),
+      "",
+      "Attached files:",
+      `- ${docxFilename}`,
+      `- ${pdfFilename}`,
+      "",
+      "This email and attachments require human review before reliance.",
+      "",
+      "AIVS Software Limited copyright 2026. All rights reserved."
+    ].join("\n");
+
+    const subject = `AIVS FCA Register Report - ${safeCompany}`;
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean);
+
+    const sent = [];
+
+    for (const recipient of recipients) {
+      const mailjetResult = await sendResultEmail({
+        toEmail: recipient,
+        subject,
+        bodyText,
+        pdfBuffer,
+        pdfFilename,
+        docxBuffer,
+        docxFilename
+      });
+
+      sent.push({
+        to: recipient,
+        status: mailjetResult?.Status || "sent"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      sent_at: new Date().toISOString(),
+      sent,
+      companyNumber,
+      companyName: safeCompany,
+      matched: report.matched,
+      frn: report.frn,
+      docxFilename,
+      pdfFilename,
+      attachment_bytes: {
+        docx: docxBuffer.length,
+        pdf: pdfBuffer.length
+      }
+    });
+  } catch (err) {
+    console.error("ERROR /send-fca-register-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "FCA Register report email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+
+
+async function fetchAccountsPdfForCompanyByIndex(companyNumber, accountsIndex = 0) {
+  const number = normaliseCompanyNumber(companyNumber);
+
+  const index = Number.isInteger(Number(accountsIndex))
+    ? Math.max(0, Math.min(2, Number(accountsIndex)))
+    : 0;
+
+  if (!number) {
+    return {
+      ok: false,
+      error: "Company number required.",
+      buffer: null,
+      filename: null,
+      accounts_index: index,
+      accounts_label: `Year ${index + 1}`
+    };
+  }
+
+  let filingHistory = await companiesHouseGet(
+    `/company/${encodeURIComponent(number)}/filing-history?category=accounts&items_per_page=100`
+  );
+
+  let filings = filingHistory.data?.items || [];
+
+  if (!filings.length) {
+    filingHistory = await companiesHouseGet(
+      `/company/${encodeURIComponent(number)}/filing-history?items_per_page=100`
+    );
+
+    filings = filingHistory.data?.items || [];
+  }
+
+  const accountFilings = filings
+    .filter((filing) => {
+      const category = String(filing.category || "").toLowerCase();
+      const type = String(filing.type || "").toUpperCase();
+      const description = String(filing.description || "").toLowerCase();
+
+      return (
+        filing.links?.document_metadata &&
+        (
+          category === "accounts" ||
+          type === "AA" ||
+          description.includes("accounts")
+        )
+      );
+    })
+    .sort((a, b) => {
+      const aDate = String(a.date || a.action_date || "");
+      const bDate = String(b.date || b.action_date || "");
+      return bDate.localeCompare(aDate);
+    });
+
+  if (!accountFilings.length) {
+    return {
+      ok: false,
+      error: "No accounts filings with downloadable document metadata were found.",
+      buffer: null,
+      filename: null,
+      accounts_index: index,
+      accounts_label: `Year ${index + 1}`,
+      available_accounts_filings: 0
+    };
+  }
+
+  const selectedFiling = accountFilings[index];
+
+  if (!selectedFiling) {
+    return {
+      ok: false,
+      error: `Accounts filing for Year ${index + 1} was not found. Only ${accountFilings.length} accounts filing(s) were available.`,
+      buffer: null,
+      filename: null,
+      accounts_index: index,
+      accounts_label: `Year ${index + 1}`,
+      available_accounts_filings: accountFilings.length
+    };
+  }
+
+  const metadataResult = await companiesHouseGetUrl(
+    selectedFiling.links.document_metadata
+  );
+
+  if (!metadataResult.ok) {
+    return {
+      ok: false,
+      error: `Could not retrieve Companies House document metadata: ${metadataResult.error || metadataResult.status}`,
+      buffer: null,
+      filename: null,
+      accounts_index: index,
+      accounts_label: `Year ${index + 1}`,
+      filing: selectedFiling,
+      available_accounts_filings: accountFilings.length
+    };
+  }
+
+  const metadata = metadataResult.data || {};
+  const pdfResource = metadata.resources?.["application/pdf"] || null;
+
+  let pdfContentLink =
+    pdfResource?.links?.document ||
+    pdfResource?.link ||
+    metadata.links?.document ||
+    "";
+
+  if (!pdfContentLink && metadata.links?.self) {
+    pdfContentLink = `${String(metadata.links.self).replace(/\/$/, "")}/content`;
+  }
+
+  if (!pdfContentLink) {
+    return {
+      ok: false,
+      error: `No PDF download link was returned by Companies House for Year ${index + 1} accounts.`,
+      buffer: null,
+      filename: null,
+      accounts_index: index,
+      accounts_label: `Year ${index + 1}`,
+      filing: selectedFiling,
+      available_accounts_filings: accountFilings.length
+    };
+  }
+
+  const pdfResult = await companiesHouseFetchBinary(
+    pdfContentLink,
+    "application/pdf"
+  );
+
+  if (!pdfResult.ok || !pdfResult.buffer) {
+    return {
+      ok: false,
+      error: `Could not retrieve Companies House accounts PDF: ${pdfResult.error || pdfResult.status}`,
+      buffer: null,
+      filename: null,
+      accounts_index: index,
+      accounts_label: `Year ${index + 1}`,
+      filing: selectedFiling,
+      available_accounts_filings: accountFilings.length
+    };
+  }
+
+  const filingDate =
+    selectedFiling.date ||
+    selectedFiling.action_date ||
+    "undated";
+
+  const filename = `Companies_House_accounts_year_${index + 1}_${number}_${filingDate}.pdf`
+    .replace(/[^\w.\-]+/g, "_");
+
+  return {
+    ok: true,
+    error: null,
+    buffer: pdfResult.buffer,
+    filename,
+    filing: selectedFiling,
+    accounts_index: index,
+    accounts_label: `Year ${index + 1}`,
+    available_accounts_filings: accountFilings.length
+  };
+}
+
+async function fetchLatestAccountsPdfForCompany(companyNumber) {
+  return fetchAccountsPdfForCompanyByIndex(companyNumber, 0);
+}
+
+/* -------------------------- ACCOUNTS DOWNLOAD -------------------------- */
+/*
+ * ISO Timestamp: 2026-05-11T16:10:00Z
+ * Change:
+ * - /latest-accounts now supports year=1, year=2 and year=3.
+ * - Existing behaviour remains unchanged when year is omitted.
+ * - year=1 returns the latest accounts.
+ * - year=2 returns the previous accounts filing.
+ * - year=3 returns the year before previous accounts filing.
+ */
+
+app.get("/latest-accounts", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.query.companyNumber || "");
+
+    const rawYear =
+      req.query.year ??
+      req.query.accountsYear ??
+      req.query.accountsIndex ??
+      1;
+
+    let accountsIndex = 0;
+
+    if (String(rawYear) === "0") {
+      accountsIndex = 0;
+    } else {
+      accountsIndex = Math.max(0, Math.min(2, Number(rawYear) - 1));
+    }
+
+    if (!companyNumber) {
+      return res.status(400).send("Company number required.");
+    }
+
+    console.log("ACCOUNTS PDF REQUESTED:", {
+      companyNumber,
+      accountsIndex,
+      accountsYear: accountsIndex + 1,
+      build_iso: BUILD_ISO
+    });
+
+    const accountsPdf = await fetchAccountsPdfForCompanyByIndex(
+      companyNumber,
+      accountsIndex
+    );
+
+        if (!accountsPdf.ok || !accountsPdf.buffer) {
+      const rawMessage =
+        accountsPdf.error ||
+        `Accounts PDF for Year ${accountsIndex + 1} could not be retrieved.`;
+
+      const lowerMessage = String(rawMessage).toLowerCase();
+
+      let userMessage = rawMessage;
+
+      if (
+        lowerMessage.includes("no accounts filings") ||
+        lowerMessage.includes("no downloadable accounts") ||
+        lowerMessage.includes("no accounts filing")
+      ) {
+        userMessage = "This company has not filed any downloadable accounts yet.";
+      }
+
+      if (
+        lowerMessage.includes("accounts filing for year") ||
+        lowerMessage.includes("only") && lowerMessage.includes("accounts filing")
+      ) {
+        userMessage = `There is no downloadable Companies House accounts PDF available for Year ${accountsIndex + 1}.`;
+      }
+
+      return res.status(404).send(`
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>AIVS Company Examiner - Accounts Not Available</title>
+          <style>
+            body {
+              margin: 0;
+              padding: 40px;
+              background: #f4f1ea;
+              color: #16222b;
+              font-family: Arial, sans-serif;
+            }
+            .card {
+              max-width: 760px;
+              background: #fffdfa;
+              border: 1px solid #ddd6c9;
+              border-left: 6px solid #d89222;
+              border-radius: 14px;
+              padding: 24px 28px;
+              box-shadow: 3px 3px 0 #8d5b0d;
+            }
+            h1 {
+              margin-top: 0;
+              color: #14232B;
+              font-size: 26px;
+            }
+            p {
+              font-size: 16px;
+              line-height: 1.55;
+            }
+            .meta {
+              margin-top: 18px;
+              font-size: 13px;
+              color: #4a5f6c;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Accounts not available</h1>
+            <p><strong>${userMessage}</strong></p>
+            <p>No Companies House accounts PDF could be opened for this company for the selected year.</p>
+            <p>This may happen where the company is newly incorporated, not yet due to file accounts, exempt, overdue, dissolved, or where Companies House does not provide a downloadable accounts document.</p>
+            <p>Please check the Companies House filing history directly before relying on this result.</p>
+            <div class="meta">
+              Company number: ${companyNumber}<br>
+              Requested accounts year button: ${accountsIndex + 1}<br>
+              Technical message: ${rawMessage}<br>
+              AIVS build: ${BUILD_ISO}
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${accountsPdf.filename}"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-AIVS-Build", BUILD_ISO);
+    res.setHeader("X-AIVS-Accounts-Year", String(accountsIndex + 1));
+    res.setHeader("X-AIVS-Accounts-Available", String(accountsPdf.available_accounts_filings || ""));
+
+    return res.send(accountsPdf.buffer);
+  } catch (err) {
+    console.error("ERROR /latest-accounts failed:", err);
+    return res.status(500).send(`Accounts PDF download failed: ${err.message}`);
+  }
+});
+
+/* -------------------------- REPORT GENERATION -------------------------- */
+
+function decodeBasicHtmlEntities(value = "") {
+  return String(value || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&pound;/gi, "\u00A3")
+    .replace(/&euro;/gi, "\u20AC")
+    .replace(/&#(\d+);/g, (_, code) => {
+      try {
+        return String.fromCharCode(Number(code));
+      } catch {
+        return "";
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+      try {
+        return String.fromCharCode(parseInt(code, 16));
+      } catch {
+        return "";
+      }
+    });
+}
+
+function ixbrlToPlainText(xhtml = "") {
+  let text = String(xhtml || "");
+
+  const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) {
+    text = bodyMatch[1];
+  }
+
+  text = text
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(div|p|tr|td|th|li|h1|h2|h3|h4|h5|h6|section|article|table|ix:nonNumeric|ix:nonFraction)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+
+  text = decodeBasicHtmlEntities(text);
+
+  return text
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function getLatestAccountsIxbrlForCompany(companyNumber) {
+  const number = normaliseCompanyNumber(companyNumber);
+
+  if (!number) {
+    return {
+      ok: false,
+      error: "Company number required.",
+      filename: null,
+      filing: null,
+      text: ""
+    };
+  }
+
+  let filingHistory = await companiesHouseGet(
+    `/company/${encodeURIComponent(number)}/filing-history?category=accounts&items_per_page=25`
+  );
+
+  let filings = filingHistory.data?.items || [];
+
+  if (!filings.length) {
+    filingHistory = await companiesHouseGet(
+      `/company/${encodeURIComponent(number)}/filing-history?items_per_page=100`
+    );
+
+    filings = filingHistory.data?.items || [];
+  }
+
+  const latestAccountsFiling = filings.find((filing) => {
+    const category = String(filing.category || "").toLowerCase();
+    const type = String(filing.type || "").toUpperCase();
+    const description = String(filing.description || "").toLowerCase();
+
+    return (
+      filing.links?.document_metadata &&
+      (
+        category === "accounts" ||
+        type === "AA" ||
+        description.includes("accounts")
+      )
+    );
+  });
+
+  if (!latestAccountsFiling) {
+    return {
+      ok: false,
+      error: "No accounts filing with document metadata was found.",
+      filename: null,
+      filing: null,
+      text: ""
+    };
+  }
+
+  const documentMetadataPath = latestAccountsFiling.links.document_metadata;
+
+  const metadataResult = await companiesHouseGetUrl(documentMetadataPath);
+
+  if (!metadataResult.ok) {
+    return {
+      ok: false,
+      error: `Could not retrieve Companies House document metadata: ${metadataResult.error || metadataResult.status}`,
+      filename: null,
+      filing: latestAccountsFiling,
+      text: ""
+    };
+  }
+
+  const metadata = metadataResult.data || {};
+  const resources = metadata.resources || {};
+  const resourceTypes = Object.keys(resources);
+
+  if (!resources["application/xhtml+xml"]) {
+    return {
+      ok: false,
+      error: `Companies House did not offer application/xhtml+xml. Available resource types: ${resourceTypes.join(", ") || "none"}.`,
+      filename: null,
+      filing: latestAccountsFiling,
+      text: ""
+    };
+  }
+
+  const contentPath = `${String(documentMetadataPath).replace(/\/$/, "")}/content`;
+
+  const ixbrlResult = await companiesHouseFetchBinary(
+    contentPath,
+    "application/xhtml+xml"
+  );
+
+  if (!ixbrlResult.ok || !ixbrlResult.buffer) {
+    return {
+      ok: false,
+      error: `Could not download Companies House iXBRL/XHTML accounts: ${ixbrlResult.error || ixbrlResult.status}`,
+      filename: null,
+      filing: latestAccountsFiling,
+      text: ""
+    };
+  }
+
+  const rawXhtml = ixbrlResult.buffer.toString("utf8");
+  const text = ixbrlToPlainText(rawXhtml);
+
+  const filingDate =
+    latestAccountsFiling.date ||
+    latestAccountsFiling.action_date ||
+    "undated";
+
+  const filename = `Companies_House_latest_accounts_ixbrl_${number}_${filingDate}.xhtml`
+    .replace(/[^\w.\-]+/g, "_");
+
+  return {
+    ok: true,
+    error: null,
+    filename,
+    filing: latestAccountsFiling,
+    text
+  };
+}
+
+function normalisePossibleJson(value, fallback = null) {
+  if (!value) return fallback;
+
+  if (typeof value === "object") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return fallback;
+  }
+}
+
+app.post(
+  "/generate-report",
+  upload.fields([
+    { name: "supporting", maxCount: 7 }
+  ]),
+  async (req, res) => {
+    try {
+      const extractedProfile = normalisePossibleJson(
+        req.body.profile || req.body.extractedProfile,
+        null
+      );
+
+      const companyNumber =
+        req.body.companyNumber ||
+        extractedProfile?.company_number ||
+        "";
+
+      if (!companyNumber) {
+        return res.status(400).json({
+          ok: false,
+          error: "Company number required.",
+          build_iso: BUILD_ISO
+        });
+      }
+
+      const result = await buildCompanyAccountsPdfReport({
+        companyNumber,
+        companyName: req.body.companyName,
+        examinationNeed: req.body.examinationNeed || req.body.examinationWhy,
+        riskFocus: req.body.riskFocus,
+        urgencyLevel: req.body.urgencyLevel
+      });
+
+      if (result.ok) {
+        return res.json({
+          ok: true,
+          build_iso: BUILD_ISO,
+          generated_at: new Date().toISOString(),
+          reportText: result.reportText,
+          evidence: result.evidence,
+          audit: {
+            ...result.audit,
+            large_company_pdf_fallback_used: false
+          }
+        });
+      }
+
+      const errorText = [
+        result.error || "",
+        result.detail || ""
+      ].join(" ").toLowerCase();
+
+      const shouldUseLargeCompanyPdfFallback =
+        errorText.includes("application/xhtml+xml") ||
+        errorText.includes("available resource types: application/pdf") ||
+        errorText.includes("did not offer application/xhtml+xml");
+
+            if (!shouldUseLargeCompanyPdfFallback) {
+         const noAccountsFiled =
+          errorText.includes("no downloadable accounts filing") ||
+          errorText.includes("no downloadable accounts") ||
+          errorText.includes("no accounts filing") ||
+          errorText.includes("no accounts filings") ||
+          errorText.includes("no accounts filed") ||
+          errorText.includes("no accounts") ||
+          errorText.includes("accounts filing with document metadata");
+        if (noAccountsFiled) {
+          const companyName = String(req.body.companyName || "").trim();
+
+          const reportText = [
+            "# AIVS Company Examiner",
+            "# Latest Filed Accounts Synopsis",
+            "",
+            `Generated: ${new Date().toISOString()}`,
+            `Company: ${companyName || "Not supplied"}`,
+            `Company number: ${companyNumber}`,
+            "",
+            "## Accounts filing status",
+            "",
+            "This company has not filed any accounts.",
+            "",
+            "## Review note",
+            "",
+            "No Companies House accounts filing was available for automatic accounts review at the time of this check.",
+            "",
+            "This may occur where the company is newly incorporated, not yet due to file accounts, overdue, exempt, dissolved, or where Companies House does not currently provide a downloadable accounts document.",
+            "",
+            "## Human-review action",
+            "",
+            "- Check the company filing history directly on Companies House.",
+            "- Confirm whether the first accounts are not yet due, overdue, exempt, or otherwise unavailable.",
+            "- Do not treat this as a financial-health assessment.",
+            "- Do not rely on this tool for an accounts synopsis where no filed accounts exist.",
+            "",
+            "AIVS Software Limited copyright 2026. All rights reserved."
+          ].join("\n");
+
+          return res.json({
+            ok: true,
+            build_iso: BUILD_ISO,
+            generated_at: new Date().toISOString(),
+            reportText,
+            evidence: {
+              company_number: companyNumber,
+              company_name: companyName || null,
+              source: "companies_house_no_accounts_filed",
+              original_agent_error: result.error || null,
+              original_agent_detail: result.detail || null
+            },
+            audit: {
+              no_accounts_filed_message_returned: true,
+              accounts_pdf_loaded: false,
+              openai_used: false,
+              build_iso: BUILD_ISO
+            }
+          });
+        }
+
+        return res.status(502).json({
+          ok: false,
+          error: result.error || "Latest filed accounts synopsis generation failed.",
+          detail: result.detail || null,
+          evidence: result.evidence || null,
+          audit: result.audit || null,
+          build_iso: BUILD_ISO
+        });
+      }
+
+      if (!openai) {
+        return res.status(502).json({
+          ok: false,
+          error: "OpenAI is not configured. Cannot use large-company PDF fallback.",
+          detail: result.detail || null,
+          evidence: result.evidence || null,
+          build_iso: BUILD_ISO
+        });
+      }
+
+      const latestPdf = await fetchLatestAccountsPdfForCompany(companyNumber);
+
+      if (!latestPdf.ok || !latestPdf.buffer) {
+        return res.status(502).json({
+          ok: false,
+          error: "Large-company PDF fallback failed. Latest Companies House accounts PDF could not be retrieved.",
+          detail: latestPdf.error || null,
+          evidence: result.evidence || null,
+          build_iso: BUILD_ISO
+        });
+      }
+
+      const companyName = String(req.body.companyName || "").trim();
+      const riskFocus = String(req.body.riskFocus || "").trim();
+      const urgencyLevel = String(req.body.urgencyLevel || "").trim();
+      const examinationNeed = String(req.body.examinationNeed || req.body.examinationWhy || "").trim();
+      const pdfBase64 = latestPdf.buffer.toString("base64");
+
+      const prompt = `
+    You are an evidence-first company accounts analyst for AIVS Software Limited.
+
+    Task:
+    Review the attached latest Companies House accounts PDF and produce a full, detailed, board-readable company accounts report.
+
+    This must be a comprehensive report, not a short synopsis.
+
+    Rules:
+    - Use only the attached Companies House accounts PDF.
+    - Do not invent facts.
+    - Do not provide legal, financial, investment, credit, sanctions, procurement or tax advice.
+    - Make clear that human review against the source Companies House filing is required.
+    - Focus on the latest filed accounts.
+    - If a figure or fact is not visible in the PDF, say so plainly.
+    - Do not include raw JSON.
+    - Do not mention internal implementation details.
+    - Use clear headings, practical language and structured tables where useful.
+    - Treat this as a full review suitable for a director, adviser, investor-screening reviewer or board pack.
+    - Include RAG judgements where appropriate, but make clear they are initial review indicators only.
+
+    Required report structure:
+
+    # AIVS Company Examiner
+    # Full Accounts Report - ${companyName || "Company"}
+
+    Generated: ${new Date().toISOString()}
+    Company: ${companyName || "Not supplied"}
+    Company number: ${companyNumber}
+    Source: ${latestPdf.filename || "Latest Companies House accounts PDF"}
+
+    ## 1. Executive view
+    Give a clear overview of the company's financial position, trading performance, audit position, going concern position and main review points.
+
+    ## 2. Company identity and filing details
+    Cover company name, company number, reporting period, registered office, principal activity, operating footprint, auditor and directors where visible.
+
+    ## 3. Business and trading performance
+    Explain trading performance and include a profit and loss summary where figures are visible.
+
+    ## 4. Balance sheet and financial position
+    Summarise assets, liabilities, net current liabilities, cash, equity, lease exposure and pension position where visible.
+
+    ## 5. Cash, liquidity and going concern
+    Explain cash position, current liabilities, net current liabilities, going concern wording and funding support where visible.
+
+    ## 6. Audit opinion and audit focus
+    Summarise the auditor, audit opinion, going concern audit conclusion and any key audit or fraud-risk areas visible.
+
+    ## 7. Strategic report and management narrative
+    Summarise management narrative, future developments, principal activity and strategic priorities.
+
+    ## 8. Principal risks and operational exposure
+    Identify visible risk themes including cyber security, data privacy, technology, geopolitics, supply chain, competition, regulatory compliance, product safety, health and safety, people risk and macroeconomic risk.
+
+    ## 9. Employees and workforce
+    Summarise employee numbers and staff costs where visible.
+
+    ## 10. Dividends and reserves
+    Cover dividends, reserves and shareholder funds where visible.
+
+    ## 11. Leases and right-of-use assets
+    Summarise lease liabilities, right-of-use assets and property/store exposure.
+
+    ## 12. Tangible assets and impairment
+    Explain tangible assets, impairment wording, assumptions and why this matters.
+
+    ## 13. Commercial income and supplier arrangements
+    Explain commercial income or supplier arrangement disclosures where visible, including why they may be judgemental.
+
+    ## 14. Pensions and post-employment benefits
+    Summarise pension deficit/surplus, movement, assumptions and funding where visible.
+
+    ## 15. Provisions
+    Summarise provisions and why they matter.
+
+    ## 16. Related-party transactions and group position
+    Summarise related-party balances, parent/group position and transactions where visible.
+
+    ## 17. Capital commitments, guarantees and contingencies
+    Identify commitments, guarantees, legal claims, equal pay claims or contingent liabilities where visible.
+
+    ## 18. Events after the reporting period
+    State whether any post-balance-sheet events are disclosed.
+
+    ## 19. Initial RAG assessment
+    Provide a table with:
+    - Area
+    - RAG
+    - Reason
+
+    Include at least:
+    - Company identity
+    - Trading performance
+    - Audit opinion
+    - Going concern
+    - Net current liabilities
+    - Lease exposure
+    - Pensions
+    - Commercial income
+    - Provisions
+    - Related parties
+    - Claims / contingencies
+    - Cyber / data / technology risk
+    - Adverse media / sanctions / credit
+
+    ## 20. Human-review checklist
+    Provide a practical checklist of points a human reviewer should verify against the source accounts.
+
+    ## 21. Conclusion
+    Give a balanced conclusion. State whether the initial view is Green, Amber, Red or mixed, and why.
+
+    Company number:
+    ${companyNumber}
+
+    Company name:
+    ${companyName || "Not supplied"}
+
+    Risk focus:
+    ${riskFocus || "Not supplied"}
+
+    Urgency:
+    ${urgencyLevel || "Not supplied"}
+
+    User question / need:
+    ${examinationNeed || "Not supplied"}
+
+    Source PDF:
+    ${latestPdf.filename || "Latest Companies House accounts PDF"}
+    `.trim();
+
+      const response = await openai.responses.create({
+        model: OPENAI_PDF_MODEL,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_file",
+                filename: latestPdf.filename || `latest_accounts_${companyNumber}.pdf`,
+                file_data: `data:application/pdf;base64,${pdfBase64}`
+              },
+              {
+                type: "input_text",
+                text: prompt
+              }
+            ]
+          }
+        ]
+      });
+
+      const reportText =
+        String(response.output_text || "").trim() ||
+        "No report text returned from OpenAI.";
+
+      return res.json({
+        ok: true,
+        build_iso: BUILD_ISO,
+        generated_at: new Date().toISOString(),
+        reportText,
+        evidence: {
+          company_number: companyNumber,
+          company_name: companyName || null,
+          source: "companies_house_latest_accounts_pdf_large_company_fallback",
+          source_pdf: latestPdf.filename || null,
+          original_agent_error: result.error || null,
+          original_agent_detail: result.detail || null
+        },
+        audit: {
+          large_company_pdf_fallback_used: true,
+          small_company_ixbrl_agent_failed: true,
+          pdf_loaded: true,
+          pdf_sent_directly_to_openai: true,
+          manual_text_extraction_used: false,
+          openai_used: true,
+          openai_model: OPENAI_PDF_MODEL,
+          build_iso: BUILD_ISO
+        }
+      });
+
+    } catch (err) {
+      console.error("ERROR /generate-report failed:", err);
+
+      return res.status(500).json({
+        ok: false,
+        error: "Report generation failed.",
+        detail: err.message,
+        build_iso: BUILD_ISO
+      });
+    }
+  }
+);
+
+app.post("/send-ocr-accounts-report-email", async (req, res) => {
+  let runOutputDir = null;
+
+  try {
+    const companyName = String(req.body.companyName || "").trim();
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const latestPdf = await fetchLatestAccountsPdfForCompany(companyNumber);
+
+    if (!latestPdf.ok || !latestPdf.buffer) {
+      return res.status(502).json({
+        ok: false,
+        error: latestPdf.error || "Latest Companies House accounts PDF could not be retrieved.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    runOutputDir = path.join(
+      "/tmp",
+      "aivs-company-examiner",
+      `ocr_${companyNumber}_${Date.now()}`
+    );
+
+    const agentResult = await buildOcrAccountsSynopsisFromPdf({
+      pdfBuffer: latestPdf.buffer,
+      sourceFilename: latestPdf.filename,
+      outputDir: runOutputDir,
+      firstPage: 1,
+      lastPage: 64,
+      dpi: 120,
+      writeOutputs: true
+    });
+
+    const reportPdfBuffer = await fs.readFile(agentResult.outputs.pdf);
+
+    const safeCompany =
+      companyName ||
+      agentResult.facts?.companyName ||
+      companyNumber ||
+      "Company";
+
+    const reportPdfFilename = `AIVS_OCR_Accounts_Synopsis_${companyNumber}.pdf`
+      .replace(/[^\w.\-]+/g, "_");
+
+    const subject = `AIVS OCR Accounts Synopsis - ${safeCompany}`;
+
+    const bodyText = [
+      "AIVS OCR Accounts Synopsis attached.",
+      "",
+      `Company: ${safeCompany}`,
+      `Company number: ${companyNumber}`,
+      `Source PDF: ${latestPdf.filename}`,
+      `OCR pages processed: ${agentResult.audit?.pagesProcessed || "Not returned"}`,
+      `OCR text characters: ${agentResult.audit?.ocrTextChars || "Not returned"}`,
+      `OpenAI synthesis available: ${agentResult.audit?.openaiSynthesisAvailable ? "Yes" : "No"}`,
+      "",
+      "This report is OCR-derived and requires human review against the original Companies House filing before reliance.",
+      "",
+      "AIVS Software Limited copyright 2026. All rights reserved."
+    ].join("\n");
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean);
+
+    const sent = [];
+
+    for (const recipient of recipients) {
+      const mailjetResult = await sendResultEmail({
+        toEmail: recipient,
+        subject,
+        bodyText,
+        pdfBuffer: reportPdfBuffer,
+        pdfFilename: reportPdfFilename
+      });
+
+      sent.push({
+        to: recipient,
+        status: mailjetResult?.Status || "sent"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      sent_at: new Date().toISOString(),
+      sent,
+      company_number: companyNumber,
+      source_pdf: latestPdf.filename,
+      report_pdf: reportPdfFilename,
+      audit: agentResult.audit
+    });
+  } catch (err) {
+    console.error("ERROR /send-ocr-accounts-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "OCR accounts report email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  } finally {
+    if (runOutputDir) {
+      await fs.rm(runOutputDir, {
+        recursive: true,
+        force: true
+      }).catch((err) => {
+        console.warn("WARNING OCR temp cleanup failed:", err.message);
+      });
+    }
+  }
+});
+
+/* -------------------------- REPORT EMAIL -------------------------- */
+
+function reportLines(reportText = "") {
+  return String(reportText || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+}
+
+function cleanMarkdownLine(line = "") {
+  return String(line || "")
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^\-\s+/, "")
+    .replace(/\*\*/g, "")
+    .trim();
+}
+
+function isMarkdownTableLine(line = "") {
+  const value = String(line || "").trim();
+  return value.startsWith("|") && value.endsWith("|") && value.includes("|");
+}
+
+function isMarkdownTableSeparator(line = "") {
+  const value = String(line || "").trim();
+
+  if (!isMarkdownTableLine(value)) return false;
+
+  const cells = value
+    .split("|")
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function parseMarkdownTable(lines = []) {
+  const tableLines = lines
+    .map((line) => String(line || "").trim())
+    .filter((line) => isMarkdownTableLine(line) && !isMarkdownTableSeparator(line));
+
+  return tableLines.map((line) =>
+    line
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cleanMarkdownLine(cell))
+  );
+}
+
+function splitReportIntoBlocks(reportText = "") {
+  const lines = reportLines(reportText);
+  const blocks = [];
+  let tableBuffer = [];
+
+  function flushTable() {
+    if (tableBuffer.length) {
+      const rows = parseMarkdownTable(tableBuffer);
+      if (rows.length) {
+        blocks.push({
+          type: "table",
+          rows
+        });
+      }
+      tableBuffer = [];
+    }
+  }
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || "").trim();
+
+    if (isMarkdownTableLine(line)) {
+      tableBuffer.push(line);
+      continue;
+    }
+
+    flushTable();
+
+    if (!line) {
+      blocks.push({
+        type: "space"
+      });
+      continue;
+    }
+
+    if (line.startsWith("# ")) {
+      blocks.push({
+        type: "heading1",
+        text: cleanMarkdownLine(line)
+      });
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      blocks.push({
+        type: "heading2",
+        text: cleanMarkdownLine(line)
+      });
+      continue;
+    }
+
+    if (line.startsWith("- ")) {
+      blocks.push({
+        type: "bullet",
+        text: cleanMarkdownLine(line)
+      });
+      continue;
+    }
+
+    blocks.push({
+      type: "paragraph",
+      text: cleanMarkdownLine(line)
+    });
+  }
+
+  flushTable();
+
+  return blocks;
+}
+
+function ensurePdfSpace(doc, neededHeight = 40) {
+  const bottom = doc.page.height - doc.page.margins.bottom;
+
+  if (doc.y + neededHeight > bottom) {
+    doc.addPage();
+  }
+}
+
+function drawPdfTable(doc, rows = []) {
+  if (!rows.length) return;
+
+  const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const colCount = Math.max(...rows.map((row) => row.length));
+
+  let colWidths;
+
+  if (colCount === 4) {
+    colWidths = [
+      usableWidth * 0.24,
+      usableWidth * 0.18,
+      usableWidth * 0.18,
+      usableWidth * 0.40
+    ];
+  } else if (colCount === 3) {
+    colWidths = [
+      usableWidth * 0.34,
+      usableWidth * 0.33,
+      usableWidth * 0.33
+    ];
+  } else {
+    colWidths = Array.from({ length: colCount }, () => usableWidth / colCount);
+  }
+
+  const left = doc.page.margins.left;
+  const padding = 5;
+
+  doc.moveDown(0.4);
+
+  rows.forEach((row, rowIndex) => {
+    const isHeader = rowIndex === 0;
+
+    const cellHeights = colWidths.map((width, index) => {
+      const text = String(row[index] || "");
+      return doc.heightOfString(text, {
+        width: width - padding * 2,
+        align: "left"
+      }) + padding * 2;
+    });
+
+    const rowHeight = Math.max(24, ...cellHeights);
+
+    ensurePdfSpace(doc, rowHeight + 8);
+
+    let x = left;
+    const y = doc.y;
+
+    row.forEach((cell, index) => {
+      const width = colWidths[index] || colWidths[colWidths.length - 1];
+
+      doc
+        .lineWidth(0.5)
+        .rect(x, y, width, rowHeight)
+        .stroke();
+
+      doc
+        .fontSize(isHeader ? 8.5 : 8)
+        .text(String(cell || ""), x + padding, y + padding, {
+          width: width - padding * 2,
+          align: "left"
+        });
+
+      x += width;
+    });
+
+    doc.y = y + rowHeight;
+    doc.x = left;
+  });
+
+  doc.x = left;
+  doc.moveDown(0.7);
+  doc.x = left;
+}
+
+function buildReportPdfBuffer({
+  companyName,
+  companyNumber,
+  riskFocus,
+  urgencyLevel,
+  reportText
+}) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 42,
+      bufferPages: true
+    });
+
+    const chunks = [];
+
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const generatedAt = new Date().toISOString();
+    const blocks = splitReportIntoBlocks(reportText);
+
+    doc
+      .fontSize(13)
+      .text("AIVS Company Examiner", { align: "left" });
+
+    doc.moveDown(0.3);
+
+    doc
+      .fontSize(8.5)
+      .text(`Generated at: ${generatedAt}`);
+
+    doc.moveDown(0.8);
+
+    for (const block of blocks) {
+      if (block.type === "space") {
+        doc.moveDown(0.3);
+        continue;
+      }
+
+      if (block.type === "heading1") {
+        ensurePdfSpace(doc, 30);
+        doc.moveDown(0.5);
+        doc.fontSize(11).text(block.text);
+        doc.moveDown(0.2);
+        continue;
+      }
+
+      if (block.type === "heading2") {
+        ensurePdfSpace(doc, 30);
+        doc.moveDown(0.55);
+        doc.fontSize(13).text(block.text);
+        doc.moveDown(0.2);
+        continue;
+      }
+
+      if (block.type === "bullet") {
+        ensurePdfSpace(doc, 24);
+        doc.fontSize(10).text(`- ${block.text}`, {
+          align: "left",
+          indent: 12,
+          lineGap: 3
+        });
+        doc.moveDown(0.25);
+        continue;
+      }
+
+      if (block.type === "table") {
+        drawPdfTable(doc, block.rows);
+        continue;
+      }
+
+      ensurePdfSpace(doc, 24);
+      doc.fontSize(10).text(block.text, {
+        align: "left",
+        lineGap: 3
+      });
+      doc.moveDown(0.35);
+    }
+
+    doc.moveDown(1.5);
+
+    ensurePdfSpace(doc, 60);
+
+    doc
+      .fontSize(8)
+      .text(
+        "This report supports company examination using available public Companies House data. It is not legal, financial, investment, sanctions, credit, procurement or professional advice. All outputs require human review against source evidence before reliance.",
+        { align: "left" }
+      );
+
+    doc.moveDown();
+
+    doc
+      .fontSize(8)
+      .text("(c) AIVS Software Limited copyright 2026. All rights reserved.");
+
+    doc.end();
+  });
+}
+
+/* -------------------------- IMPROVED COMPANIES HOUSE WORD REPORT -------------------------- */
+
+function makeDocxRuns(value = "", options = {}) {
+  const clean = String(value || "");
+  const parts = clean.split(/\n+/);
+
+  const runs = [];
+
+  parts.forEach((part, index) => {
+    if (index > 0) {
+      runs.push(
+        new TextRun({
+          text: "",
+          break: 1,
+          font: "Arial",
+          size: options.size ?? 20
+        })
+      );
+    }
+
+    runs.push(
+      new TextRun({
+        text: part || "",
+        bold: options.bold === true,
+        italics: options.italics === true,
+        font: "Arial",
+        size: options.size ?? 20,
+        color: options.color || "243744"
+      })
+    );
+  });
+
+  return runs;
+}
+
+function makeDocxParagraph(text = "", options = {}) {
+  return new Paragraph({
+    children: makeDocxRuns(text, {
+      size: options.size ?? 20,
+      bold: options.bold === true,
+      italics: options.italics === true,
+      color: options.color || "243744"
+    }),
+    spacing: {
+      before: options.before ?? 0,
+      after: options.after ?? 120
+    }
+  });
+}
+
+function makeDocxHeading(text = "", level = HeadingLevel.HEADING_2) {
+  let size = 24;
+  let before = 260;
+  let after = 120;
+
+  if (level === HeadingLevel.HEADING_1) {
+    size = 30;
+    before = 320;
+    after = 160;
+  }
+
+  if (level === HeadingLevel.HEADING_2) {
+    size = 25;
+    before = 280;
+    after = 130;
+  }
+
+  return new Paragraph({
+    heading: level,
+    children: [
+      new TextRun({
+        text: String(text || ""),
+        bold: true,
+        font: "Arial",
+        size,
+        color: "14232B"
+      })
+    ],
+    spacing: {
+      before,
+      after
+    }
+  });
+}
+
+function makeDocxCell(value = "", options = {}) {
+  const isHeader = options.header === true;
+  const isLabel = options.label === true;
+
+  let fill = "FFFDF8";
+  let color = "243744";
+  let bold = false;
+
+  if (isHeader) {
+    fill = "14232B";
+    color = "FFFFFF";
+    bold = true;
+  } else if (isLabel) {
+    fill = "EDE8DF";
+    color = "243744";
+    bold = true;
+  }
+
+  return new TableCell({
+    margins: {
+      top: 120,
+      bottom: 120,
+      left: 140,
+      right: 140
+    },
+    shading: {
+      fill
+    },
+    children: [
+      new Paragraph({
+        children: makeDocxRuns(value, {
+          bold,
+          size: 19,
+          color
+        }),
+        spacing: {
+          after: 0
+        }
+      })
+    ]
+  });
+}
+
+function makeDocxTable(rows = []) {
+  const cleanRows = Array.isArray(rows) ? rows : [];
+
+  if (!cleanRows.length) {
+    return new Table({
+      width: {
+        size: 100,
+        type: WidthType.PERCENTAGE
+      },
+      rows: [
+        new TableRow({
+          children: [
+            makeDocxCell("No records returned.", {
+              header: true
+            })
+          ]
+        })
+      ]
+    });
+  }
+
+  const colCount = Math.max(...cleanRows.map((row) => row.length || 1));
+  const headerRow = cleanRows[0] || [];
+  const bodyRows = cleanRows.slice(1);
+
+  return new Table({
+    width: {
+      size: 100,
+      type: WidthType.PERCENTAGE
+    },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "B7AEA0" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "B7AEA0" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "B7AEA0" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "B7AEA0" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" }
+    },
+    rows: [
+      new TableRow({
+        children: Array.from({ length: colCount }, (_, index) =>
+          makeDocxCell(headerRow[index] ?? "", {
+            header: true
+          })
+        )
+      }),
+      ...bodyRows.map((row) =>
+        new TableRow({
+          children: Array.from({ length: colCount }, (_, index) =>
+            makeDocxCell(row[index] ?? "", {
+              label: colCount === 2 && index === 0
+            })
+          )
+        })
+      )
+    ]
+  });
+}
+
+async function buildReportDocxBuffer({
+  companyName,
+  companyNumber,
+  riskFocus,
+  urgencyLevel,
+  reportText
+}) {
+  const generatedAt = new Date().toISOString();
+  const blocks = splitReportIntoBlocks(reportText);
+
+  const children = [
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: "AIVS Company Examiner",
+          bold: true,
+          font: "Arial",
+          size: 32,
+          color: "14232B"
+        })
+      ],
+      spacing: {
+        after: 80
+      }
+    }),
+
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: companyName
+            ? `Companies House / Public Checks Report - ${companyName}`
+            : "Companies House / Public Checks Report",
+          bold: true,
+          font: "Arial",
+          size: 24,
+          color: "243744"
+        })
+      ],
+      spacing: {
+        after: 160
+      }
+    }),
+
+    makeDocxParagraph(`Generated at: ${generatedAt}`, {
+      size: 17,
+      color: "4A5F6C",
+      after: 80
+    }),
+
+    makeDocxParagraph(`Company number: ${companyNumber || "Not supplied"}`, {
+      size: 17,
+      color: "4A5F6C",
+      after: 160
+    })
+  ];
+
+  for (const block of blocks) {
+    if (block.type === "space") {
+      children.push(makeDocxParagraph("", { after: 80 }));
+      continue;
+    }
+
+    if (block.type === "heading1") {
+      children.push(makeDocxHeading(block.text, HeadingLevel.HEADING_1));
+      continue;
+    }
+
+    if (block.type === "heading2") {
+      children.push(makeDocxHeading(block.text, HeadingLevel.HEADING_2));
+      continue;
+    }
+
+    if (block.type === "bullet") {
+      children.push(
+        makeDocxParagraph(`${block.text}`, {
+          size: 20,
+          color: "243744",
+          after: 90
+        })
+      );
+      continue;
+    }
+
+    if (block.type === "table") {
+      children.push(makeDocxTable(block.rows));
+      children.push(makeDocxParagraph("", { after: 120 }));
+      continue;
+    }
+
+    children.push(
+      makeDocxParagraph(block.text, {
+        size: 20,
+        color: "243744",
+        after: 120
+      })
+    );
+  }
+
+  children.push(
+    makeDocxParagraph("", { after: 120 }),
+
+    makeDocxParagraph(
+      "This report supports company examination using available public Companies House data. It is not legal, financial, investment, sanctions, credit, procurement or professional advice. All outputs require human review against source evidence before reliance.",
+      {
+        italics: true,
+        size: 18,
+        color: "4A5F6C",
+        before: 160,
+        after: 120
+      }
+    ),
+
+    makeDocxParagraph(
+      "AIVS Software Limited copyright 2026. All rights reserved.",
+      {
+        size: 18,
+        color: "4A5F6C"
+      }
+    )
+  );
+
+  const document = new Document({
+    creator: "AIVS Software Limited",
+    title: "AIVS Company Examiner Report",
+    description: "Companies House public checks report generated by AIVS Company Examiner",
+    sections: [
+      {
+        properties: {},
+        children
+      }
+    ]
+  });
+
+  return Packer.toBuffer(document);
+}
+
+/* -------------------------- DIRECTOR APPOINTMENTS REPORT EMAIL -------------------------- */
+/*
+ * ISO Timestamp: 2026-05-11T16:35:00Z
+ * Change:
+ * - Adds /send-director-appointments-report-email.
+ * - Uses Companies House officer appointment links already returned by getCompaniesHouseBundle().
+ * - Sends a Word and PDF report showing active directors and active appointment companies.
+ * - Does not alter public checks, FCA routes, accounts routes or GDELT.
+ */
+
+function directorAppointmentsMarkdownTable(headers = [], rows = []) {
+  const safe = (value) => {
+    if (value === true) return "Yes";
+    if (value === false) return "No";
+    if (value === 0) return "0";
+    return String(value ?? "Not returned").replace(/\|/g, "/").trim() || "Not returned";
+  };
+
+  const cleanHeaders = headers.map(safe);
+  const cleanRows = rows.map((row) => row.map(safe));
+
+  return [
+    `| ${cleanHeaders.join(" | ")} |`,
+    `| ${cleanHeaders.map(() => "---").join(" | ")} |`,
+    ...cleanRows.map((row) => `| ${row.join(" | ")} |`)
+  ].join("\n");
+}
+
+function buildDirectorAppointmentsReportText({
+  companyNumber,
+  companyName,
+  bundle
+}) {
+  const checkedAt = new Date().toISOString();
+  const profile = bundle.profile || {};
+  const officers = bundle.officers || {};
+  const officerAppointments = Array.isArray(bundle.officer_appointments)
+    ? bundle.officer_appointments
+    : [];
+
+  const subjectCompanyNumber = normaliseCompanyNumber(
+    profile.company_number ||
+    bundle.company_number ||
+    companyNumber
+  );
+
+  const officerItems = Array.isArray(officers.items) ? officers.items : [];
+
+  const makeOfficerKey = (name = "") =>
+    String(name || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const activeSubjectDirectors = officerItems
+    .filter((officer) => !officer.resigned_on)
+    .filter((officer) =>
+      String(officer.officer_role || "")
+        .toLowerCase()
+        .includes("director")
+    )
+    .filter((officer) => officer.name)
+    .map((officer) => ({
+      name: officer.name || "Unknown director",
+      key: makeOfficerKey(officer.name || ""),
+      officer_role: officer.officer_role || "director",
+      appointed_on: officer.appointed_on || "Not returned",
+      date_of_birth: officer.date_of_birth || null,
+      nationality: officer.nationality || "Not returned",
+      country_of_residence: officer.country_of_residence || "Not returned"
+    }));
+
+  const activeSubjectDirectorKeys = new Set(
+    activeSubjectDirectors.map((director) => director.key)
+  );
+
+  const activeOfficerRows = officerItems
+    .filter((officer) => !officer.resigned_on)
+    .map((officer) => [
+      officer.name || "Not returned",
+      officer.officer_role || "Not returned",
+      officer.appointed_on || "Not returned",
+      officer.resigned_on || "",
+      officer.date_of_birth
+        ? `${officer.date_of_birth.month || ""}/${officer.date_of_birth.year || ""}`
+        : "Not returned",
+      officer.nationality || "Not returned",
+      officer.country_of_residence || "Not returned"
+    ]);
+
+  const activeDirectorRows = activeSubjectDirectors.map((director) => [
+    director.name,
+    director.officer_role,
+    director.appointed_on,
+    director.date_of_birth
+      ? `${director.date_of_birth.month || ""}/${director.date_of_birth.year || ""}`
+      : "Not returned",
+    director.nationality,
+    director.country_of_residence
+  ]);
+
+  const activeDirectorAppointmentsOnly = officerAppointments.filter((officer) => {
+    const officerNameKey = makeOfficerKey(officer.officer_name || "");
+    const role = String(officer.company_role || "").toLowerCase();
+
+    return (
+      activeSubjectDirectorKeys.has(officerNameKey) &&
+      role.includes("director")
+    );
+  });
+
+  const excludedOfficerAppointments = officerAppointments.filter((officer) => {
+    const officerNameKey = makeOfficerKey(officer.officer_name || "");
+    return !activeSubjectDirectorKeys.has(officerNameKey);
+  });
+
+  const sourceStatus = bundle.source_status || {};
+  const officerNetworkTrace = bundle.officer_network_trace || {};
+
+  const groupedOfficerSections = [];
+
+  activeDirectorAppointmentsOnly.forEach((officer, index) => {
+    const officerName = officer.officer_name || "Unknown director";
+
+    const allAppointments = Array.isArray(officer.all_appointments)
+      ? officer.all_appointments
+      : [];
+
+    const activeAppointmentsAcrossCompanies = allAppointments.filter(
+      (appointment) => !appointment.resigned_on
+    );
+
+    const resignedAppointmentsAcrossCompanies = allAppointments.filter(
+      (appointment) => appointment.resigned_on
+    );
+
+    const appointmentRows = allAppointments.map((appointment) => {
+      const appointmentCompanyNumber = normaliseCompanyNumber(
+        appointment.company_number || ""
+      );
+
+      const isSubjectCompany = appointmentCompanyNumber === subjectCompanyNumber;
+      const isResigned = Boolean(appointment.resigned_on);
+
+      let statusText = "ACTIVE";
+      if (isResigned) {
+        statusText = `Resigned ${appointment.resigned_on}`;
+      }
+
+      const relationshipText = isSubjectCompany
+        ? "Subject company"
+        : "Other appointment company";
+
+      return [
+        appointment.company_name || "Not returned",
+        appointment.company_number || "Not returned",
+        appointment.role || "Not returned",
+        appointment.appointed_on || "Not returned",
+        `${statusText} - ${relationshipText}`
+      ];
+    });
+
+    groupedOfficerSections.push(
+      `## 5.${index + 1}. Active director: ${officerName}`,
+      "",
+      directorAppointmentsMarkdownTable(
+        ["Area", "Value"],
+        [
+          ["Subject company role", officer.company_role || "Not returned"],
+          ["Subject company appointed", officer.company_appointed_on || "Not returned"],
+          ["Total appointment records returned for this person", officer.total_results ?? allAppointments.length],
+          ["Active appointment records across all companies", activeAppointmentsAcrossCompanies.length],
+          ["Resigned appointment records across all companies", resignedAppointmentsAcrossCompanies.length],
+          ["Companies House appointment source", officer.ok === true ? "OK" : `Not OK: ${officer.error || "Unknown error"}`]
+        ]
+      ),
+      "",
+      appointmentRows.length
+        ? directorAppointmentsMarkdownTable(
+            ["Company", "Company number", "Role", "Appointed", "Status / relationship"],
+            appointmentRows
+          )
+        : "No appointment companies were returned for this active director.",
+      ""
+    );
+  });
+
+  return [
+    "# AIVS Company Examiner",
+    "# Director Appointments Report",
+    "",
+    `Generated at: ${checkedAt}`,
+    `Backend build: ${BUILD_ISO}`,
+    "",
+    "## 1. Subject company",
+    "",
+    directorAppointmentsMarkdownTable(
+      ["Area", "Value"],
+      [
+        ["Company", profile.company_name || companyName || "Not returned"],
+        ["Company number", subjectCompanyNumber || companyNumber || "Not returned"],
+        ["Companies House status", profile.company_status || "Not returned"],
+        ["Company type", profile.type || "Not returned"],
+        ["Jurisdiction", profile.jurisdiction || "Not returned"]
+      ]
+    ),
+    "",
+    "## 2. Source status",
+    "",
+    directorAppointmentsMarkdownTable(
+      ["Source", "Status", "Error / note"],
+      [
+        [
+          "Company profile",
+          sourceStatus.profile?.ok
+            ? `${sourceStatus.profile.status || ""} / OK`
+            : `${sourceStatus.profile?.status || "Not returned"} / Not OK`,
+          sourceStatus.profile?.error || ""
+        ],
+        [
+          "Officers",
+          sourceStatus.officers?.ok
+            ? `${sourceStatus.officers.status || ""} / OK`
+            : `${sourceStatus.officers?.status || "Not returned"} / Not OK`,
+          sourceStatus.officers?.error || ""
+        ],
+        [
+          "Officer appointments",
+          sourceStatus.officer_appointments?.ok
+            ? `${sourceStatus.officer_appointments.status || ""} / OK`
+            : `${sourceStatus.officer_appointments?.status || "Not returned"} / Not OK`,
+          sourceStatus.officer_appointments?.error || ""
+        ]
+      ]
+    ),
+    "",
+    "## 3. Active officers returned for subject company",
+    "",
+    activeOfficerRows.length
+      ? directorAppointmentsMarkdownTable(
+          ["Officer", "Role", "Appointed", "Resigned", "DOB month/year", "Nationality", "Residence"],
+          activeOfficerRows
+        )
+      : "No active officer rows were returned by the Companies House officer endpoint.",
+    "",
+    "## 4. Active directors checked in this report",
+    "",
+    activeDirectorRows.length
+      ? directorAppointmentsMarkdownTable(
+          ["Director", "Role", "Appointed", "DOB month/year", "Nationality", "Residence"],
+          activeDirectorRows
+        )
+      : "No active director rows were returned by the Companies House officer endpoint.",
+    "",
+    "## 5. Appointment records grouped by active director",
+    "",
+    activeDirectorAppointmentsOnly.length
+      ? "Only active directors of the subject company are expanded below. Secretaries and resigned/historic directors are excluded from this grouped section."
+      : "No active director appointment expansion was returned.",
+    "",
+    ...groupedOfficerSections,
+    `## ${6 + activeDirectorAppointmentsOnly.length}. Exclusions applied`,
+    "",
+    directorAppointmentsMarkdownTable(
+      ["Area", "Value"],
+      [
+        ["Active officers returned for subject company", activeOfficerRows.length],
+        ["Active directors expanded in grouped section", activeDirectorAppointmentsOnly.length],
+        ["Officer appointment records excluded from grouped section", excludedOfficerAppointments.length],
+        ["Reason for exclusion", "Not an active director of the subject company, or role was secretary/resigned/historic."]
+      ]
+    ),
+    "",
+    `## ${7 + activeDirectorAppointmentsOnly.length}. Review notes`,
+    "",
+    "- This report uses Companies House officer appointment links returned for the subject company.",
+    "- The grouped appointment section is limited to active directors of the subject company only.",
+    "- Secretaries are not shown as directors.",
+    "- Resigned or historic subject-company directors are not expanded in the grouped active-director section.",
+    "- Active appointment record counts are appointment records for that person across all companies; they are not the number of active directors of the subject company.",
+    "- Appointment records are not identity verification.",
+    "- This is not a sanctions, criminal-record, credit, insolvency, adverse-media or regulatory enforcement check.",
+    "- Human review against Companies House source records is required before reliance.",
+    "",
+    `## ${8 + activeDirectorAppointmentsOnly.length}. Network trace limit`,
+    "",
+    directorAppointmentsMarkdownTable(
+      ["Area", "Value"],
+      [
+        ["Trace skipped", officerNetworkTrace.skipped === true ? "Yes" : "No"],
+        ["Officer count returned in current bundle", officerNetworkTrace.officer_count ?? "Not returned"],
+        ["Trace threshold", officerNetworkTrace.threshold ?? "Not returned"],
+        ["Message", officerNetworkTrace.message || "Not applicable"]
+      ]
+    ),
+    "",
+    "AIVS Software Limited copyright 2026. All rights reserved."
+  ].join("\n");
+}
+
+
+app.post("/send-director-appointments-report-email", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const companyName = String(req.body.companyName || "").trim();
+
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const bundle = await getCompaniesHouseBundle(companyNumber);
+
+    if (!bundle.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: bundle.error || "Companies House bundle failed.",
+        build_iso: BUILD_ISO,
+        companies_house: bundle
+      });
+    }
+
+    const safeCompany =
+      bundle.profile?.company_name ||
+      companyName ||
+      companyNumber ||
+      "Company";
+
+    const reportText = buildDirectorAppointmentsReportText({
+      companyNumber,
+      companyName: safeCompany,
+      bundle
+    });
+
+    const safeFilenameCompany = String(safeCompany)
+      .replace(/[^\w.\-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "Company";
+
+    const pdfFilename = `AIVS_Director_Appointments_Report_${safeFilenameCompany}.pdf`;
+    const docxFilename = `AIVS_Director_Appointments_Report_${safeFilenameCompany}.docx`;
+
+    const pdfBuffer = await buildReportPdfBuffer({
+      companyName: safeCompany,
+      companyNumber,
+      riskFocus: "Director appointments",
+      urgencyLevel: "N/A",
+      reportText
+    });
+
+    const docxBuffer = await buildReportDocxBuffer({
+      companyName: safeCompany,
+      companyNumber,
+      riskFocus: "Director appointments",
+      urgencyLevel: "N/A",
+      reportText
+    });
+
+    const bodyText = [
+      "AIVS Company Examiner director appointments report attached.",
+      "",
+      `Company: ${safeCompany}`,
+      `Company number: ${companyNumber}`,
+      "",
+      "Attached files:",
+      `- ${pdfFilename}`,
+      `- ${docxFilename}`,
+      "",
+      "This report uses Companies House officer appointment links and requires human review before reliance.",
+      "",
+      "AIVS Software Limited copyright 2026. All rights reserved."
+    ].join("\n");
+
+    const subject = `AIVS Director Appointments Report - ${safeCompany}`;
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean);
+
+    const sent = [];
+
+    for (const recipient of recipients) {
+      const mailjetResult = await sendResultEmail({
+        toEmail: recipient,
+        subject,
+        bodyText,
+        pdfBuffer,
+        pdfFilename,
+        docxBuffer,
+        docxFilename
+      });
+
+      sent.push({
+        to: recipient,
+        status: mailjetResult?.Status || "sent"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      sent_at: new Date().toISOString(),
+      sent,
+      companyNumber,
+      companyName: safeCompany,
+      pdfFilename,
+      docxFilename,
+      attachment_bytes: {
+        pdf: pdfBuffer.length,
+        docx: docxBuffer.length
+      },
+      officer_appointments_count: Array.isArray(bundle.officer_appointments)
+        ? bundle.officer_appointments.length
+        : 0
+    });
+  } catch (err) {
+    console.error("ERROR /send-director-appointments-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Director appointments report email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+app.post("/send-report-email", async (req, res) => {
+  try {
+    const companyName = String(req.body.companyName || "").trim();
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const riskFocus = String(req.body.riskFocus || "").trim();
+    const urgencyLevel = String(req.body.urgencyLevel || "").trim();
+    const reportText = String(req.body.reportText || "").trim();
+
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!reportText) {
+      return res.status(400).json({
+        ok: false,
+        error: "Report text required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean);
+
+    const safeCompany =
+      report.company_name ||
+      companyName ||
+      companyNumber ||
+      "Company";
+
+    const pdfFilename = `AIVS_Company_Examiner_Report_${companyNumber || "company"}.pdf`
+      .replace(/[^\w.\-]+/g, "_");
+
+    const docxFilename = `AIVS_Company_Examiner_Report_${companyNumber || "company"}.docx`
+      .replace(/[^\w.\-]+/g, "_");
+
+    const pdfBuffer = await buildReportPdfBuffer({
+      companyName,
+      companyNumber,
+      riskFocus,
+      urgencyLevel,
+      reportText
+    });
+
+    const docxBuffer = await buildReportDocxBuffer({
+      companyName,
+      companyNumber,
+      riskFocus,
+      urgencyLevel,
+      reportText
+    });
+
+    const subject = `AIVS Company Examiner Report - ${safeCompany}`;
+
+    const bodyText = [
+      "AIVS Company Examiner report attached.",
+      "",
+      `Company: ${companyName || "Not supplied"}`,
+      `Company number: ${companyNumber || "Not supplied"}`,
+      `Risk focus: ${riskFocus || "Not supplied"}`,
+      `Urgency: ${urgencyLevel || "Not supplied"}`,
+      "",
+      "Attached files:",
+      `- ${pdfFilename}`,
+      `- ${docxFilename}`,
+      "",
+      "This report is a structured draft requiring human review against source evidence before reliance.",
+      "",
+      "(c) AIVS Software Limited copyright 2026. All rights reserved."
+    ].join("\n");
+
+    const sent = [];
+
+    for (const recipient of recipients) {
+      const mailjetResult = await sendResultEmail({
+        toEmail: recipient,
+        subject,
+        bodyText,
+        pdfBuffer,
+        pdfFilename,
+        docxBuffer,
+        docxFilename
+      });
+
+      sent.push({
+        to: recipient,
+        status: mailjetResult?.Status || "sent"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      sent_at: new Date().toISOString(),
+      sent,
+      pdfFilename,
+      docxFilename
+    });
+  } catch (err) {
+    console.error("ERROR /send-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Report email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
+
+
+/* -------------------------- COMPANY INSOLVENCY REPORT EMAIL -------------------------- */
+/*
+ * ISO Timestamp: 2026-05-17T08:55:00Z
+ * Change:
+ * - Adds /send-company-insolvency-report-email route.
+ * - Calls standalone company_insolvency_report_agent.js.
+ * - Agent sends its own PDF and DOCX email attachments.
+ * - No full report text is returned to the frontend.
+ */
+
+app.post("/send-company-insolvency-report-email", async (req, res) => {
+  try {
+    const companyNumber = normaliseCompanyNumber(req.body.companyNumber || "");
+    const companyName = String(req.body.companyName || "").trim();
+
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    if (!companyNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Company number required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    if (!toEmail) {
+      return res.status(400).json({
+        ok: false,
+        error: "Primary email address required.",
+        build_iso: BUILD_ISO
+      });
+    }
+
+    const recipients = [toEmail, secondEmail]
+      .map((email) => String(email || "").trim())
+      .filter(Boolean)
+      .join(",");
+
+    const result = await buildCompanyInsolvencyReport({
+      companyNumber,
+      companyName,
+      emailTo: recipients,
+      sendEmail: true,
+      includeReportText: false
+    });
+
+    if (!result.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: result.error || "Company insolvency report failed.",
+        build_iso: BUILD_ISO,
+        agent_build_iso: result.build_iso || null,
+        company_number: companyNumber,
+        company_name: companyName || null,
+        rag: result.rag || null,
+        rag_reason: result.rag_reason || null,
+        email_sent: result.email_sent === true,
+        counts: result.counts || null,
+        source_status: result.source_status || null
+      });
+    }
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      agent_build_iso: result.build_iso,
+      sent_at: new Date().toISOString(),
+      route: "/send-company-insolvency-report-email",
+      company_number: result.company_number,
+      company_name: result.company_name,
+      rag: result.rag,
+      rag_reason: result.rag_reason,
+      report_built: result.report_built === true,
+      email_sent: result.email_sent === true,
+      email_status: result.email?.status || null,
+      counts: result.counts || null,
+      source_status: result.source_status || null,
+      frontend_display: false
+    });
+    } catch (err) {
+    console.error("ERROR /send-company-insolvency-report-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Company insolvency report email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+
+});
+/* -------------------------- START -------------------------- */
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`AIVS Company Examiner backend running on port ${PORT}`);
+});
