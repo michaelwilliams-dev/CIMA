@@ -2,22 +2,26 @@
 <html lang="en">
 <head>
   <!--
-    AIVS / PGB CIMA Demo Front End
+    AIVS / PGB CIMA Front End
     File: index.html
-    ISO Timestamp: 2026-05-18T18:35:00Z
+    ISO Timestamp: 2026-05-20T13:45:00Z
 
     Change Log:
-    - v0.9.0: rebuilt to match supplied reference layout
-    - v0.9.0: removed visible six-field form from main view
-    - v0.9.0: left panel now acts as navigation/recent thread list
-    - v0.9.0: centre panel is clean empty chat workspace
-    - v0.9.0: right panel is sources-only workspace
-    - v0.9.0: retained CIMA demo behaviour in chat script only
+    - v1.0.0: amended to match PGB CIMA Agent Operating Instructions working standard
+    - v1.0.0: added CIMA operating mode, command level, audience, scenario, persona and output selectors
+    - v1.0.0: added FAST PATH / ASSURANCE PATH display logic
+    - v1.0.0: added T&C front tab and chat gate
+    - v1.0.0: added source hierarchy panel: Resource Index, Source Register, Policy Abstracts, Internal Plans
+    - v1.0.0: added audit/status panel for mode, path, HITL, confidence, sources and version
+    - v1.0.0: connected chat to /cima-chat with safe local fallback
+    - v1.0.0: connected transcript email to /send-transcript-email with two email fields
+    - v1.0.0: removed Company Examiner / security-specific terminology from the CIMA interface
   -->
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIVS CIMA</title>
+  <meta name="theme-color" content="#ffffff" />
+  <title>AIVS / PGB CIMA</title>
 
   <style>
     :root {
@@ -30,10 +34,12 @@
       --ink: #10232d;
       --muted: #7d878e;
       --faint: #a4abb0;
-      --border: #e5ded2;
-      --soft-border: #eee9df;
+      --border: #d6cbbd;
+      --soft-border: #e5ded2;
       --blue: #2f73c8;
       --green: #24814f;
+      --amber: #9b6a10;
+      --red: #a33a2b;
       --shadow: 0 16px 35px rgba(40, 35, 25, 0.10);
       --radius: 24px;
     }
@@ -46,7 +52,7 @@
     body {
       margin: 0;
       height: 100%;
-      background: var(--page-bg);
+      background: #ffffff;
       font-family: Arial, Helvetica, sans-serif;
       color: var(--ink);
       overflow: hidden;
@@ -58,6 +64,7 @@
       align-items: center;
       gap: 8px;
       padding-left: 13px;
+      background: #ffffff;
     }
 
     .mac-dot {
@@ -67,26 +74,26 @@
       display: block;
     }
 
-    .red { background: #ff5f57; }
-    .yellow { background: #ffbd2e; }
-    .green { background: #28c840; }
+    .red-dot { background: #ff5f57; }
+    .yellow-dot { background: #ffbd2e; }
+    .green-dot { background: #28c840; }
 
     .app {
       height: calc(100vh - 32px);
       display: grid;
-      grid-template-columns: 320px 1fr 365px;
+      grid-template-columns: 330px 1fr 390px;
       gap: 16px;
+      background: var(--page-bg);
+      padding: 0;
     }
 
     .panel {
       background: var(--panel-bg);
-      border: 1px solid var(--soft-border);
+      border: 1.5px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       overflow: hidden;
     }
-
-    /* LEFT PANEL */
 
     .left-panel {
       display: flex;
@@ -94,15 +101,15 @@
     }
 
     .left-top {
-      padding: 18px 12px 0 12px;
+      padding: 18px 14px 0 14px;
     }
 
     .brand-row {
-      height: 34px;
+      min-height: 34px;
       display: flex;
       align-items: center;
       gap: 9px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .aivs-logo {
@@ -136,8 +143,11 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 6px 8px;
-      margin-bottom: 12px;
+      padding: 7px 9px;
+      margin-bottom: 11px;
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      background: #fffdfa;
     }
 
     .avatar {
@@ -194,8 +204,8 @@
     .search-wrap input {
       width: 100%;
       height: 43px;
-      border: 1px solid #e2ddd3;
-      background: #f4f2ec;
+      border: 1.5px solid var(--border);
+      background: #f8f5ee;
       border-radius: 999px;
       padding: 0 45px 0 42px;
       font-size: 14px;
@@ -230,26 +240,15 @@
     .conversation-filter {
       width: 100%;
       height: 39px;
-      border: 1px solid #dfd9cc;
+      border: 1.5px solid var(--border);
       border-radius: 999px;
-      background: #f3f1eb;
+      background: #f8f5ee;
       color: var(--ink);
       font-size: 14px;
       font-weight: bold;
       text-align: center;
       cursor: pointer;
       margin-bottom: 14px;
-    }
-
-    .all-projects {
-      height: 32px;
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      color: #5f6b72;
-      font-size: 14px;
-      padding: 0 14px;
-      margin-bottom: 12px;
     }
 
     .left-scroll {
@@ -259,29 +258,78 @@
     }
 
     .section-label {
-      color: #a0a5a8;
+      color: #7d878e;
       font-size: 11px;
       font-weight: bold;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      margin: 7px 0 7px 3px;
+      margin: 10px 0 8px 4px;
+    }
+
+    .context-box {
+      border: 1.7px solid var(--border);
+      border-radius: 18px;
+      background: #fffdfa;
+      padding: 11px;
+      margin-bottom: 12px;
+    }
+
+    .context-box h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .field {
+      margin-bottom: 9px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: bold;
+      color: #5f6b72;
+      margin-bottom: 4px;
+    }
+
+    .field select,
+    .field input {
+      width: 100%;
+      height: 36px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #f8f5ee;
+      color: var(--ink);
+      padding: 0 10px;
+      outline: none;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .field select:focus,
+    .field input:focus {
+      border-color: var(--orange);
+      background: #ffffff;
     }
 
     .recent-item {
       min-height: 58px;
-      border-radius: 9px;
-      padding: 10px 8px;
+      border-radius: 12px;
+      border: 1.5px solid transparent;
+      padding: 10px 10px;
       color: var(--ink);
       font-size: 14px;
       font-weight: bold;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
-      margin-bottom: 2px;
+      margin-bottom: 6px;
+      background: rgba(255,255,255,0.38);
     }
 
     .recent-item.active {
       background: var(--active-bg);
+      border-color: var(--border);
     }
 
     .recent-item span {
@@ -293,26 +341,25 @@
     }
 
     .left-footer {
-      height: 136px;
-      border-top: 1px solid var(--border);
+      min-height: 128px;
+      border-top: 1.5px solid var(--border);
       background: rgba(255, 255, 255, 0.52);
-      padding: 13px 21px;
+      padding: 13px 18px;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px 18px;
+      gap: 10px 14px;
     }
 
     .footer-link {
-      border: 0;
-      background: transparent;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fffdfa;
       color: var(--muted);
-      padding: 0;
+      padding: 8px 9px;
       text-align: left;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
     }
-
-    /* CENTRE PANEL */
 
     .centre-panel {
       background: var(--white);
@@ -321,11 +368,12 @@
     }
 
     .main-header {
-      height: 62px;
-      border-bottom: 1px solid var(--soft-border);
+      min-height: 62px;
+      border-bottom: 1.5px solid var(--soft-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
       padding: 0 15px;
       background: var(--white);
     }
@@ -335,6 +383,7 @@
       align-items: center;
       gap: 10px;
       min-width: 0;
+      flex-wrap: wrap;
     }
 
     .thread-title {
@@ -345,13 +394,13 @@
     }
 
     .project-pill {
-      height: 28px;
+      min-height: 28px;
       border: 1px solid #ebe7df;
       background: #fbfbfb;
       border-radius: 999px;
       color: var(--muted);
       font-size: 13px;
-      padding: 5px 10px;
+      padding: 6px 10px;
       white-space: nowrap;
     }
 
@@ -359,6 +408,8 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .online-pill {
@@ -379,20 +430,25 @@
     }
 
     .icon-btn {
-      min-width: 36px;
+      min-width: 38px;
       height: 36px;
-      border: 1px solid #efebe5;
-      border-radius: 50%;
+      border: 1.5px solid #e3d9cc;
+      border-radius: 999px;
       background: #ffffff;
-      color: #b5bdc2;
+      color: #5f6b72;
       font-size: 11px;
       font-weight: bold;
       cursor: pointer;
+      padding: 0 10px;
+    }
+
+    .icon-btn:hover {
+      border-color: var(--orange);
+      color: var(--ink);
     }
 
     .sources-main-btn {
       min-width: 106px;
-      border-radius: 999px;
       color: var(--ink);
       font-size: 13px;
     }
@@ -409,7 +465,7 @@
 
     .empty-state {
       margin: auto;
-      width: 380px;
+      width: min(430px, 80%);
       text-align: center;
       color: var(--muted);
     }
@@ -450,13 +506,13 @@
     }
 
     .message {
-      max-width: 720px;
-      border: 1px solid var(--border);
+      max-width: 760px;
+      border: 1.5px solid var(--border);
       border-radius: 14px;
       padding: 13px 15px;
       margin: 20px 24px 0 24px;
       font-size: 14px;
-      line-height: 1.45;
+      line-height: 1.48;
     }
 
     .message.user {
@@ -478,6 +534,12 @@
       margin-bottom: 6px;
     }
 
+    .message h3 {
+      font-size: 15px;
+      margin: 10px 0 6px 0;
+      color: var(--ink);
+    }
+
     .message p {
       margin: 6px 0;
     }
@@ -488,7 +550,7 @@
     }
 
     .composer-row {
-      height: 86px;
+      min-height: 90px;
       background: #ffffff;
       display: flex;
       align-items: center;
@@ -498,10 +560,10 @@
 
     .composer {
       width: 100%;
-      max-width: 590px;
+      max-width: 640px;
       min-height: 64px;
       background: #ffffff;
-      border: 1px solid #ede8df;
+      border: 1.5px solid #d8cfc2;
       border-radius: 16px;
       display: grid;
       grid-template-columns: 48px 1fr 50px;
@@ -515,7 +577,7 @@
       border: 0;
       background: transparent;
       color: #5d6870;
-      font-size: 28px;
+      font-size: 24px;
       cursor: pointer;
     }
 
@@ -530,6 +592,12 @@
       font-family: inherit;
     }
 
+    .composer textarea:disabled {
+      color: #9ca3af;
+      background: #f7f5ef;
+      cursor: not-allowed;
+    }
+
     .send-btn {
       width: 46px;
       height: 46px;
@@ -542,7 +610,11 @@
       cursor: pointer;
     }
 
-    /* RIGHT PANEL */
+    .send-btn:disabled {
+      background: #c7b69f;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
 
     .right-panel {
       background: var(--panel-bg);
@@ -551,8 +623,8 @@
     }
 
     .right-header {
-      height: 62px;
-      border-bottom: 1px solid var(--soft-border);
+      min-height: 62px;
+      border-bottom: 1.5px solid var(--soft-border);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -579,9 +651,10 @@
 
     .filter-card {
       background: #ffffff;
-      margin: 30px 13px 22px 13px;
-      padding: 9px 10px;
-      border: 1px solid var(--soft-border);
+      margin: 18px 13px 18px 13px;
+      padding: 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
     }
 
     .source-tabs {
@@ -592,13 +665,14 @@
     }
 
     .source-tab {
-      border: 1px solid #ededed;
+      border: 1.5px solid #ded6cb;
       background: #ffffff;
-      color: #c1c5c8;
+      color: #7a858c;
       border-radius: 999px;
-      padding: 7px 13px;
+      padding: 7px 11px;
       font-size: 12px;
       font-weight: bold;
+      cursor: pointer;
     }
 
     .source-tab.active {
@@ -614,27 +688,33 @@
     }
 
     .tiny-btn {
-      border: 1px solid #e8e8e8;
+      border: 1.5px solid #e1d8cc;
       background: #ffffff;
       color: #5f6b72;
-      border-radius: 6px;
-      padding: 4px 9px;
+      border-radius: 8px;
+      padding: 5px 9px;
       font-size: 12px;
+      cursor: pointer;
     }
 
     .answer-tabs {
-      margin: 0 55px 22px 55px;
-      border-bottom: 1px solid var(--border);
+      margin: 0 30px 16px 30px;
+      border-bottom: 1.5px solid var(--border);
       display: flex;
       justify-content: center;
+      gap: 4px;
     }
 
     .answer-tab {
-      padding: 9px 16px;
+      padding: 9px 12px;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: bold;
+      border: 0;
+      background: transparent;
       border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: inherit;
     }
 
     .answer-tab.active {
@@ -643,12 +723,12 @@
     }
 
     .source-search {
-      margin: 0 76px 28px 76px;
+      margin: 0 42px 18px 42px;
     }
 
     .source-search input {
       height: 39px;
-      border: 1px solid #dedbd3;
+      border: 1.5px solid #dedbd3;
       border-radius: 9px;
       background: #ffffff;
       padding: 0 13px;
@@ -658,17 +738,59 @@
       width: 100%;
     }
 
-    .source-empty {
-      border-top: 1px solid var(--soft-border);
-      height: 104px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #8a9297;
-      font-style: italic;
+    .source-view {
+      border-top: 1.5px solid var(--soft-border);
+      min-height: 130px;
+      color: #5e6970;
+      font-size: 13px;
+      background: rgba(255,255,255,0.40);
+      padding: 14px 18px;
+      line-height: 1.45;
+    }
+
+    .source-view h3 {
+      margin: 0 0 8px 0;
+      color: var(--ink);
       font-size: 14px;
-      text-align: center;
-      background: rgba(255,255,255,0.36);
+    }
+
+    .source-view p {
+      margin: 7px 0;
+    }
+
+    .source-view ul {
+      margin: 8px 0 8px 18px;
+      padding: 0;
+    }
+
+    .terms-line {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .terms-line input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--orange);
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .terms-line select {
+      width: 100%;
+      height: 36px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 0 10px;
+      outline: none;
+      font-size: 13px;
+      font-family: inherit;
     }
 
     .status-area {
@@ -677,7 +799,7 @@
 
     .status-card {
       background: #ffffff;
-      border: 1px solid var(--soft-border);
+      border: 1.5px solid var(--border);
       border-radius: 14px;
       padding: 12px;
       margin-bottom: 10px;
@@ -689,9 +811,17 @@
       color: var(--ink);
     }
 
+    .status-card p {
+      margin: 6px 0;
+      font-size: 13px;
+      color: #5f6b72;
+      line-height: 1.42;
+    }
+
     .status-line {
       display: flex;
       justify-content: space-between;
+      gap: 10px;
       border-top: 1px solid var(--soft-border);
       padding-top: 8px;
       margin-top: 8px;
@@ -704,6 +834,45 @@
 
     .status-line strong {
       color: var(--ink);
+      text-align: right;
+    }
+
+    .email-input {
+      width: 100%;
+      height: 34px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      background: #f8f5ee;
+      padding: 0 10px;
+      font-size: 13px;
+      margin-bottom: 8px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .report-btn {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--orange);
+      color: #17242d;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    .report-btn:disabled {
+      background: #c7b69f;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
     }
 
     @media (max-width: 1180px) {
@@ -733,9 +902,9 @@
 
 <body>
   <div class="mac-dots">
-    <span class="mac-dot red"></span>
-    <span class="mac-dot yellow"></span>
-    <span class="mac-dot green"></span>
+    <span class="mac-dot red-dot"></span>
+    <span class="mac-dot yellow-dot"></span>
+    <span class="mac-dot green-dot"></span>
   </div>
 
   <main class="app">
@@ -763,16 +932,94 @@
 
         <div class="search-wrap">
           <span class="search-icon">⌕</span>
-          <input placeholder="Search" />
+          <input placeholder="Search incident threads" />
           <span class="key-pill">K</span>
         </div>
 
         <button class="conversation-filter" type="button">All incident threads⌄</button>
-
-        <div class="all-projects">☰ All projects</div>
       </div>
 
       <div class="left-scroll">
+        <div class="section-label">CIMA Context</div>
+
+        <div class="context-box">
+          <h3>Operating Setup</h3>
+
+          <div class="field">
+            <label for="modeSelect">Mode</label>
+            <select id="modeSelect" onchange="updateContextFromControls()">
+              <option value="">N/A</option>
+              <option value="Ops / Live / Time-critical">Ops / Live / Time-critical</option>
+              <option value="Planning">Planning</option>
+              <option value="Training / Exercise">Training / Exercise</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="levelSelect">Command level</label>
+            <select id="levelSelect" onchange="updateContextFromControls()">
+              <option value="">N/A</option>
+              <option value="Gold / Strategic">Gold / Strategic</option>
+              <option value="Silver / Tactical">Silver / Tactical</option>
+              <option value="Bronze / Operational">Bronze / Operational</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="audienceSelect">Audience / role</label>
+            <select id="audienceSelect" onchange="updateContextFromControls()">
+              <option value="">N/A</option>
+              <option value="Neutral operational voice">Neutral operational voice</option>
+              <option value="Gold / Strategic">Gold / Strategic</option>
+              <option value="Silver / Tactical">Silver / Tactical</option>
+              <option value="Bronze / Operational">Bronze / Operational</option>
+              <option value="Media / Comms">Media / Comms</option>
+              <option value="Support functions">Support functions</option>
+              <option value="Board / C-Suite on demand">Board / C-Suite on demand</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="scenarioSelect">Scenario</label>
+            <select id="scenarioSelect" onchange="updateContextFromControls()">
+              <option value="">N/A</option>
+              <option value="Missing travel / welfare concern">Missing travel / welfare concern</option>
+              <option value="Severe weather">Severe weather</option>
+              <option value="Transport disruption">Transport disruption</option>
+              <option value="Accommodation pressure">Accommodation pressure</option>
+              <option value="Personal safety concern">Personal safety concern</option>
+              <option value="Incident reporting / coordination">Incident reporting / coordination</option>
+              <option value="Media holding line">Media holding line</option>
+              <option value="Recovery / return to steady state">Recovery / return to steady state</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="personaSelect">Persona</label>
+            <select id="personaSelect" onchange="updateContextFromControls()">
+              <option value="">N/A</option>
+              <option value="No persona requested">No persona requested</option>
+              <option value="Role view requested">Role view requested</option>
+              <option value="Persona view requested">Persona view requested</option>
+              <option value="Governance / Board view">Governance / Board view</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="outputSelect">Requested output</label>
+            <select id="outputSelect" onchange="updateContextFromControls()">
+              <option value="">N/A</option>
+              <option value="Decision support">Decision support</option>
+              <option value="Options / controls">Options / controls</option>
+              <option value="Risk and safety summary">Risk and safety summary</option>
+              <option value="Internal comms draft">Internal comms draft</option>
+              <option value="External / media line">External / media line</option>
+              <option value="Assurance / citation check">Assurance / citation check</option>
+              <option value="Versioned report">Versioned report</option>
+            </select>
+          </div>
+        </div>
+
         <div class="section-label">Recent</div>
 
         <div class="recent-item active">New Incident Thread<span>Now</span></div>
@@ -781,18 +1028,13 @@
         <div class="recent-item">Transport disruption<span>Demo</span></div>
         <div class="recent-item">Media holding line<span>Demo</span></div>
         <div class="recent-item">Accommodation pressure<span>Demo</span></div>
-
-        <div class="section-label">Context</div>
-        <div class="recent-item">Mode: Ops<span>Default</span></div>
-        <div class="recent-item">Level: Silver<span>Default</span></div>
-        <div class="recent-item">Scenario: Welfare concern<span>Default</span></div>
       </div>
 
       <div class="left-footer">
-        <button class="footer-link" type="button">▦ Sources</button>
-        <button class="footer-link" type="button">▤ Reports</button>
-        <button class="footer-link" type="button">◉ Users</button>
-        <button class="footer-link" type="button">⚙ Settings</button>
+        <button class="footer-link" type="button" onclick="setRightTab('sources')">▦ Sources</button>
+        <button class="footer-link" type="button" onclick="setRightTab('audit')">▤ Audit</button>
+        <button class="footer-link" type="button" onclick="setRightTab('terms')">☑ T&amp;C</button>
+        <button class="footer-link" type="button" onclick="setRightTab('thread')">✉ Transcript</button>
       </div>
     </aside>
 
@@ -800,74 +1042,83 @@
       <div class="main-header">
         <div class="thread-left">
           <div class="thread-title" id="threadTitle">New Incident Thread</div>
-          <div class="project-pill">● All contexts⌄</div>
+          <div class="project-pill" id="contextPill">● Context N/A</div>
         </div>
 
         <div class="main-actions">
           <div class="online-pill"><span>●</span>CIMA online</div>
-          <button class="icon-btn" type="button">PDF</button>
-          <button class="icon-btn" type="button">W</button>
-          <button class="icon-btn" type="button">✉</button>
-          <button class="icon-btn sources-main-btn" type="button">▥ Sources</button>
+          <button class="icon-btn" type="button" onclick="setRightTab('thread')">PDF</button>
+          <button class="icon-btn" type="button" onclick="setRightTab('thread')">W</button>
+          <button class="icon-btn" type="button" onclick="setRightTab('thread')">✉</button>
+          <button class="icon-btn sources-main-btn" type="button" onclick="setRightTab('sources')">▥ Sources</button>
         </div>
       </div>
 
       <div class="chat" id="chatWindow">
         <div class="empty-state" id="emptyState">
           <div class="bubble-icon"></div>
-          <h2>Start a conversation</h2>
-          <p>Ask about operational response, welfare, command actions, communications or recovery.</p>
+          <h2>Confirm T&amp;C to begin</h2>
+          <p>Select the T&amp;C tab, choose the applicable T&amp;C page, tick confirmation, then ask about operational response, welfare, command actions, communications or recovery.</p>
         </div>
       </div>
 
       <div class="composer-row">
         <div class="composer">
-          <button class="attach-btn" type="button">⌘</button>
-          <textarea id="questionInput" placeholder="Send a message..."></textarea>
-          <button class="send-btn" type="button" onclick="askQuestion()">↑</button>
+          <button class="attach-btn" type="button" onclick="setRightTab('sources')">⌘</button>
+          <textarea id="questionInput" placeholder="Confirm T&C to continue..." disabled></textarea>
+          <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()" disabled>↑</button>
         </div>
       </div>
     </section>
 
     <aside class="panel right-panel">
       <div class="right-header">
-        <h2>Sources</h2>
+        <h2>CIMA Control</h2>
         <span>×</span>
       </div>
 
       <div class="right-body">
         <div class="filter-card">
           <div class="source-tabs">
-            <button class="source-tab active" type="button">✓ Industry</button>
-            <button class="source-tab" type="button">Company</button>
-            <button class="source-tab" type="button">My Documents</button>
-            <button class="source-tab" type="button">Projects⌄</button>
+            <button id="sourceBtnResource" class="source-tab active" type="button" onclick="setSourceClass('resource')">Resource Index</button>
+            <button id="sourceBtnRegister" class="source-tab" type="button" onclick="setSourceClass('register')">Source Register</button>
+            <button id="sourceBtnPolicy" class="source-tab" type="button" onclick="setSourceClass('policy')">Policy Abstracts</button>
+            <button id="sourceBtnInternal" class="source-tab" type="button" onclick="setSourceClass('internal')">Internal Plans</button>
           </div>
 
           <div class="source-actions">
-            <button class="tiny-btn" type="button">All</button>
-            <button class="tiny-btn" type="button">None</button>
+            <button class="tiny-btn" type="button" onclick="setSourceClass('resource')">Default</button>
+            <button class="tiny-btn" type="button" onclick="setRightTab('audit')">Audit</button>
           </div>
         </div>
 
         <div class="answer-tabs">
-          <div class="answer-tab active">This Answer</div>
-          <div class="answer-tab">This Thread</div>
+          <button id="termsTab" class="answer-tab active" type="button" onclick="setRightTab('terms')">T&amp;C</button>
+          <button id="answerTab" class="answer-tab" type="button" onclick="setRightTab('answer')">This Answer</button>
+          <button id="threadTab" class="answer-tab" type="button" onclick="setRightTab('thread')">Thread / Email</button>
+          <button id="sourcesTab" class="answer-tab" type="button" onclick="setRightTab('sources')">Sources</button>
+          <button id="auditTab" class="answer-tab" type="button" onclick="setRightTab('audit')">Audit</button>
         </div>
 
         <div class="source-search">
-          <input placeholder="Search sources..." />
+          <input id="sourceSearch" placeholder="Search sources / personas..." />
         </div>
 
-        <div class="source-empty" id="sourceStatus">
-          No sources for this answer.
-        </div>
+        <div class="source-view" id="rightView"></div>
 
         <div class="status-area">
           <div class="status-card">
             <h3>Session Status</h3>
             <div class="status-line">
               <span>Mode</span>
+              <strong id="modeStatus">N/A</strong>
+            </div>
+            <div class="status-line">
+              <span>Command</span>
+              <strong id="levelStatus">N/A</strong>
+            </div>
+            <div class="status-line">
+              <span>Path</span>
               <strong id="pathStatus">FAST PATH</strong>
             </div>
             <div class="status-line">
@@ -876,13 +1127,17 @@
             </div>
             <div class="status-line">
               <span>HITL</span>
-              <strong id="hitlStatus">Not triggered</strong>
+              <strong id="hitlStatus">T&amp;C required</strong>
+            </div>
+            <div class="status-line">
+              <span>Confidence</span>
+              <strong id="confidenceStatus">Provisional</strong>
             </div>
           </div>
 
           <div class="status-card">
             <h3>Last Output</h3>
-            <p id="lastOutput">None.</p>
+            <p id="lastOutput">T&amp;C must be confirmed before the assistant can continue.</p>
           </div>
 
           <div class="status-card">
@@ -895,8 +1150,16 @@
   </main>
 
   <script>
-    const BUILD_ISO = "2026-05-18T18:35:00Z";
+    const BUILD_ISO = "2026-05-20T13:45:00Z";
+
     let questions = [];
+    let transcriptEntries = [];
+    let latestAnswer = "";
+    let latestSources = [];
+    let rightTab = "terms";
+    let sourceClass = "resource";
+    let termsAccepted = false;
+    let termsSelection = "";
 
     function updateIsoTime() {
       document.getElementById("isoTime").textContent = new Date().toISOString();
@@ -914,8 +1177,138 @@
         .replaceAll("'", "&#039;");
     }
 
+    function markdownToHtml(value) {
+      const lines = String(value || "").split("\n");
+      let html = "";
+      let inList = false;
+
+      for (const raw of lines) {
+        const line = raw.trim();
+
+        if (!line) {
+          if (inList) {
+            html += "</ul>";
+            inList = false;
+          }
+          continue;
+        }
+
+        if (line.startsWith("## ")) {
+          if (inList) {
+            html += "</ul>";
+            inList = false;
+          }
+          html += `<h3>${escapeHtml(line.replace(/^##\s+/, ""))}</h3>`;
+          continue;
+        }
+
+        if (line.startsWith("- ")) {
+          if (!inList) {
+            html += "<ul>";
+            inList = true;
+          }
+          html += `<li>${escapeHtml(line.replace(/^-+\s*/, ""))}</li>`;
+          continue;
+        }
+
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+
+        html += `<p>${escapeHtml(line)}</p>`;
+      }
+
+      if (inList) {
+        html += "</ul>";
+      }
+
+      return html || "<p>No response text returned.</p>";
+    }
+
+    function getContext() {
+      return {
+        thread: document.getElementById("threadTitle").textContent || "New Incident Thread",
+        mode: document.getElementById("modeSelect").value || "N/A",
+        level: document.getElementById("levelSelect").value || "N/A",
+        audience: document.getElementById("audienceSelect").value || "N/A",
+        scenario: document.getElementById("scenarioSelect").value || "N/A",
+        persona: document.getElementById("personaSelect").value || "N/A",
+        output: document.getElementById("outputSelect").value || "N/A"
+      };
+    }
+
+    function termsAreConfirmed() {
+      return Boolean(termsAccepted && termsSelection);
+    }
+
+    function updateTermsGate() {
+      const allowed = termsAreConfirmed();
+
+      const input = document.getElementById("questionInput");
+      const sendButton = document.getElementById("sendButton");
+
+      input.disabled = !allowed;
+      sendButton.disabled = !allowed;
+      input.placeholder = allowed ? "Ask CIMA a question..." : "Confirm T&C to continue...";
+
+      if (allowed && document.getElementById("hitlStatus").textContent === "T&C required") {
+        document.getElementById("hitlStatus").textContent = "Not triggered";
+      }
+
+      if (!allowed) {
+        document.getElementById("hitlStatus").textContent = "T&C required";
+      }
+    }
+
+    function updateTermsStatus() {
+      const dropdown = document.getElementById("termsSelect");
+      const checkbox = document.getElementById("termsCheck");
+
+      termsSelection = dropdown ? dropdown.value : "";
+      termsAccepted = checkbox ? checkbox.checked : false;
+
+      if (termsAreConfirmed()) {
+        document.getElementById("lastOutput").textContent = `T&C confirmed: ${termsSelection}. Assistant unlocked.`;
+      } else if (termsSelection) {
+        document.getElementById("lastOutput").textContent = "T&C selected. Tick confirmation to unlock the assistant.";
+      } else {
+        document.getElementById("lastOutput").textContent = "T&C must be selected and confirmed before continuing.";
+      }
+
+      updateTermsGate();
+      renderRightView();
+    }
+
+    function updateContextFromControls() {
+      const context = getContext();
+
+      document.getElementById("modeStatus").textContent = context.mode;
+      document.getElementById("levelStatus").textContent = context.level;
+
+      const pillText = [
+        context.mode !== "N/A" ? context.mode : null,
+        context.level !== "N/A" ? context.level : null,
+        context.scenario !== "N/A" ? context.scenario : null
+      ].filter(Boolean).join(" / ");
+
+      document.getElementById("contextPill").textContent = pillText ? `● ${pillText}` : "● Context N/A";
+
+      renderRightView();
+    }
+
     function determinePath(question) {
-      const text = question.toLowerCase();
+      const context = getContext();
+
+      const text = [
+        question,
+        context.mode,
+        context.level,
+        context.audience,
+        context.scenario,
+        context.persona,
+        context.output
+      ].join(" ").toLowerCase();
 
       if (
         text.includes("assurance") ||
@@ -923,7 +1316,8 @@
         text.includes("statutory") ||
         text.includes("validate") ||
         text.includes("source") ||
-        text.includes("citation")
+        text.includes("citation") ||
+        text.includes("policy")
       ) {
         return "ASSURANCE PATH";
       }
@@ -931,12 +1325,167 @@
       return "FAST PATH";
     }
 
+    function setSourceClass(value) {
+      sourceClass = value;
+
+      for (const item of ["Resource", "Register", "Policy", "Internal"]) {
+        const id = "sourceBtn" + item;
+        const el = document.getElementById(id);
+        if (el) el.classList.remove("active");
+      }
+
+      const map = {
+        resource: "sourceBtnResource",
+        register: "sourceBtnRegister",
+        policy: "sourceBtnPolicy",
+        internal: "sourceBtnInternal"
+      };
+
+      const active = document.getElementById(map[value] || "sourceBtnResource");
+      if (active) active.classList.add("active");
+
+      if (rightTab !== "terms") {
+        setRightTab("sources");
+      } else {
+        renderRightView();
+      }
+    }
+
+    function setRightTab(value) {
+      rightTab = value;
+
+      for (const id of ["termsTab", "answerTab", "threadTab", "sourcesTab", "auditTab"]) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove("active");
+      }
+
+      const activeMap = {
+        terms: "termsTab",
+        answer: "answerTab",
+        thread: "threadTab",
+        sources: "sourcesTab",
+        audit: "auditTab"
+      };
+
+      const active = document.getElementById(activeMap[value] || "termsTab");
+      if (active) active.classList.add("active");
+
+      renderRightView();
+    }
+
+    function renderRightView() {
+      const panel = document.getElementById("rightView");
+      const context = getContext();
+
+      if (rightTab === "terms") {
+        panel.innerHTML = `
+          <h3>Terms &amp; Conditions</h3>
+          <div class="terms-line">
+            <input id="termsCheck" type="checkbox" ${termsAccepted ? "checked" : ""} onchange="updateTermsStatus()" />
+            <select id="termsSelect" onchange="updateTermsStatus()">
+              <option value="" ${termsSelection === "" ? "selected" : ""}>N/A</option>
+              <option value="T&C page 1" ${termsSelection === "T&C page 1" ? "selected" : ""}>T&amp;C page 1</option>
+              <option value="T&C page 2" ${termsSelection === "T&C page 2" ? "selected" : ""}>T&amp;C page 2</option>
+              <option value="Full CIMA T&C pack" ${termsSelection === "Full CIMA T&C pack" ? "selected" : ""}>Full CIMA T&amp;C pack</option>
+              <option value="Manual review required" ${termsSelection === "Manual review required" ? "selected" : ""}>Manual review required</option>
+            </select>
+          </div>
+          <p class="small-note">The assistant is locked until a T&amp;C option is selected and the confirmation box is ticked.</p>
+        `;
+        return;
+      }
+
+      if (rightTab === "answer") {
+        panel.innerHTML = `
+          <h3>This Answer</h3>
+          <p><strong>Current response path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
+          <p><strong>HITL:</strong> ${escapeHtml(document.getElementById("hitlStatus").textContent)}</p>
+          <p><strong>Latest answer:</strong></p>
+          ${latestAnswer ? markdownToHtml(latestAnswer) : "<p>No answer has been generated in this session yet.</p>"}
+        `;
+        return;
+      }
+
+      if (rightTab === "thread") {
+        panel.innerHTML = `
+          <h3>Thread / Transcript Email</h3>
+          <p>Send the current CIMA transcript as Word and PDF attachments.</p>
+          <input id="emailOne" class="email-input" placeholder="Primary email" />
+          <input id="emailTwo" class="email-input" placeholder="Second email optional" />
+          <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
+          <p class="small-note">Questions recorded this session: ${questions.length}</p>
+        `;
+        return;
+      }
+
+      if (rightTab === "sources") {
+        const sourceText = {
+          resource: [
+            "<h3>Resource Index</h3>",
+            "<p>Use first for role, scenario, command level, audience and visibility matching.</p>",
+            "<ul>",
+            "<li>Persona and role matrix</li>",
+            "<li>Scenario index</li>",
+            "<li>Command-level routing</li>",
+            "<li>Output template selection</li>",
+            "</ul>"
+          ].join(""),
+          register: [
+            "<h3>Source Register</h3>",
+            "<p>Authoritative citation and weighting list for Assurance Path outputs.</p>",
+            "<ul>",
+            "<li>Canonical PDF / source URL</li>",
+            "<li>Curated mirror URL where available</li>",
+            "<li>Weighting and timestamp</li>",
+            "<li>HITL if exact source confidence fails</li>",
+            "</ul>"
+          ].join(""),
+          policy: [
+            "<h3>Policy Abstracts</h3>",
+            "<p>Primary reasoning layer for PGB / IPC policy interpretation unless exact wording is requested.</p>",
+            "<ul>",
+            "<li>Policy abstracts first</li>",
+            "<li>Underlying PDFs for exact wording</li>",
+            "<li>No historic policy import unless current source says so</li>",
+            "</ul>"
+          ].join(""),
+          internal: [
+            "<h3>Internal Plans</h3>",
+            "<p>Operational protocols, plans, structures, recovery arrangements and role responsibilities.</p>",
+            "<ul>",
+            "<li>Internal plans</li>",
+            "<li>Operating structures</li>",
+            "<li>Role/persona matrices</li>",
+            "<li>Audit and version records</li>",
+            "</ul>"
+          ].join("")
+        };
+
+        panel.innerHTML = sourceText[sourceClass] || sourceText.resource;
+        return;
+      }
+
+      if (rightTab === "audit") {
+        panel.innerHTML = `
+          <h3>Audit / Governance Snapshot</h3>
+          <p><strong>Build:</strong> ${escapeHtml(BUILD_ISO)}</p>
+          <p><strong>T&amp;C confirmed:</strong> ${termsAreConfirmed() ? "Yes" : "No"}</p>
+          <p><strong>Mode:</strong> ${escapeHtml(context.mode)}</p>
+          <p><strong>Command level:</strong> ${escapeHtml(context.level)}</p>
+          <p><strong>Audience:</strong> ${escapeHtml(context.audience)}</p>
+          <p><strong>Scenario:</strong> ${escapeHtml(context.scenario)}</p>
+          <p><strong>Persona:</strong> ${escapeHtml(context.persona)}</p>
+          <p><strong>Output:</strong> ${escapeHtml(context.output)}</p>
+          <p><strong>Questions:</strong> ${questions.length}</p>
+          <p><strong>Path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
+          <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
+        `;
+      }
+    }
+
     function removeEmptyState() {
       const emptyState = document.getElementById("emptyState");
-
-      if (emptyState) {
-        emptyState.remove();
-      }
+      if (emptyState) emptyState.remove();
     }
 
     function addMessage(type, title, bodyHtml) {
@@ -952,7 +1501,44 @@
       chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
-    function askQuestion() {
+    function fallbackAnswer(question, path) {
+      const context = getContext();
+
+      return [
+        "## Executive Summary",
+        path === "ASSURANCE PATH"
+          ? "This has been treated as an Assurance Path request. The production system would require Source Register evidence before presenting this as assured."
+          : "This has been treated as a Fast Path operational request. The immediate priority is to clarify facts, identify people at risk, stabilise the situation and set a next action owner.",
+        "",
+        "## Options / Controls",
+        "- Confirm known facts and assumptions.",
+        "- Identify people at immediate risk.",
+        "- Set the next action owner.",
+        "- Agree the next update time.",
+        "- Record the decision and the reason for it.",
+        "",
+        "## Risk & Safety",
+        `- Mode: ${context.mode}`,
+        `- Command level: ${context.level}`,
+        `- Scenario: ${context.scenario}`,
+        "- Do not present uncertain information as confirmed.",
+        "",
+        "## Next Steps / Information Gaps",
+        "- Confirm exact location and time.",
+        "- Confirm who is affected and current welfare status.",
+        "- Confirm whether external authorities are involved.",
+        "- Confirm whether a formal source-cited assurance response is required."
+      ].join("\n");
+    }
+
+    async function askQuestion() {
+      if (!termsAreConfirmed()) {
+        setRightTab("terms");
+        document.getElementById("lastOutput").textContent = "T&C must be selected and ticked before the assistant can continue.";
+        updateTermsGate();
+        return;
+      }
+
       const input = document.getElementById("questionInput");
       const question = input.value.trim();
 
@@ -960,59 +1546,173 @@
 
       questions.push(question);
 
-      const path = determinePath(question);
+      const predictedPath = determinePath(question);
+      const context = getContext();
 
       document.getElementById("questionCount").textContent = String(questions.length);
-      document.getElementById("pathStatus").textContent = path;
+      document.getElementById("pathStatus").textContent = predictedPath;
       document.getElementById("threadTitle").textContent = "Active Incident Thread";
-
-      if (path === "ASSURANCE PATH") {
-        document.getElementById("hitlStatus").textContent = "May be required";
-        document.getElementById("sourceStatus").textContent = "Assurance requested. Production version would retrieve approved source-register material.";
-      } else {
-        document.getElementById("sourceStatus").textContent = "Demo answer only. Production version would use the CIMA knowledge index.";
-      }
+      document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
 
       addMessage("user", "You", `<p>${escapeHtml(question)}</p>`);
+
+      let answer = "";
+      let finalPath = predictedPath;
+      let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
+      let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
+
+      try {
+        const res = await fetch("/cima-chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question,
+            context,
+            terms: {
+              accepted: true,
+              selected: termsSelection
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Backend response failed.");
+        }
+
+        answer = data.answer || fallbackAnswer(question, predictedPath);
+        finalPath = data.response_path || predictedPath;
+        hitl = data.hitl || hitl;
+        latestSources = data.sources || [];
+      } catch (error) {
+        answer = fallbackAnswer(question, predictedPath);
+        latestSources = [
+          {
+            title: "Local fallback",
+            note: error.message
+          }
+        ];
+      }
+
+      latestAnswer = answer;
+
+      document.getElementById("pathStatus").textContent = finalPath;
+      document.getElementById("hitlStatus").textContent = hitl;
+      document.getElementById("confidenceStatus").textContent = confidence;
 
       addMessage(
         "agent",
         "CIMA Assistant",
         `
-          <p><strong>Path:</strong> ${escapeHtml(path)}</p>
-          <p>This is the demo CIMA response area. In production this would answer using the CIMA knowledge index, approved source register and relevant command mode.</p>
-          <ul>
-            <li>Confirm known facts.</li>
-            <li>Identify people at risk.</li>
-            <li>Set the next action owner.</li>
-            <li>Log the decision and next update time.</li>
-          </ul>
+          <p><strong>Path:</strong> ${escapeHtml(finalPath)}</p>
+          ${markdownToHtml(answer)}
         `
       );
 
-      document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${path}.`;
+      transcriptEntries.push({
+        at: new Date().toISOString(),
+        question,
+        path: finalPath,
+        answer
+      });
+
+      document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
       input.value = "";
+      setRightTab("answer");
+    }
+
+    async function sendTranscriptEmail() {
+      const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+      const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+
+      const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+      if (!emails.length) {
+        document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the transcript.";
+        return;
+      }
+
+      if (!transcriptEntries.length) {
+        document.getElementById("lastOutput").textContent = "No transcript entries to send yet.";
+        return;
+      }
+
+      const button = document.getElementById("sendTranscriptBtn");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Sending...";
+      }
+
+      try {
+        const res = await fetch("/send-transcript-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            emails,
+            subject: "PGB CIMA transcript",
+            generated_at: new Date().toISOString(),
+            context: getContext(),
+            questions: transcriptEntries
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Transcript email failed.");
+        }
+
+        document.getElementById("lastOutput").textContent = `Transcript sent to ${emails.join(", ")}.`;
+      } catch (error) {
+        document.getElementById("lastOutput").textContent = `Transcript email failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Send Word + PDF Transcript";
+        }
+      }
     }
 
     function clearSession() {
       questions = [];
+      transcriptEntries = [];
+      latestAnswer = "";
+      latestSources = [];
 
       document.getElementById("questionInput").value = "";
       document.getElementById("questionCount").textContent = "0";
       document.getElementById("pathStatus").textContent = "FAST PATH";
-      document.getElementById("hitlStatus").textContent = "Not triggered";
-      document.getElementById("lastOutput").textContent = "None.";
-      document.getElementById("sourceStatus").textContent = "No sources for this answer.";
+      document.getElementById("hitlStatus").textContent = termsAreConfirmed() ? "Not triggered" : "T&C required";
+      document.getElementById("confidenceStatus").textContent = "Provisional";
+      document.getElementById("lastOutput").textContent = termsAreConfirmed()
+        ? "New incident started."
+        : "T&C must be confirmed before the assistant can continue.";
       document.getElementById("threadTitle").textContent = "New Incident Thread";
 
       document.getElementById("chatWindow").innerHTML = `
         <div class="empty-state" id="emptyState">
           <div class="bubble-icon"></div>
-          <h2>Start a conversation</h2>
-          <p>Ask about operational response, welfare, command actions, communications or recovery.</p>
+          <h2>${termsAreConfirmed() ? "Start a conversation" : "Confirm T&C to begin"}</h2>
+          <p>${termsAreConfirmed()
+            ? "Ask about operational response, welfare, command actions, communications or recovery."
+            : "Select the T&C tab, choose the applicable T&C page, tick confirmation, then ask about operational response, welfare, command actions, communications or recovery."}</p>
         </div>
       `;
+
+      updateContextFromControls();
+      renderRightView();
     }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      updateContextFromControls();
+      setRightTab("terms");
+      updateTermsGate();
+    });
   </script>
 </body>
 </html>
