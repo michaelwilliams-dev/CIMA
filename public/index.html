@@ -4,18 +4,31 @@
   <!--
     AIVS / PGB CIMA Front End
     File: index.html
-    ISO Timestamp: 2026-05-20T13:45:00Z
+    ISO Timestamp: 2026-05-20T15:05:00Z
 
     Change Log:
-    - v1.0.0: amended to match PGB CIMA Agent Operating Instructions working standard
-    - v1.0.0: added CIMA operating mode, command level, audience, scenario, persona and output selectors
-    - v1.0.0: added FAST PATH / ASSURANCE PATH display logic
-    - v1.0.0: added T&C front tab and chat gate
-    - v1.0.0: added source hierarchy panel: Resource Index, Source Register, Policy Abstracts, Internal Plans
-    - v1.0.0: added audit/status panel for mode, path, HITL, confidence, sources and version
-    - v1.0.0: connected chat to /cima-chat with safe local fallback
-    - v1.0.0: connected transcript email to /send-transcript-email with two email fields
-    - v1.0.0: removed Company Examiner / security-specific terminology from the CIMA interface
+    - v1.0.5: made CIMA Context a larger heading
+    - v1.0.5: removed Context N/A pill and CIMA online pill
+    - v1.0.5: aligned Transcript and Sources as clear visible action buttons
+    - v1.0.4: removed left search and incident-thread dropdown
+    - v1.0.4: replaced PDF/W/email/source header controls with two clean buttons: Transcript and Sources
+    - v1.0.3: moved logo images to far left and ISO timestamp to far right
+    - v1.0.2: full replacement script
+    - v1.0.2: added top-left ISO timestamp in top logo strip
+    - v1.0.2: added larger real logos from public folder: AIVS_logo.png, ISO_logo.png, Quad Logo.jpg
+    - v1.0.2: made top logo strip left-aligned
+    - v1.0.2: left brand now shows larger AIVS only
+    - v1.0.2: removed CIMA | PGB text from left brand row
+    - v1.0.2: removed Command User profile card
+    - v1.0.2: removed yellow New incident button
+    - v1.0.2: removed Audience / Role selector
+    - v1.0.2: removed Scenario selector
+    - v1.0.2: removed Recent thread list
+    - v1.0.2: centre panel now has clear chat input and clear reply area
+    - v1.0.2: retained Mode, Command Level, Persona, Requested Output, T&C, Sources, Audit and Transcript Email
+    - v1.0.2: retained /cima-chat and /send-transcript-email backend connections
+    - v1.0.3: moved ISO timestamp to far-left rounded shadow card
+    - v1.0.3: replaced left-panel AIVS text with larger PGB | CIMA logo text
   -->
 
   <meta charset="UTF-8" />
@@ -44,9 +57,7 @@
       --radius: 24px;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html,
     body {
@@ -78,8 +89,67 @@
     .yellow-dot { background: #ffbd2e; }
     .green-dot { background: #28c840; }
 
+    .top-logo-strip {
+      height: 78px;
+      background: #ffffff;
+      border-bottom: 1.5px solid var(--soft-border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 34px;
+      padding: 10px 22px;
+    }
+
+    .top-logo-left {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 34px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .iso-time-stamp {
+      min-width: 228px;
+      height: 40px;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      background: #fffdfa;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      white-space: nowrap;
+      box-shadow: 0 5px 14px rgba(40, 35, 25, 0.12);
+      margin-left: auto;
+    }
+
+    .top-logo-strip img {
+      max-height: 58px;
+      max-width: 210px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .top-logo-strip img.aivs-top-logo {
+      max-height: 62px;
+      max-width: 230px;
+    }
+
+    .top-logo-strip img.iso-logo {
+      max-height: 54px;
+      max-width: 200px;
+    }
+
+    .top-logo-strip img.quad-logo {
+      max-height: 58px;
+      max-width: 245px;
+    }
+
     .app {
-      height: calc(100vh - 32px);
+      height: calc(100vh - 110px);
       display: grid;
       grid-template-columns: 330px 1fr 390px;
       gap: 16px;
@@ -105,31 +175,26 @@
     }
 
     .brand-row {
-      min-height: 34px;
+      min-height: 48px;
       display: flex;
       align-items: center;
       gap: 9px;
       margin-bottom: 16px;
     }
 
-    .aivs-logo {
-      font-size: 30px;
+    .pgb-cima-logo {
+      font-size: 28px;
       font-weight: 900;
-      font-style: italic;
-      letter-spacing: -0.09em;
+      letter-spacing: 0.01em;
       color: #050505;
       line-height: 1;
+      white-space: nowrap;
     }
 
-    .brand-text {
-      font-size: 14px;
-      font-weight: bold;
-      color: var(--ink);
-    }
-
-    .brand-muted {
-      color: var(--muted);
-      font-weight: bold;
+    .pgb-cima-logo span {
+      color: var(--orange);
+      padding: 0 6px;
+      font-weight: 900;
     }
 
     .collapse {
@@ -137,63 +202,6 @@
       color: var(--muted);
       font-size: 26px;
       line-height: 1;
-    }
-
-    .profile {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 9px;
-      margin-bottom: 11px;
-      border: 1.5px solid var(--border);
-      border-radius: 16px;
-      background: #fffdfa;
-    }
-
-    .avatar {
-      width: 41px;
-      height: 41px;
-      border-radius: 50%;
-      background: #efc777;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      color: var(--ink);
-      font-size: 17px;
-    }
-
-    .profile strong {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 2px;
-    }
-
-    .profile span {
-      display: block;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .new-btn {
-      width: 100%;
-      border: 0;
-      border-radius: 999px;
-      background: var(--orange);
-      color: #0e1f29;
-      padding: 11px 16px;
-      font-size: 15px;
-      font-weight: bold;
-      text-align: left;
-      cursor: pointer;
-      margin-bottom: 10px;
-    }
-
-    .new-btn .plus {
-      font-size: 24px;
-      font-weight: normal;
-      margin-right: 8px;
-      vertical-align: -2px;
     }
 
     .search-wrap {
@@ -266,6 +274,14 @@
       margin: 10px 0 8px 4px;
     }
 
+    .context-heading {
+      color: var(--ink);
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin: 8px 0 14px 4px;
+    }
+
     .context-box {
       border: 1.7px solid var(--border);
       border-radius: 18px;
@@ -292,8 +308,7 @@
       margin-bottom: 4px;
     }
 
-    .field select,
-    .field input {
+    .field select {
       width: 100%;
       height: 36px;
       border: 1.5px solid var(--border);
@@ -306,38 +321,9 @@
       font-family: inherit;
     }
 
-    .field select:focus,
-    .field input:focus {
+    .field select:focus {
       border-color: var(--orange);
       background: #ffffff;
-    }
-
-    .recent-item {
-      min-height: 58px;
-      border-radius: 12px;
-      border: 1.5px solid transparent;
-      padding: 10px 10px;
-      color: var(--ink);
-      font-size: 14px;
-      font-weight: bold;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      margin-bottom: 6px;
-      background: rgba(255,255,255,0.38);
-    }
-
-    .recent-item.active {
-      background: var(--active-bg);
-      border-color: var(--border);
-    }
-
-    .recent-item span {
-      display: block;
-      color: var(--faint);
-      font-size: 12px;
-      font-weight: normal;
-      margin-top: 4px;
     }
 
     .left-footer {
@@ -407,9 +393,10 @@
     .main-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: 14px;
+      flex-wrap: nowrap;
       justify-content: flex-end;
+      margin-left: auto;
     }
 
     .online-pill {
@@ -453,78 +440,144 @@
       font-size: 13px;
     }
 
-    .chat {
+    .clean-action-btn {
+      min-width: 140px;
+      height: 44px;
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      background: #fffdfa;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      padding: 0 22px;
+      box-shadow: 0 6px 16px rgba(40, 35, 25, 0.12);
+    }
+
+    .clean-action-btn:hover {
+      border-color: var(--orange);
+      background: #ffffff;
+    }
+
+    .centre-workspace {
       flex: 1;
       background: #ffffff;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow-y: auto;
-      border-right: 1px dashed #f0ede7;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+      padding: 24px;
+      overflow: hidden;
     }
 
-    .empty-state {
-      margin: auto;
-      width: min(430px, 80%);
-      text-align: center;
+    .ask-card {
+      border: 1.7px solid var(--border);
+      border-radius: 20px;
+      background: #fffdfa;
+      box-shadow: 0 8px 22px rgba(20, 30, 38, 0.06);
+      padding: 18px;
+    }
+
+    .ask-card h2 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      color: var(--ink);
+    }
+
+    .ask-card p {
+      margin: 0 0 14px 0;
       color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
     }
 
-    .bubble-icon {
-      width: 48px;
-      height: 38px;
-      margin: 0 auto 23px auto;
-      border: 4px solid #c2c8cc;
-      border-radius: 8px;
-      position: relative;
+    .clear-composer {
+      display: grid;
+      grid-template-columns: 1fr 52px;
+      gap: 10px;
+      align-items: stretch;
     }
 
-    .bubble-icon::after {
-      content: "";
-      position: absolute;
-      left: 8px;
-      bottom: -13px;
-      width: 15px;
-      height: 15px;
+    .clear-composer textarea {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      border: 1.7px solid var(--border);
+      border-radius: 15px;
       background: #ffffff;
-      border-left: 4px solid #c2c8cc;
-      border-bottom: 4px solid #c2c8cc;
-      transform: rotate(45deg);
+      padding: 13px 14px;
+      color: var(--ink);
+      font-size: 15px;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.45;
     }
 
-    .empty-state h2 {
-      margin: 0 0 12px 0;
-      color: #5d6770;
-      font-size: 21px;
+    .clear-composer textarea:disabled {
+      color: #9ca3af;
+      background: #f7f5ef;
+      cursor: not-allowed;
     }
 
-    .empty-state p {
-      margin: 0;
-      color: #89939a;
-      font-size: 16px;
+    .send-btn {
+      width: 52px;
+      border: 0;
+      border-radius: 15px;
+      background: var(--orange);
+      color: #ffffff;
+      font-size: 26px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .send-btn:disabled {
+      background: #c7b69f;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .reply-card {
+      border: 1.7px solid var(--border);
+      border-radius: 20px;
+      background: #ffffff;
+      padding: 18px;
+      overflow-y: auto;
+    }
+
+    .reply-card h2 {
+      margin: 0 0 10px 0;
+      color: var(--ink);
+      font-size: 18px;
+    }
+
+    .reply-placeholder {
+      min-height: 250px;
+      border: 1.5px dashed #d8cfc2;
+      border-radius: 16px;
+      background: #fbfaf5;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 28px;
       line-height: 1.45;
     }
 
     .message {
-      max-width: 760px;
       border: 1.5px solid var(--border);
       border-radius: 14px;
       padding: 13px 15px;
-      margin: 20px 24px 0 24px;
+      margin: 12px 0;
       font-size: 14px;
       line-height: 1.48;
     }
 
     .message.user {
-      align-self: flex-end;
-      margin-left: auto;
       background: #f8f9fa;
       border-right: 4px solid var(--blue);
     }
 
     .message.agent {
-      align-self: flex-start;
-      margin-right: auto;
       background: #fffaf2;
       border-left: 4px solid var(--orange);
     }
@@ -547,73 +600,6 @@
     .message ul {
       margin: 8px 0 8px 20px;
       padding: 0;
-    }
-
-    .composer-row {
-      min-height: 90px;
-      background: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 28px 20px 28px;
-    }
-
-    .composer {
-      width: 100%;
-      max-width: 640px;
-      min-height: 64px;
-      background: #ffffff;
-      border: 1.5px solid #d8cfc2;
-      border-radius: 16px;
-      display: grid;
-      grid-template-columns: 48px 1fr 50px;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 8px 22px rgba(20, 30, 38, 0.08);
-      padding: 7px;
-    }
-
-    .attach-btn {
-      border: 0;
-      background: transparent;
-      color: #5d6870;
-      font-size: 24px;
-      cursor: pointer;
-    }
-
-    .composer textarea {
-      border: 0;
-      resize: none;
-      height: 42px;
-      padding: 11px 4px;
-      color: var(--ink);
-      font-size: 15px;
-      outline: none;
-      font-family: inherit;
-    }
-
-    .composer textarea:disabled {
-      color: #9ca3af;
-      background: #f7f5ef;
-      cursor: not-allowed;
-    }
-
-    .send-btn {
-      width: 46px;
-      height: 46px;
-      border: 0;
-      border-radius: 14px;
-      background: var(--orange);
-      color: #ffffff;
-      font-size: 24px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .send-btn:disabled {
-      background: #c7b69f;
-      cursor: not-allowed;
-      opacity: 0.7;
     }
 
     .right-panel {
@@ -881,6 +867,12 @@
         overflow: auto;
       }
 
+      .top-logo-strip {
+        height: auto;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+
       .app {
         height: auto;
         grid-template-columns: 1fr;
@@ -893,8 +885,8 @@
         min-height: 500px;
       }
 
-      .chat {
-        min-height: 480px;
+      .centre-workspace {
+        min-height: 560px;
       }
     }
   </style>
@@ -907,40 +899,27 @@
     <span class="mac-dot green-dot"></span>
   </div>
 
+  <div class="top-logo-strip">
+    <div class="top-logo-left">
+      <img class="aivs-top-logo" src="AIVS_logo.png" alt="AIVS Software Limited" />
+      <img class="iso-logo" src="ISO_logo.png" alt="ISO/IEC 42001" />
+      <img class="quad-logo" src="Quad%20Logo.jpg" alt="Quad" />
+    </div>
+    <div id="topIsoStamp" class="iso-time-stamp">ISO loading...</div>
+  </div>
+
   <main class="app">
     <aside class="panel left-panel">
       <div class="left-top">
         <div class="brand-row">
-          <div class="aivs-logo">AIVS</div>
-          <div class="brand-text">CIMA</div>
-          <div class="brand-muted">|</div>
-          <div class="brand-muted">PGB</div>
+          <div class="pgb-cima-logo">PGB<span>|</span>CIMA</div>
           <div class="collapse">‹</div>
         </div>
 
-        <div class="profile">
-          <div class="avatar">C</div>
-          <div>
-            <strong>Command User</strong>
-            <span>Incident workspace</span>
-          </div>
-        </div>
-
-        <button class="new-btn" type="button" onclick="clearSession()">
-          <span class="plus">＋</span>New incident
-        </button>
-
-        <div class="search-wrap">
-          <span class="search-icon">⌕</span>
-          <input placeholder="Search incident threads" />
-          <span class="key-pill">K</span>
-        </div>
-
-        <button class="conversation-filter" type="button">All incident threads⌄</button>
       </div>
 
       <div class="left-scroll">
-        <div class="section-label">CIMA Context</div>
+        <div class="context-heading">CIMA Context</div>
 
         <div class="context-box">
           <h3>Operating Setup</h3>
@@ -962,35 +941,6 @@
               <option value="Gold / Strategic">Gold / Strategic</option>
               <option value="Silver / Tactical">Silver / Tactical</option>
               <option value="Bronze / Operational">Bronze / Operational</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="audienceSelect">Audience / role</label>
-            <select id="audienceSelect" onchange="updateContextFromControls()">
-              <option value="">N/A</option>
-              <option value="Neutral operational voice">Neutral operational voice</option>
-              <option value="Gold / Strategic">Gold / Strategic</option>
-              <option value="Silver / Tactical">Silver / Tactical</option>
-              <option value="Bronze / Operational">Bronze / Operational</option>
-              <option value="Media / Comms">Media / Comms</option>
-              <option value="Support functions">Support functions</option>
-              <option value="Board / C-Suite on demand">Board / C-Suite on demand</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="scenarioSelect">Scenario</label>
-            <select id="scenarioSelect" onchange="updateContextFromControls()">
-              <option value="">N/A</option>
-              <option value="Missing travel / welfare concern">Missing travel / welfare concern</option>
-              <option value="Severe weather">Severe weather</option>
-              <option value="Transport disruption">Transport disruption</option>
-              <option value="Accommodation pressure">Accommodation pressure</option>
-              <option value="Personal safety concern">Personal safety concern</option>
-              <option value="Incident reporting / coordination">Incident reporting / coordination</option>
-              <option value="Media holding line">Media holding line</option>
-              <option value="Recovery / return to steady state">Recovery / return to steady state</option>
             </select>
           </div>
 
@@ -1019,15 +969,6 @@
             </select>
           </div>
         </div>
-
-        <div class="section-label">Recent</div>
-
-        <div class="recent-item active">New Incident Thread<span>Now</span></div>
-        <div class="recent-item">Missing travel / welfare concern<span>Demo</span></div>
-        <div class="recent-item">Severe weather planning<span>Demo</span></div>
-        <div class="recent-item">Transport disruption<span>Demo</span></div>
-        <div class="recent-item">Media holding line<span>Demo</span></div>
-        <div class="recent-item">Accommodation pressure<span>Demo</span></div>
       </div>
 
       <div class="left-footer">
@@ -1042,31 +983,30 @@
       <div class="main-header">
         <div class="thread-left">
           <div class="thread-title" id="threadTitle">New Incident Thread</div>
-          <div class="project-pill" id="contextPill">● Context N/A</div>
         </div>
 
         <div class="main-actions">
-          <div class="online-pill"><span>●</span>CIMA online</div>
-          <button class="icon-btn" type="button" onclick="setRightTab('thread')">PDF</button>
-          <button class="icon-btn" type="button" onclick="setRightTab('thread')">W</button>
-          <button class="icon-btn" type="button" onclick="setRightTab('thread')">✉</button>
-          <button class="icon-btn sources-main-btn" type="button" onclick="setRightTab('sources')">▥ Sources</button>
+          <button class="clean-action-btn" type="button" onclick="setRightTab('thread')">Transcript</button>
+          <button class="clean-action-btn" type="button" onclick="setRightTab('sources')">Sources</button>
         </div>
       </div>
 
-      <div class="chat" id="chatWindow">
-        <div class="empty-state" id="emptyState">
-          <div class="bubble-icon"></div>
-          <h2>Confirm T&amp;C to begin</h2>
-          <p>Select the T&amp;C tab, choose the applicable T&amp;C page, tick confirmation, then ask about operational response, welfare, command actions, communications or recovery.</p>
-        </div>
-      </div>
+      <div class="centre-workspace">
+        <div class="ask-card">
+          <h2>Ask CIMA</h2>
+          <p>Use the context selectors on the left, then ask a clear operational, planning or assurance question.</p>
 
-      <div class="composer-row">
-        <div class="composer">
-          <button class="attach-btn" type="button" onclick="setRightTab('sources')">⌘</button>
-          <textarea id="questionInput" placeholder="Confirm T&C to continue..." disabled></textarea>
-          <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()" disabled>↑</button>
+          <div class="clear-composer">
+            <textarea id="questionInput" placeholder="Confirm T&C to continue..." disabled></textarea>
+            <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()" disabled>↑</button>
+          </div>
+        </div>
+
+        <div class="reply-card">
+          <h2>Reply</h2>
+          <div id="replyArea" class="reply-placeholder">
+            Select the T&amp;C tab, choose the applicable T&amp;C page, tick confirmation, then ask a question. CIMA’s reply will appear here.
+          </div>
         </div>
       </div>
     </section>
@@ -1150,7 +1090,7 @@
   </main>
 
   <script>
-    const BUILD_ISO = "2026-05-20T13:45:00Z";
+    const BUILD_ISO = "2026-05-20T15:05:00Z";
 
     let questions = [];
     let transcriptEntries = [];
@@ -1162,7 +1102,14 @@
     let termsSelection = "";
 
     function updateIsoTime() {
-      document.getElementById("isoTime").textContent = new Date().toISOString();
+      const now = new Date().toISOString();
+
+      document.getElementById("isoTime").textContent = now;
+
+      const topIsoStamp = document.getElementById("topIsoStamp");
+      if (topIsoStamp) {
+        topIsoStamp.textContent = `ISO ${now}`;
+      }
     }
 
     updateIsoTime();
@@ -1231,8 +1178,6 @@
         thread: document.getElementById("threadTitle").textContent || "New Incident Thread",
         mode: document.getElementById("modeSelect").value || "N/A",
         level: document.getElementById("levelSelect").value || "N/A",
-        audience: document.getElementById("audienceSelect").value || "N/A",
-        scenario: document.getElementById("scenarioSelect").value || "N/A",
         persona: document.getElementById("personaSelect").value || "N/A",
         output: document.getElementById("outputSelect").value || "N/A"
       };
@@ -1270,6 +1215,11 @@
 
       if (termsAreConfirmed()) {
         document.getElementById("lastOutput").textContent = `T&C confirmed: ${termsSelection}. Assistant unlocked.`;
+
+        const replyArea = document.getElementById("replyArea");
+        if (replyArea && replyArea.classList.contains("reply-placeholder")) {
+          replyArea.textContent = "T&C confirmed. Ask a question above and CIMA’s reply will appear here.";
+        }
       } else if (termsSelection) {
         document.getElementById("lastOutput").textContent = "T&C selected. Tick confirmation to unlock the assistant.";
       } else {
@@ -1286,14 +1236,6 @@
       document.getElementById("modeStatus").textContent = context.mode;
       document.getElementById("levelStatus").textContent = context.level;
 
-      const pillText = [
-        context.mode !== "N/A" ? context.mode : null,
-        context.level !== "N/A" ? context.level : null,
-        context.scenario !== "N/A" ? context.scenario : null
-      ].filter(Boolean).join(" / ");
-
-      document.getElementById("contextPill").textContent = pillText ? `● ${pillText}` : "● Context N/A";
-
       renderRightView();
     }
 
@@ -1304,8 +1246,6 @@
         question,
         context.mode,
         context.level,
-        context.audience,
-        context.scenario,
         context.persona,
         context.output
       ].join(" ").toLowerCase();
@@ -1422,10 +1362,9 @@
         const sourceText = {
           resource: [
             "<h3>Resource Index</h3>",
-            "<p>Use first for role, scenario, command level, audience and visibility matching.</p>",
+            "<p>Use first for role, command level, output and visibility matching.</p>",
             "<ul>",
             "<li>Persona and role matrix</li>",
-            "<li>Scenario index</li>",
             "<li>Command-level routing</li>",
             "<li>Output template selection</li>",
             "</ul>"
@@ -1472,8 +1411,6 @@
           <p><strong>T&amp;C confirmed:</strong> ${termsAreConfirmed() ? "Yes" : "No"}</p>
           <p><strong>Mode:</strong> ${escapeHtml(context.mode)}</p>
           <p><strong>Command level:</strong> ${escapeHtml(context.level)}</p>
-          <p><strong>Audience:</strong> ${escapeHtml(context.audience)}</p>
-          <p><strong>Scenario:</strong> ${escapeHtml(context.scenario)}</p>
           <p><strong>Persona:</strong> ${escapeHtml(context.persona)}</p>
           <p><strong>Output:</strong> ${escapeHtml(context.output)}</p>
           <p><strong>Questions:</strong> ${questions.length}</p>
@@ -1483,22 +1420,25 @@
       }
     }
 
-    function removeEmptyState() {
-      const emptyState = document.getElementById("emptyState");
-      if (emptyState) emptyState.remove();
+    function clearReplyPlaceholder() {
+      const replyArea = document.getElementById("replyArea");
+      if (replyArea.classList.contains("reply-placeholder")) {
+        replyArea.className = "";
+        replyArea.innerHTML = "";
+      }
     }
 
     function addMessage(type, title, bodyHtml) {
-      removeEmptyState();
+      clearReplyPlaceholder();
 
-      const chatWindow = document.getElementById("chatWindow");
+      const replyArea = document.getElementById("replyArea");
       const div = document.createElement("div");
 
       div.className = "message " + type;
       div.innerHTML = `<strong>${escapeHtml(title)}</strong>${bodyHtml}`;
 
-      chatWindow.appendChild(div);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
+      replyArea.appendChild(div);
+      replyArea.scrollTop = replyArea.scrollHeight;
     }
 
     function fallbackAnswer(question, path) {
@@ -1520,7 +1460,6 @@
         "## Risk & Safety",
         `- Mode: ${context.mode}`,
         `- Command level: ${context.level}`,
-        `- Scenario: ${context.scenario}`,
         "- Do not present uncertain information as confirmed.",
         "",
         "## Next Steps / Information Gaps",
@@ -1694,15 +1633,11 @@
         : "T&C must be confirmed before the assistant can continue.";
       document.getElementById("threadTitle").textContent = "New Incident Thread";
 
-      document.getElementById("chatWindow").innerHTML = `
-        <div class="empty-state" id="emptyState">
-          <div class="bubble-icon"></div>
-          <h2>${termsAreConfirmed() ? "Start a conversation" : "Confirm T&C to begin"}</h2>
-          <p>${termsAreConfirmed()
-            ? "Ask about operational response, welfare, command actions, communications or recovery."
-            : "Select the T&C tab, choose the applicable T&C page, tick confirmation, then ask about operational response, welfare, command actions, communications or recovery."}</p>
-        </div>
-      `;
+      const replyArea = document.getElementById("replyArea");
+      replyArea.className = "reply-placeholder";
+      replyArea.textContent = termsAreConfirmed()
+        ? "T&C confirmed. Ask a question above and CIMA’s reply will appear here."
+        : "Select the T&C tab, choose the applicable T&C page, tick confirmation, then ask a question. CIMA’s reply will appear here.";
 
       updateContextFromControls();
       renderRightView();
