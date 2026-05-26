@@ -4,31 +4,23 @@
   <!--
     AIVS / PGB CIMA Front End
     File: index.html
-    ISO Timestamp: 2026-05-20T15:05:00Z
+    ISO Timestamp: 2026-05-25T11:15:00Z
 
     Change Log:
-    - v1.0.5: made CIMA Context a larger heading
-    - v1.0.5: removed Context N/A pill and CIMA online pill
-    - v1.0.5: aligned Transcript and Sources as clear visible action buttons
-    - v1.0.4: removed left search and incident-thread dropdown
-    - v1.0.4: replaced PDF/W/email/source header controls with two clean buttons: Transcript and Sources
-    - v1.0.3: moved logo images to far left and ISO timestamp to far right
-    - v1.0.2: full replacement script
-    - v1.0.2: added top-left ISO timestamp in top logo strip
-    - v1.0.2: added larger real logos from public folder: AIVS_logo.png, ISO_logo.png, Quad Logo.jpg
-    - v1.0.2: made top logo strip left-aligned
-    - v1.0.2: left brand now shows larger AIVS only
-    - v1.0.2: removed CIMA | PGB text from left brand row
-    - v1.0.2: removed Command User profile card
-    - v1.0.2: removed yellow New incident button
-    - v1.0.2: removed Audience / Role selector
-    - v1.0.2: removed Scenario selector
-    - v1.0.2: removed Recent thread list
-    - v1.0.2: centre panel now has clear chat input and clear reply area
-    - v1.0.2: retained Mode, Command Level, Persona, Requested Output, T&C, Sources, Audit and Transcript Email
-    - v1.0.2: retained /cima-chat and /send-transcript-email backend connections
-    - v1.0.3: moved ISO timestamp to far-left rounded shadow card
-    - v1.0.3: replaced left-panel AIVS text with larger PGB | CIMA logo text
+    - v1.1.0: added front access gate using email access code and T&C acceptance
+    - v1.1.0: added temporary demo bypass using access code value "demo"
+    - v1.1.0: removed right-panel T&C gate as the primary access control
+    - v1.1.0: retained logos, CIMA visual structure, tabs, transcript, sources and audit controls
+    - v1.1.0: added CIMA Response Dashboard above the answer
+    - v1.1.0: added optional Show Session Q&A on screen toggle
+    - v1.1.0: added optional Include transcript in email toggle
+    - v1.1.0: displays questions and answers on screen when enabled
+    - v1.1.0: retained /cima-chat, /send-access-code-email, /check-access and /send-transcript-email backend calls
+    - v1.1.1: removed inner-panel T&C tab from the working area
+    - v1.1.1: renamed This Answer to Answer
+    - v1.1.1: renamed Thread / Email to Email
+    - v1.1.1: shortened source selector labels to Index, Source, Policy, Playbooks
+    - v1.1.1: removed temporary bottom label-patching script
   -->
 
   <meta charset="UTF-8" />
@@ -39,9 +31,9 @@
   <style>
     :root {
       --page-bg: #eee9df;
-      --panel-bg: #fbfaf5;
+      --panel-bg: #f0eadf;
       --white: #ffffff;
-      --active-bg: #f2eadc;
+      --panel-bg: #e2d6c7;
       --orange: #dc9325;
       --orange-dark: #c98118;
       --ink: #10232d;
@@ -69,6 +61,13 @@
       overflow: hidden;
     }
 
+    button,
+    input,
+    textarea,
+    select {
+      font-family: inherit;
+    }
+
     .mac-dots {
       height: 32px;
       display: flex;
@@ -90,14 +89,14 @@
     .green-dot { background: #28c840; }
 
     .top-logo-strip {
-      height: 78px;
-      background: #ffffff;
+      height: 120px;
+      background: var(--page-bg);
       border-bottom: 1.5px solid var(--soft-border);
       display: flex;
       align-items: center;
       justify-content: flex-start;
       gap: 34px;
-      padding: 10px 22px;
+      padding: 14px 22px;
     }
 
     .top-logo-left {
@@ -110,51 +109,249 @@
     }
 
     .iso-time-stamp {
-      min-width: 228px;
-      height: 40px;
-      border: 1.5px solid var(--border);
-      border-radius: 14px;
-      background: #fffdfa;
-      color: var(--ink);
+        min-width: 228px;
+        height: 40px;
+        border: 1.5px solid var(--border);
+        border-radius: 14px;
+        background: #fffdfa;
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 5px 14px rgba(40, 35, 25, 0.12);
+        margin-left: auto;
+      }
+
+      .top-logo-strip img.aivs-top-logo {
+        max-height: 62px;
+        max-width: 230px;
+      }
+
+      .top-logo-strip img.iso-logo {
+        max-height: 54px;
+        max-width: 200px;
+      }
+
+      .top-logo-strip img.quad-logo {
+        max-height: 58px;
+        max-width: 245px;
+      }
+
+    .access-gate {
+      min-height: calc(100vh - 110px);
+      background: var(--page-bg);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
-      font-weight: bold;
-      white-space: nowrap;
-      box-shadow: 0 5px 14px rgba(40, 35, 25, 0.12);
-      margin-left: auto;
+      padding: 26px;
     }
 
-    .top-logo-strip img {
-      max-height: 58px;
-      max-width: 210px;
-      object-fit: contain;
+    .access-card {
+      width: min(980px, 100%);
+      background: #fffdfa;
+      border: 1.7px solid var(--border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+
+    .access-intro {
+      background: #14232b;
+      color: #fffdfa;
+      padding: 34px;
+    }
+
+    .access-intro h1 {
+      margin: 0 0 14px 0;
+      font-size: 38px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .access-intro h1 span {
+      color: var(--orange);
+      padding: 0 6px;
+    }
+
+    .access-intro p {
+      margin: 0 0 16px 0;
+      color: #d9e1e6;
+      line-height: 1.55;
+      font-size: 15px;
+    }
+
+    .access-points {
+      margin-top: 22px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .access-point {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-left: 5px solid var(--orange);
+      border-radius: 14px;
+      padding: 13px;
+      background: rgba(255,255,255,0.05);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .access-form {
+      padding: 34px;
+      background: #fffdfa;
+    }
+
+    .access-form h2 {
+      margin: 0 0 8px 0;
+      font-size: 25px;
+      color: var(--ink);
+    }
+
+    .access-form p {
+      margin: 0 0 18px 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .gate-field {
+      margin-bottom: 13px;
+    }
+
+    .gate-field label {
       display: block;
+      font-size: 12px;
+      font-weight: 900;
+      color: #5f6b72;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
     }
 
-    .top-logo-strip img.aivs-top-logo {
-      max-height: 62px;
-      max-width: 230px;
+    .gate-field input {
+      width: 100%;
+      min-height: 44px;
+      border: 1.6px solid var(--border);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+      font-size: 15px;
     }
 
-    .top-logo-strip img.iso-logo {
-      max-height: 54px;
-      max-width: 200px;
+    .gate-field input:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(220,147,37,0.18);
     }
 
-    .top-logo-strip img.quad-logo {
-      max-height: 58px;
-      max-width: 245px;
+    .gate-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .gate-btn {
+      min-height: 46px;
+      border: 0;
+      border-radius: 13px;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .gate-btn.primary {
+      background: var(--orange);
+      color: var(--ink);
+      box-shadow: 3px 3px 0 var(--orange-dark);
+    }
+
+    .gate-btn.dark {
+      background: #14232b;
+      color: #fffdfa;
+    }
+
+    .gate-btn:disabled {
+      background: #b8aa99 !important;
+      color: #ffffff !important;
+      box-shadow: none !important;
+      cursor: not-allowed;
+    }
+
+    .terms-box {
+      border: 1.6px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      background: #f8f5ee;
+      margin-top: 14px;
+    }
+
+    .terms-box h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+      color: var(--ink);
+    }
+
+    .terms-box p {
+      margin: 0 0 8px 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #5f6b72;
+    }
+
+    .terms-check {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      gap: 10px;
+      align-items: start;
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--ink);
+    }
+
+    .terms-check input {
+      margin-top: 2px;
+      width: 18px;
+      height: 18px;
+      accent-color: var(--orange);
+    }
+
+    .access-note {
+      min-height: 24px;
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
+    .access-note.good {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .access-note.bad {
+      color: var(--red);
+      font-weight: 800;
     }
 
     .app {
       height: calc(100vh - 110px);
-      display: grid;
+      display: none;
       grid-template-columns: 330px 1fr 390px;
       gap: 16px;
       background: var(--page-bg);
-      padding: 0;
+      padding: 0 16px;
+    }
+
+    .app.unlocked {
+      display: grid;
     }
 
     .panel {
@@ -204,74 +401,10 @@
       line-height: 1;
     }
 
-    .search-wrap {
-      position: relative;
-      margin-bottom: 10px;
-    }
-
-    .search-wrap input {
-      width: 100%;
-      height: 43px;
-      border: 1.5px solid var(--border);
-      background: #f8f5ee;
-      border-radius: 999px;
-      padding: 0 45px 0 42px;
-      font-size: 14px;
-      color: var(--ink);
-      outline: none;
-    }
-
-    .search-icon {
-      position: absolute;
-      left: 16px;
-      top: 10px;
-      color: var(--faint);
-      font-size: 19px;
-    }
-
-    .key-pill {
-      position: absolute;
-      right: 18px;
-      top: 9px;
-      width: 18px;
-      height: 22px;
-      border-radius: 6px;
-      background: #ffffff;
-      border: 1px solid #ece7dc;
-      color: #b7bdc1;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .conversation-filter {
-      width: 100%;
-      height: 39px;
-      border: 1.5px solid var(--border);
-      border-radius: 999px;
-      background: #f8f5ee;
-      color: var(--ink);
-      font-size: 14px;
-      font-weight: bold;
-      text-align: center;
-      cursor: pointer;
-      margin-bottom: 14px;
-    }
-
     .left-scroll {
       flex: 1;
       overflow-y: auto;
       padding: 0 12px 12px 12px;
-    }
-
-    .section-label {
-      color: #7d878e;
-      font-size: 11px;
-      font-weight: bold;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin: 10px 0 8px 4px;
     }
 
     .context-heading {
@@ -284,6 +417,7 @@
 
     .context-box {
       border: 1.7px solid var(--border);
+      border-left: 5px solid var(--orange);
       border-radius: 18px;
       background: #fffdfa;
       padding: 11px;
@@ -342,28 +476,34 @@
       background: #fffdfa;
       color: var(--muted);
       padding: 8px 9px;
-      text-align: left;
+      text-align: center;
       font-size: 12px;
+      font-weight: 800;
       cursor: pointer;
     }
 
+    .footer-link:hover {
+      border-color: var(--orange);
+      color: var(--ink);
+    }
+
     .centre-panel {
-      background: var(--white);
+      background: var(--panel-bg);
       display: flex;
       flex-direction: column;
     }
 
     .main-header {
-      min-height: 62px;
+      height: 96px;
+      flex: 0 0 96px;
       border-bottom: 1.5px solid var(--soft-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 0 15px;
-      background: var(--white);
+      gap: 18px;
+      padding: 0 28px;
+      background: var(--panel-bg);
     }
-
     .thread-left {
       display: flex;
       align-items: center;
@@ -373,20 +513,21 @@
     }
 
     .thread-title {
-      font-size: 18px;
-      font-weight: bold;
+      font-size: 28px;
+      font-weight: 900;
       color: var(--ink);
       white-space: nowrap;
     }
 
-    .project-pill {
-      min-height: 28px;
-      border: 1px solid #ebe7df;
-      background: #fbfbfb;
-      border-radius: 999px;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 6px 10px;
+    .access-pill {
+      min-height: auto;
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      color: var(--green);
+      font-size: 16px;
+      font-weight: 900;
+      padding: 0;
       white-space: nowrap;
     }
 
@@ -399,49 +540,8 @@
       margin-left: auto;
     }
 
-    .online-pill {
-      height: 30px;
-      border-radius: 999px;
-      background: #fbfbfb;
-      border: 1px solid #efebe5;
-      color: var(--ink);
-      font-size: 13px;
-      font-weight: bold;
-      padding: 6px 14px;
-      white-space: nowrap;
-    }
-
-    .online-pill span {
-      color: var(--green);
-      margin-right: 4px;
-    }
-
-    .icon-btn {
-      min-width: 38px;
-      height: 36px;
-      border: 1.5px solid #e3d9cc;
-      border-radius: 999px;
-      background: #ffffff;
-      color: #5f6b72;
-      font-size: 11px;
-      font-weight: bold;
-      cursor: pointer;
-      padding: 0 10px;
-    }
-
-    .icon-btn:hover {
-      border-color: var(--orange);
-      color: var(--ink);
-    }
-
-    .sources-main-btn {
-      min-width: 106px;
-      color: var(--ink);
-      font-size: 13px;
-    }
-
     .clean-action-btn {
-      min-width: 140px;
+      min-width: 130px;
       height: 44px;
       border: 2px solid var(--border);
       border-radius: 999px;
@@ -463,7 +563,7 @@
       flex: 1;
       background: #ffffff;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto 1fr auto;
       gap: 16px;
       padding: 24px;
       overflow: hidden;
@@ -512,12 +612,6 @@
       line-height: 1.45;
     }
 
-    .clear-composer textarea:disabled {
-      color: #9ca3af;
-      background: #f7f5ef;
-      cursor: not-allowed;
-    }
-
     .send-btn {
       width: 52px;
       border: 0;
@@ -547,6 +641,75 @@
       margin: 0 0 10px 0;
       color: var(--ink);
       font-size: 18px;
+    }
+
+    .response-dashboard {
+      border: 1.7px solid var(--border);
+      border-left: 6px solid var(--orange);
+      border-radius: 17px;
+      background: #fffaf2;
+      padding: 14px;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .response-dashboard.on {
+      display: block;
+    }
+
+    .dashboard-title {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--ink);
+      margin-bottom: 10px;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .dash-card {
+      border: 1.4px solid var(--border);
+      border-radius: 12px;
+      background: #ffffff;
+      padding: 9px;
+      min-height: 62px;
+    }
+
+    .dash-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 900;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .dash-value {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--ink);
+      line-height: 1.25;
+    }
+
+    .rag-green { color: var(--green); }
+    .rag-amber { color: var(--amber); }
+    .rag-red { color: var(--red); }
+    .rag-grey { color: #6b7280; }
+
+    .top-actions {
+      border-top: 1px solid var(--soft-border);
+      padding-top: 9px;
+      font-size: 13px;
+      color: #4a5f6c;
+      line-height: 1.45;
+    }
+
+    .top-actions strong {
+      color: var(--ink);
     }
 
     .reply-placeholder {
@@ -602,6 +765,47 @@
       padding: 0;
     }
 
+    .session-qa-panel {
+      border: 1.7px solid var(--border);
+      border-radius: 18px;
+      background: #fbfaf5;
+      padding: 14px;
+      max-height: 190px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .session-qa-panel.on {
+      display: block;
+    }
+
+    .session-qa-panel h2 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: var(--ink);
+    }
+
+    .qa-item {
+      border-top: 1px solid var(--soft-border);
+      padding: 9px 0;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .qa-item:first-of-type {
+      border-top: 0;
+    }
+
+    .qa-item .q {
+      font-weight: 900;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .qa-item .a {
+      color: #4a5f6c;
+    }
+
     .right-panel {
       background: var(--panel-bg);
       display: flex;
@@ -635,52 +839,33 @@
       background: var(--panel-bg);
     }
 
-    .filter-card {
-      background: #ffffff;
-      margin: 18px 13px 18px 13px;
-      padding: 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 16px;
-    }
-
     .source-tabs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+      margin-bottom: 12px;
+      width: 100%;
     }
 
     .source-tab {
-      border: 1.5px solid #ded6cb;
-      background: #ffffff;
-      color: #7a858c;
+      min-height: 38px;
+      border: 1.7px solid var(--orange);
+      background: #fffdfa;
+      color: var(--ink);
       border-radius: 999px;
-      padding: 7px 11px;
+      padding: 6px 6px;
       font-size: 12px;
-      font-weight: bold;
+      font-weight: 900;
       cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
     }
 
     .source-tab.active {
-      border-color: var(--blue);
-      background: #eff6ff;
-      color: var(--blue);
-    }
-
-    .source-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 6px;
-    }
-
-    .tiny-btn {
-      border: 1.5px solid #e1d8cc;
-      background: #ffffff;
-      color: #5f6b72;
-      border-radius: 8px;
-      padding: 5px 9px;
-      font-size: 12px;
-      cursor: pointer;
+      border-color: var(--orange);
+      background: #fff7ea;
+      color: var(--orange-dark);
+      box-shadow: inset 0 0 0 1px var(--orange);
     }
 
     .answer-tabs {
@@ -688,7 +873,8 @@
       border-bottom: 1.5px solid var(--border);
       display: flex;
       justify-content: center;
-      gap: 4px;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .answer-tab {
@@ -749,58 +935,31 @@
       padding: 0;
     }
 
-    .terms-line {
-      display: grid;
-      grid-template-columns: 24px 1fr;
-      gap: 10px;
-      align-items: center;
-      width: 100%;
-      margin-bottom: 10px;
-    }
-
-    .terms-line input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--orange);
-      cursor: pointer;
-      margin: 0;
-    }
-
-    .terms-line select {
-      width: 100%;
-      height: 36px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      background: #ffffff;
-      color: var(--ink);
-      padding: 0 10px;
-      outline: none;
-      font-size: 13px;
-      font-family: inherit;
-    }
-
     .status-area {
       padding: 18px;
     }
 
     .status-card {
-      background: #ffffff;
-      border: 1.5px solid var(--border);
-      border-radius: 14px;
-      padding: 12px;
-      margin-bottom: 10px;
+      background: #fffdfa;
+      border: 2px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 18px rgba(40, 35, 25, 0.10);
     }
 
     .status-card h3 {
-      margin: 0 0 7px 0;
-      font-size: 14px;
+      margin: 0 0 9px 0;
+      font-size: 15px;
+      font-weight: 900;
       color: var(--ink);
     }
 
     .status-card p {
       margin: 6px 0;
       font-size: 13px;
-      color: #5f6b72;
+      color: var(--ink);
       line-height: 1.42;
     }
 
@@ -815,12 +974,33 @@
     }
 
     .status-line span {
-      color: var(--muted);
+      color: #4a5f6c;
+      font-weight: 700;
     }
 
     .status-line strong {
       color: var(--ink);
       text-align: right;
+    }
+
+    .toggle-line {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding-top: 9px;
+      margin-top: 9px;
+      border-top: 1px solid var(--soft-border);
+      font-size: 13px;
+      line-height: 1.4;
+      color: #4a5f6c;
+    }
+
+    .toggle-line input {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--orange);
+      margin-top: 1px;
     }
 
     .email-input {
@@ -861,6 +1041,10 @@
       line-height: 1.35;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     @media (max-width: 1180px) {
       html,
       body {
@@ -868,9 +1052,14 @@
       }
 
       .top-logo-strip {
-        height: auto;
+        min-height: 120px;
         flex-wrap: wrap;
         gap: 18px;
+        padding: 14px 22px;
+      }
+
+      .access-card {
+        grid-template-columns: 1fr;
       }
 
       .app {
@@ -887,6 +1076,10 @@
 
       .centre-workspace {
         min-height: 560px;
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
       }
     }
   </style>
@@ -908,14 +1101,104 @@
     <div id="topIsoStamp" class="iso-time-stamp">ISO loading...</div>
   </div>
 
-  <main class="app">
+  <section id="accessGate" class="access-gate">
+    <div class="access-card">
+      <div class="access-intro">
+        <h1>PGB <span>|</span> CIMA</h1>
+        <p>
+          Critical Incident Management Assistant with controlled access, human review,
+          transcript capture, source awareness and governance-first operation.
+        </p>
+        <p>
+          Use requires an emailed one-time access code or the temporary demo bypass.
+        </p>
+
+        <div class="access-points">
+          <div class="access-point">
+            <strong>1. Access first.</strong><br>
+            Enter your email, request a code, then enter the emailed code.
+          </div>
+          <div class="access-point">
+            <strong>2. Terms second.</strong><br>
+            Confirm the human-review terms before using CIMA.
+          </div>
+          <div class="access-point">
+            <strong>3. Temporary demo mode.</strong><br>
+            For testing only, enter <strong>demo</strong> as the access code.
+          </div>
+        </div>
+      </div>
+
+      <div class="access-form">
+        <h2>Access CIMA</h2>
+        <p>
+          Enter the user email address, send the access code, then confirm the terms.
+          For temporary demonstration access, type <strong>demo</strong> into the access code field.
+        </p>
+
+        <div class="gate-field">
+          <label for="gateEmailOne">Email address</label>
+          <input id="gateEmailOne" type="email" placeholder="Primary email address" autocomplete="email" />
+        </div>
+
+        <div class="gate-field">
+          <label for="gateEmailTwo">Second email address</label>
+          <input id="gateEmailTwo" type="email" placeholder="Optional second email address" autocomplete="email" />
+        </div>
+
+        <div class="gate-actions">
+          <button id="sendGateCodeBtn" class="gate-btn primary" type="button" onclick="sendGateAccessCode()">
+            Email access code
+          </button>
+          <button id="refreshGateMetaBtn" class="gate-btn dark" type="button" onclick="loadMeta()">
+            Refresh status
+          </button>
+        </div>
+
+        <div class="gate-field">
+          <label for="gateAccessCode">Access code</label>
+          <input id="gateAccessCode" type="password" placeholder="Enter emailed access code or demo" autocomplete="off" oninput="syncGateState()" />
+        </div>
+
+        <div class="terms-box">
+          <h3>Terms and conditions</h3>
+          <p>
+            CIMA produces draft operational support only. It does not replace command judgement,
+            safeguarding judgement, professional advice, legal advice, medical advice or emergency-service instructions.
+          </p>
+          <p>
+            All outputs must be checked by an authorised human before reliance, onward communication or operational action.
+          </p>
+
+          <label class="terms-check">
+            <input id="gateTermsCheck" type="checkbox" onchange="syncGateState()" />
+            <span>I understand and accept the terms of use. CIMA outputs are draft support only and require human review before reliance.</span>
+          </label>
+        </div>
+
+        <div class="gate-actions">
+          <button id="enterCimaBtn" class="gate-btn primary" type="button" onclick="enterCima()" disabled>
+            Check access and enter
+          </button>
+          <button class="gate-btn dark" type="button" onclick="resetGate()">
+            Clear
+          </button>
+        </div>
+
+        <div id="gateNote" class="access-note">
+          Enter email, access code and accept terms to continue.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main id="cimaApp" class="app">
     <aside class="panel left-panel">
       <div class="left-top">
         <div class="brand-row">
           <div class="pgb-cima-logo">PGB<span>|</span>CIMA</div>
           <div class="collapse">‹</div>
         </div>
-
       </div>
 
       <div class="left-scroll">
@@ -971,23 +1254,14 @@
         </div>
       </div>
 
-      <div class="left-footer">
-        <button class="footer-link" type="button" onclick="setRightTab('sources')">▦ Sources</button>
-        <button class="footer-link" type="button" onclick="setRightTab('audit')">▤ Audit</button>
-        <button class="footer-link" type="button" onclick="setRightTab('terms')">☑ T&amp;C</button>
-        <button class="footer-link" type="button" onclick="setRightTab('thread')">✉ Transcript</button>
-      </div>
+      
     </aside>
 
     <section class="panel centre-panel">
-      <div class="main-header">
+      <div class="main-header" style="height:96px; min-height:96px; flex:0 0 96px;">
         <div class="thread-left">
           <div class="thread-title" id="threadTitle">New Incident Thread</div>
-        </div>
-
-        <div class="main-actions">
-          <button class="clean-action-btn" type="button" onclick="setRightTab('thread')">Transcript</button>
-          <button class="clean-action-btn" type="button" onclick="setRightTab('sources')">Sources</button>
+          <div id="accessPill" class="access-pill">Access confirmed</div>
         </div>
       </div>
 
@@ -997,15 +1271,52 @@
           <p>Use the context selectors on the left, then ask a clear operational, planning or assurance question.</p>
 
           <div class="clear-composer">
-            <textarea id="questionInput" placeholder="Confirm T&C to continue..." disabled></textarea>
-            <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()" disabled>↑</button>
+            <textarea id="questionInput" placeholder="Ask CIMA a question..."></textarea>
+            <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()">↑</button>
           </div>
         </div>
 
         <div class="reply-card">
           <h2>Reply</h2>
+
+          <div id="responseDashboard" class="response-dashboard">
+            <div class="dashboard-title">CIMA Response Dashboard</div>
+            <div class="dashboard-grid">
+              <div class="dash-card">
+                <div class="dash-label">Path</div>
+                <div id="dashPath" class="dash-value">FAST PATH</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">RAG</div>
+                <div id="dashRag" class="dash-value rag-grey">Not set</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">HITL</div>
+                <div id="dashHitl" class="dash-value">Not triggered</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">Confidence</div>
+                <div id="dashConfidence" class="dash-value">Provisional</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">Review</div>
+                <div id="dashReview" class="dash-value">Human review</div>
+              </div>
+            </div>
+            <div id="dashActions" class="top-actions">
+              <strong>Top actions:</strong> Not generated yet.
+            </div>
+          </div>
+
           <div id="replyArea" class="reply-placeholder">
-            Select the T&amp;C tab, choose the applicable T&amp;C page, tick confirmation, then ask a question. CIMA’s reply will appear here.
+            Ask a question. CIMA’s response and dashboard will appear here.
+          </div>
+        </div>
+
+        <div id="sessionQaPanel" class="session-qa-panel">
+          <h2>Session Q&amp;A</h2>
+          <div id="sessionQaList">
+            No questions asked yet.
           </div>
         </div>
       </div>
@@ -1014,33 +1325,17 @@
     <aside class="panel right-panel">
       <div class="right-header">
         <h2>CIMA Control</h2>
-        <span>×</span>
       </div>
 
       <div class="right-body">
-        <div class="filter-card">
-          <div class="source-tabs">
-            <button id="sourceBtnResource" class="source-tab active" type="button" onclick="setSourceClass('resource')">Resource Index</button>
-            <button id="sourceBtnRegister" class="source-tab" type="button" onclick="setSourceClass('register')">Source Register</button>
-            <button id="sourceBtnPolicy" class="source-tab" type="button" onclick="setSourceClass('policy')">Policy Abstracts</button>
-            <button id="sourceBtnInternal" class="source-tab" type="button" onclick="setSourceClass('internal')">Internal Plans</button>
-          </div>
-
-          <div class="source-actions">
-            <button class="tiny-btn" type="button" onclick="setSourceClass('resource')">Default</button>
-            <button class="tiny-btn" type="button" onclick="setRightTab('audit')">Audit</button>
-          </div>
-        </div>
-
         <div class="answer-tabs">
-          <button id="termsTab" class="answer-tab active" type="button" onclick="setRightTab('terms')">T&amp;C</button>
-          <button id="answerTab" class="answer-tab" type="button" onclick="setRightTab('answer')">This Answer</button>
-          <button id="threadTab" class="answer-tab" type="button" onclick="setRightTab('thread')">Thread / Email</button>
+          <button id="answerTab" class="answer-tab active" type="button" onclick="setRightTab('answer')">Answer</button>
+          <button id="threadTab" class="answer-tab" type="button" onclick="setRightTab('thread')">Email</button>
           <button id="sourcesTab" class="answer-tab" type="button" onclick="setRightTab('sources')">Sources</button>
           <button id="auditTab" class="answer-tab" type="button" onclick="setRightTab('audit')">Audit</button>
         </div>
 
-        <div class="source-search">
+        <div id="sourceSearchWrap" class="source-search hidden">
           <input id="sourceSearch" placeholder="Search sources / personas..." />
         </div>
 
@@ -1067,17 +1362,27 @@
             </div>
             <div class="status-line">
               <span>HITL</span>
-              <strong id="hitlStatus">T&amp;C required</strong>
+              <strong id="hitlStatus">Not triggered</strong>
             </div>
             <div class="status-line">
               <span>Confidence</span>
               <strong id="confidenceStatus">Provisional</strong>
             </div>
+
+            <label class="toggle-line">
+              <input id="showQaToggle" type="checkbox" onchange="toggleSessionQa()" />
+              <span>Show Session Q&amp;A on screen</span>
+            </label>
+
+            <label class="toggle-line">
+              <input id="includeTranscriptToggle" type="checkbox" checked onchange="renderRightView()" />
+              <span>Include transcript in email</span>
+            </label>
           </div>
 
           <div class="status-card">
             <h3>Last Output</h3>
-            <p id="lastOutput">T&amp;C must be confirmed before the assistant can continue.</p>
+            <p id="lastOutput">CIMA is ready. Ask a question.</p>
           </div>
 
           <div class="status-card">
@@ -1090,16 +1395,21 @@
   </main>
 
   <script>
-    const BUILD_ISO = "2026-05-20T15:05:00Z";
+    const BUILD_ISO = "2026-05-25T11:15:00Z";
+
+    let accessConfirmed = false;
+    let accessMode = "locked";
+    let gateEmailOne = "";
+    let gateEmailTwo = "";
 
     let questions = [];
     let transcriptEntries = [];
     let latestAnswer = "";
     let latestSources = [];
-    let rightTab = "terms";
+    let latestDashboard = null;
+    let rightTab = "answer";
     let sourceClass = "resource";
-    let termsAccepted = false;
-    let termsSelection = "";
+    let metaState = null;
 
     function updateIsoTime() {
       const now = new Date().toISOString();
@@ -1149,6 +1459,15 @@
           continue;
         }
 
+        if (line.startsWith("# ")) {
+          if (inList) {
+            html += "</ul>";
+            inList = false;
+          }
+          html += `<h3>${escapeHtml(line.replace(/^#\s+/, ""))}</h3>`;
+          continue;
+        }
+
         if (line.startsWith("- ")) {
           if (!inList) {
             html += "<ul>";
@@ -1173,6 +1492,222 @@
       return html || "<p>No response text returned.</p>";
     }
 
+    function normaliseEmail(value = "") {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function setGateNote(message, mode = "") {
+      const gateNote = document.getElementById("gateNote");
+      gateNote.textContent = message;
+      gateNote.className = "access-note";
+
+      if (mode === "good") {
+        gateNote.classList.add("good");
+      }
+
+      if (mode === "bad") {
+        gateNote.classList.add("bad");
+      }
+    }
+
+    function syncGateState() {
+      const email = normaliseEmail(document.getElementById("gateEmailOne").value);
+      const code = String(document.getElementById("gateAccessCode").value || "").trim();
+      const terms = document.getElementById("gateTermsCheck").checked;
+      const isDemo = code.toLowerCase() === "demo";
+
+      const canEnter = terms && ((email && code) || isDemo);
+
+      document.getElementById("enterCimaBtn").disabled = !canEnter;
+
+      if (isDemo && terms) {
+        setGateNote("Demo bypass ready. Click Check access and enter.", "good");
+        return;
+      }
+
+      if (!terms) {
+        setGateNote("Accept the terms to continue.");
+        return;
+      }
+
+      if (!email) {
+        setGateNote("Enter an email address or use demo access.");
+        return;
+      }
+
+      if (!code) {
+        setGateNote("Enter the emailed access code.");
+        return;
+      }
+
+      setGateNote("Ready to check access.");
+    }
+
+    function resetGate() {
+      document.getElementById("gateEmailOne").value = "";
+      document.getElementById("gateEmailTwo").value = "";
+      document.getElementById("gateAccessCode").value = "";
+      document.getElementById("gateTermsCheck").checked = false;
+      gateEmailOne = "";
+      gateEmailTwo = "";
+      accessConfirmed = false;
+      accessMode = "locked";
+      syncGateState();
+    }
+
+    async function sendGateAccessCode() {
+      const toEmail = normaliseEmail(document.getElementById("gateEmailOne").value);
+      const secondEmail = normaliseEmail(document.getElementById("gateEmailTwo").value);
+
+      if (!toEmail || !toEmail.includes("@")) {
+        setGateNote("Enter a valid email address before requesting an access code.", "bad");
+        return;
+      }
+
+      const btn = document.getElementById("sendGateCodeBtn");
+
+      try {
+        btn.disabled = true;
+        btn.textContent = "Sending...";
+
+        const res = await fetch("/send-access-code-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            toEmail,
+            secondEmail
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Access code email failed.");
+        }
+
+        gateEmailOne = toEmail;
+        gateEmailTwo = secondEmail;
+
+        sessionStorage.setItem("cima_email_one", gateEmailOne);
+        sessionStorage.setItem("cima_email_two", gateEmailTwo);
+
+        setGateNote("Access code sent. Check the mailbox, then enter the code.", "good");
+      } catch (error) {
+        setGateNote(`Access code email failed: ${error.message}`, "bad");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Email access code";
+        syncGateState();
+      }
+    }
+
+    async function enterCima() {
+      const email = normaliseEmail(document.getElementById("gateEmailOne").value);
+      const secondEmail = normaliseEmail(document.getElementById("gateEmailTwo").value);
+      const code = String(document.getElementById("gateAccessCode").value || "").trim();
+      const terms = document.getElementById("gateTermsCheck").checked;
+
+      if (!terms) {
+        setGateNote("Terms must be accepted before entering CIMA.", "bad");
+        return;
+      }
+
+      if (code.toLowerCase() === "demo") {
+        gateEmailOne = email || "demo@aivs.local";
+        gateEmailTwo = secondEmail;
+        accessConfirmed = true;
+        accessMode = "demo";
+
+        sessionStorage.setItem("cima_email_one", gateEmailOne);
+        sessionStorage.setItem("cima_email_two", gateEmailTwo);
+
+        unlockCima();
+        return;
+      }
+
+      if (!email || !email.includes("@")) {
+        setGateNote("A valid email address is required unless using demo mode.", "bad");
+        return;
+      }
+
+      if (!code) {
+        setGateNote("Access code required.", "bad");
+        return;
+      }
+
+      const btn = document.getElementById("enterCimaBtn");
+
+      try {
+        btn.disabled = true;
+        btn.textContent = "Checking...";
+
+        const res = await fetch("/check-access", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            accessCode: code,
+            code,
+            email,
+            toEmail: email,
+            secondEmail
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Access check failed.");
+        }
+
+        gateEmailOne = email;
+        gateEmailTwo = secondEmail;
+        accessConfirmed = true;
+        accessMode = "one-time-code";
+
+        sessionStorage.setItem("cima_email_one", gateEmailOne);
+        sessionStorage.setItem("cima_email_two", gateEmailTwo);
+
+        unlockCima();
+      } catch (error) {
+        accessConfirmed = false;
+        accessMode = "locked";
+        setGateNote(error.message, "bad");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Check access and enter";
+        syncGateState();
+      }
+    }
+
+    function unlockCima() {
+      document.getElementById("accessGate").classList.add("hidden");
+      document.getElementById("cimaApp").classList.add("unlocked");
+
+      const accessPill = document.getElementById("accessPill");
+      accessPill.textContent = accessMode === "demo" ? "Demo access" : "Access confirmed";
+
+      document.getElementById("lastOutput").textContent =
+        accessMode === "demo"
+          ? "Demo access active. Ask a question."
+          : "Access confirmed. Ask a question.";
+
+      updateContextFromControls();
+      setRightTab("answer");
+      renderRightView();
+    }
+
+    function loadStoredGateEmails() {
+      gateEmailOne = sessionStorage.getItem("cima_email_one") || "";
+      gateEmailTwo = sessionStorage.getItem("cima_email_two") || "";
+
+      document.getElementById("gateEmailOne").value = gateEmailOne;
+      document.getElementById("gateEmailTwo").value = gateEmailTwo;
+    }
+
     function getContext() {
       return {
         thread: document.getElementById("threadTitle").textContent || "New Incident Thread",
@@ -1181,53 +1716,6 @@
         persona: document.getElementById("personaSelect").value || "N/A",
         output: document.getElementById("outputSelect").value || "N/A"
       };
-    }
-
-    function termsAreConfirmed() {
-      return Boolean(termsAccepted && termsSelection);
-    }
-
-    function updateTermsGate() {
-      const allowed = termsAreConfirmed();
-
-      const input = document.getElementById("questionInput");
-      const sendButton = document.getElementById("sendButton");
-
-      input.disabled = !allowed;
-      sendButton.disabled = !allowed;
-      input.placeholder = allowed ? "Ask CIMA a question..." : "Confirm T&C to continue...";
-
-      if (allowed && document.getElementById("hitlStatus").textContent === "T&C required") {
-        document.getElementById("hitlStatus").textContent = "Not triggered";
-      }
-
-      if (!allowed) {
-        document.getElementById("hitlStatus").textContent = "T&C required";
-      }
-    }
-
-    function updateTermsStatus() {
-      const dropdown = document.getElementById("termsSelect");
-      const checkbox = document.getElementById("termsCheck");
-
-      termsSelection = dropdown ? dropdown.value : "";
-      termsAccepted = checkbox ? checkbox.checked : false;
-
-      if (termsAreConfirmed()) {
-        document.getElementById("lastOutput").textContent = `T&C confirmed: ${termsSelection}. Assistant unlocked.`;
-
-        const replyArea = document.getElementById("replyArea");
-        if (replyArea && replyArea.classList.contains("reply-placeholder")) {
-          replyArea.textContent = "T&C confirmed. Ask a question above and CIMA’s reply will appear here.";
-        }
-      } else if (termsSelection) {
-        document.getElementById("lastOutput").textContent = "T&C selected. Tick confirmation to unlock the assistant.";
-      } else {
-        document.getElementById("lastOutput").textContent = "T&C must be selected and confirmed before continuing.";
-      }
-
-      updateTermsGate();
-      renderRightView();
     }
 
     function updateContextFromControls() {
@@ -1257,12 +1745,110 @@
         text.includes("validate") ||
         text.includes("source") ||
         text.includes("citation") ||
-        text.includes("policy")
+        text.includes("policy") ||
+        text.includes("safeguarding")
       ) {
         return "ASSURANCE PATH";
       }
 
       return "FAST PATH";
+    }
+
+    function inferRagFromText(answer = "", path = "FAST PATH") {
+      const text = String(answer || "").toLowerCase();
+
+      if (
+        text.includes("immediate risk") ||
+        text.includes("life safety") ||
+        text.includes("emergency") ||
+        text.includes("critical") ||
+        text.includes("red")
+      ) {
+        return "RED";
+      }
+
+      if (
+        path === "ASSURANCE PATH" ||
+        text.includes("check source") ||
+        text.includes("human review") ||
+        text.includes("uncertain") ||
+        text.includes("amber")
+      ) {
+        return "AMBER";
+      }
+
+      return "GREEN";
+    }
+
+    function ragClass(rag = "") {
+      const clean = String(rag || "").toUpperCase();
+
+      if (clean.includes("RED")) return "rag-red";
+      if (clean.includes("AMBER")) return "rag-amber";
+      if (clean.includes("GREEN")) return "rag-green";
+
+      return "rag-grey";
+    }
+
+    function extractTopActions(answer = "") {
+      const lines = String(answer || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const bullets = lines
+        .filter((line) => line.startsWith("- "))
+        .map((line) => line.replace(/^-+\s*/, "").trim())
+        .filter(Boolean)
+        .slice(0, 3);
+
+      if (bullets.length) {
+        return bullets;
+      }
+
+      return [
+        "Confirm known facts and assumptions.",
+        "Identify people at immediate risk.",
+        "Set the next owner and review time."
+      ];
+    }
+
+    function updateResponseDashboard({
+      path,
+      rag,
+      hitl,
+      confidence,
+      answer
+    }) {
+      latestDashboard = {
+        path,
+        rag,
+        hitl,
+        confidence,
+        actions: extractTopActions(answer)
+      };
+
+      const dash = document.getElementById("responseDashboard");
+      dash.classList.add("on");
+
+      document.getElementById("dashPath").textContent = path || "FAST PATH";
+
+      const ragEl = document.getElementById("dashRag");
+      ragEl.textContent = rag || "AMBER";
+      ragEl.className = `dash-value ${ragClass(rag)}`;
+
+      document.getElementById("dashHitl").textContent = hitl || "Not triggered";
+      document.getElementById("dashConfidence").textContent = confidence || "Provisional";
+      document.getElementById("dashReview").textContent = "Human review";
+
+      document.getElementById("dashActions").innerHTML = [
+        "<strong>Top actions:</strong>",
+        "<ul>",
+        ...latestDashboard.actions.map((action) => `<li>${escapeHtml(action)}</li>`),
+        "</ul>"
+      ].join("");
+
+      renderRightView();
     }
 
     function setSourceClass(value) {
@@ -1284,31 +1870,31 @@
       const active = document.getElementById(map[value] || "sourceBtnResource");
       if (active) active.classList.add("active");
 
-      if (rightTab !== "terms") {
-        setRightTab("sources");
-      } else {
-        renderRightView();
-      }
+      setRightTab("sources");
     }
 
     function setRightTab(value) {
       rightTab = value;
 
-      for (const id of ["termsTab", "answerTab", "threadTab", "sourcesTab", "auditTab"]) {
+      for (const id of ["answerTab", "threadTab", "sourcesTab", "auditTab"]) {
         const el = document.getElementById(id);
         if (el) el.classList.remove("active");
       }
 
       const activeMap = {
-        terms: "termsTab",
         answer: "answerTab",
         thread: "threadTab",
         sources: "sourcesTab",
         audit: "auditTab"
       };
 
-      const active = document.getElementById(activeMap[value] || "termsTab");
+      const active = document.getElementById(activeMap[value] || "answerTab");
       if (active) active.classList.add("active");
+
+      const sourceSearchWrap = document.getElementById("sourceSearchWrap");
+      if (sourceSearchWrap) {
+        sourceSearchWrap.classList.toggle("hidden", value !== "sources");
+      }
 
       renderRightView();
     }
@@ -1317,29 +1903,13 @@
       const panel = document.getElementById("rightView");
       const context = getContext();
 
-      if (rightTab === "terms") {
-        panel.innerHTML = `
-          <h3>Terms &amp; Conditions</h3>
-          <div class="terms-line">
-            <input id="termsCheck" type="checkbox" ${termsAccepted ? "checked" : ""} onchange="updateTermsStatus()" />
-            <select id="termsSelect" onchange="updateTermsStatus()">
-              <option value="" ${termsSelection === "" ? "selected" : ""}>N/A</option>
-              <option value="T&C page 1" ${termsSelection === "T&C page 1" ? "selected" : ""}>T&amp;C page 1</option>
-              <option value="T&C page 2" ${termsSelection === "T&C page 2" ? "selected" : ""}>T&amp;C page 2</option>
-              <option value="Full CIMA T&C pack" ${termsSelection === "Full CIMA T&C pack" ? "selected" : ""}>Full CIMA T&amp;C pack</option>
-              <option value="Manual review required" ${termsSelection === "Manual review required" ? "selected" : ""}>Manual review required</option>
-            </select>
-          </div>
-          <p class="small-note">The assistant is locked until a T&amp;C option is selected and the confirmation box is ticked.</p>
-        `;
-        return;
-      }
-
       if (rightTab === "answer") {
         panel.innerHTML = `
-          <h3>This Answer</h3>
+          <h3>Answer</h3>
           <p><strong>Current response path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
+          <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
           <p><strong>HITL:</strong> ${escapeHtml(document.getElementById("hitlStatus").textContent)}</p>
+          <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
           <p><strong>Latest answer:</strong></p>
           ${latestAnswer ? markdownToHtml(latestAnswer) : "<p>No answer has been generated in this session yet.</p>"}
         `;
@@ -1347,18 +1917,30 @@
       }
 
       if (rightTab === "thread") {
+        const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
+
         panel.innerHTML = `
-          <h3>Thread / Transcript Email</h3>
+          <h3>Email</h3>
           <p>Send the current CIMA transcript as Word and PDF attachments.</p>
-          <input id="emailOne" class="email-input" placeholder="Primary email" />
-          <input id="emailTwo" class="email-input" placeholder="Second email optional" />
+          <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
+          <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
           <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
           <p class="small-note">Questions recorded this session: ${questions.length}</p>
+          <p class="small-note">Include transcript in email: ${includeTranscript ? "Yes" : "No"}</p>
         `;
         return;
       }
 
       if (rightTab === "sources") {
+        const sourceButtons = `
+          <div class="source-tabs">
+            <button id="sourceBtnResource" class="source-tab ${sourceClass === "resource" ? "active" : ""}" type="button" onclick="setSourceClass('resource')">Index</button>
+            <button id="sourceBtnRegister" class="source-tab ${sourceClass === "register" ? "active" : ""}" type="button" onclick="setSourceClass('register')">Source</button>
+            <button id="sourceBtnPolicy" class="source-tab ${sourceClass === "policy" ? "active" : ""}" type="button" onclick="setSourceClass('policy')">Policy</button>
+            <button id="sourceBtnInternal" class="source-tab ${sourceClass === "internal" ? "active" : ""}" type="button" onclick="setSourceClass('internal')">Playbooks</button>
+          </div>
+        `;
+
         const sourceText = {
           resource: [
             "<h3>Resource Index</h3>",
@@ -1389,7 +1971,7 @@
             "</ul>"
           ].join(""),
           internal: [
-            "<h3>Internal Plans</h3>",
+            "<h3>Internal Playbooks</h3>",
             "<p>Operational protocols, plans, structures, recovery arrangements and role responsibilities.</p>",
             "<ul>",
             "<li>Internal plans</li>",
@@ -1400,7 +1982,7 @@
           ].join("")
         };
 
-        panel.innerHTML = sourceText[sourceClass] || sourceText.resource;
+        panel.innerHTML = sourceButtons + (sourceText[sourceClass] || sourceText.resource);
         return;
       }
 
@@ -1408,14 +1990,19 @@
         panel.innerHTML = `
           <h3>Audit / Governance Snapshot</h3>
           <p><strong>Build:</strong> ${escapeHtml(BUILD_ISO)}</p>
-          <p><strong>T&amp;C confirmed:</strong> ${termsAreConfirmed() ? "Yes" : "No"}</p>
+          <p><strong>Access confirmed:</strong> ${accessConfirmed ? "Yes" : "No"}</p>
+          <p><strong>Access mode:</strong> ${escapeHtml(accessMode)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(gateEmailOne || "Not supplied")}</p>
           <p><strong>Mode:</strong> ${escapeHtml(context.mode)}</p>
           <p><strong>Command level:</strong> ${escapeHtml(context.level)}</p>
           <p><strong>Persona:</strong> ${escapeHtml(context.persona)}</p>
           <p><strong>Output:</strong> ${escapeHtml(context.output)}</p>
           <p><strong>Questions:</strong> ${questions.length}</p>
           <p><strong>Path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
+          <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
           <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
+          <p><strong>Show Session Q&A:</strong> ${document.getElementById("showQaToggle")?.checked ? "On" : "Off"}</p>
+          <p><strong>Include transcript in email:</strong> ${document.getElementById("includeTranscriptToggle")?.checked !== false ? "Yes" : "No"}</p>
         `;
       }
     }
@@ -1447,7 +2034,7 @@
       return [
         "## Executive Summary",
         path === "ASSURANCE PATH"
-          ? "This has been treated as an Assurance Path request. The production system would require Source Register evidence before presenting this as assured."
+          ? "This has been treated as an Assurance Path request. The production system should require Source Register evidence before presenting this as assured."
           : "This has been treated as a Fast Path operational request. The immediate priority is to clarify facts, identify people at risk, stabilise the situation and set a next action owner.",
         "",
         "## Options / Controls",
@@ -1471,14 +2058,13 @@
     }
 
     async function askQuestion() {
-      if (!termsAreConfirmed()) {
-        setRightTab("terms");
-        document.getElementById("lastOutput").textContent = "T&C must be selected and ticked before the assistant can continue.";
-        updateTermsGate();
+      if (!accessConfirmed) {
+        alert("Access has not been confirmed.");
         return;
       }
 
       const input = document.getElementById("questionInput");
+      const sendButton = document.getElementById("sendButton");
       const question = input.value.trim();
 
       if (!question) return;
@@ -1499,8 +2085,11 @@
       let finalPath = predictedPath;
       let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
       let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
+      let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
 
       try {
+        sendButton.disabled = true;
+
         const res = await fetch("/cima-chat", {
           method: "POST",
           headers: {
@@ -1509,9 +2098,18 @@
           body: JSON.stringify({
             question,
             context,
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            },
             terms: {
               accepted: true,
-              selected: termsSelection
+              accepted_at: new Date().toISOString()
+            },
+            session: {
+              question_count: questions.length,
+              show_session_qa_on_screen: document.getElementById("showQaToggle")?.checked === true,
+              include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
             }
           })
         });
@@ -1523,17 +2121,22 @@
         }
 
         answer = data.answer || fallbackAnswer(question, predictedPath);
-        finalPath = data.response_path || predictedPath;
-        hitl = data.hitl || hitl;
+        finalPath = data.response_path || data.path || predictedPath;
+        hitl = data.hitl || data.human_in_the_loop || hitl;
+        confidence = data.confidence || confidence;
+        rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
         latestSources = data.sources || [];
       } catch (error) {
         answer = fallbackAnswer(question, predictedPath);
+        rag = inferRagFromText(answer, predictedPath);
         latestSources = [
           {
             title: "Local fallback",
             note: error.message
           }
         ];
+      } finally {
+        sendButton.disabled = false;
       }
 
       latestAnswer = answer;
@@ -1541,6 +2144,14 @@
       document.getElementById("pathStatus").textContent = finalPath;
       document.getElementById("hitlStatus").textContent = hitl;
       document.getElementById("confidenceStatus").textContent = confidence;
+
+      updateResponseDashboard({
+        path: finalPath,
+        rag,
+        hitl,
+        confidence,
+        answer
+      });
 
       addMessage(
         "agent",
@@ -1555,17 +2166,52 @@
         at: new Date().toISOString(),
         question,
         path: finalPath,
+        rag,
+        hitl,
+        confidence,
         answer
       });
 
       document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
       input.value = "";
+
+      renderSessionQa();
       setRightTab("answer");
+    }
+
+    function renderSessionQa() {
+      const list = document.getElementById("sessionQaList");
+
+      if (!transcriptEntries.length) {
+        list.innerHTML = "No questions asked yet.";
+        return;
+      }
+
+      list.innerHTML = transcriptEntries
+        .map((entry, index) => {
+          return `
+            <div class="qa-item">
+              <div class="q">Q${index + 1}. ${escapeHtml(entry.question)}</div>
+              <div class="a">${markdownToHtml(entry.answer)}</div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function toggleSessionQa() {
+      const panel = document.getElementById("sessionQaPanel");
+      const checked = document.getElementById("showQaToggle").checked;
+
+      panel.classList.toggle("on", checked);
+      renderSessionQa();
+      renderRightView();
     }
 
     async function sendTranscriptEmail() {
       const emailOne = document.getElementById("emailOne")?.value.trim() || "";
       const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+      const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
 
       const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
 
@@ -1596,7 +2242,15 @@
             subject: "PGB CIMA transcript",
             generated_at: new Date().toISOString(),
             context: getContext(),
-            questions: transcriptEntries
+            include_transcript_in_email: includeTranscript,
+            questions: includeTranscript ? transcriptEntries : transcriptEntries.map((entry) => ({
+              at: entry.at,
+              question: entry.question,
+              path: entry.path,
+              rag: entry.rag,
+              hitl: entry.hitl,
+              confidence: entry.confidence
+            }))
           })
         });
 
@@ -1622,31 +2276,60 @@
       transcriptEntries = [];
       latestAnswer = "";
       latestSources = [];
+      latestDashboard = null;
 
       document.getElementById("questionInput").value = "";
       document.getElementById("questionCount").textContent = "0";
       document.getElementById("pathStatus").textContent = "FAST PATH";
-      document.getElementById("hitlStatus").textContent = termsAreConfirmed() ? "Not triggered" : "T&C required";
+      document.getElementById("hitlStatus").textContent = "Not triggered";
       document.getElementById("confidenceStatus").textContent = "Provisional";
-      document.getElementById("lastOutput").textContent = termsAreConfirmed()
-        ? "New incident started."
-        : "T&C must be confirmed before the assistant can continue.";
+      document.getElementById("lastOutput").textContent = "New incident started.";
       document.getElementById("threadTitle").textContent = "New Incident Thread";
 
       const replyArea = document.getElementById("replyArea");
       replyArea.className = "reply-placeholder";
-      replyArea.textContent = termsAreConfirmed()
-        ? "T&C confirmed. Ask a question above and CIMA’s reply will appear here."
-        : "Select the T&C tab, choose the applicable T&C page, tick confirmation, then ask a question. CIMA’s reply will appear here.";
+      replyArea.textContent = "Ask a question. CIMA’s response and dashboard will appear here.";
 
+      document.getElementById("responseDashboard").classList.remove("on");
+
+      document.getElementById("dashPath").textContent = "FAST PATH";
+      document.getElementById("dashRag").textContent = "Not set";
+      document.getElementById("dashRag").className = "dash-value rag-grey";
+      document.getElementById("dashHitl").textContent = "Not triggered";
+      document.getElementById("dashConfidence").textContent = "Provisional";
+      document.getElementById("dashReview").textContent = "Human review";
+      document.getElementById("dashActions").innerHTML = "<strong>Top actions:</strong> Not generated yet.";
+
+      renderSessionQa();
       updateContextFromControls();
       renderRightView();
     }
 
+    async function loadMeta() {
+      try {
+        const res = await fetch("/meta");
+        const data = await res.json();
+
+        metaState = data;
+
+        if (data.ok) {
+          setGateNote(
+            `Backend ready. Build: ${data.build_iso || "not returned"}. Access: ${data.access_ready ? "configured" : "not configured"}.`,
+            data.access_ready ? "good" : ""
+          );
+        }
+      } catch (error) {
+        setGateNote("Backend status unavailable. You may still use demo mode.", "bad");
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
+      loadStoredGateEmails();
+      syncGateState();
+      loadMeta();
       updateContextFromControls();
-      setRightTab("terms");
-      updateTermsGate();
+      setRightTab("answer");
+      renderSessionQa();
     });
   </script>
 </body>
