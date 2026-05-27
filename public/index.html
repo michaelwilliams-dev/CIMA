@@ -21,6 +21,7 @@
     - v1.1.1: renamed Thread / Email to Email
     - v1.1.1: shortened source selector labels to Index, Source, Policy, Playbooks
     - v1.1.1: removed temporary bottom label-patching script
+    - v1.1.2: NOT VERIFIED evidence date range sliders now set their maximum year from the live ISO timestamp so the range rolls forward automatically each year
   -->
 
   <meta charset="UTF-8" />
@@ -430,6 +431,133 @@
       color: var(--ink);
     }
 
+    .cima-process-card {
+      border: 1.7px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 18px;
+      background: #fffdfa;
+      padding: 14px 12px;
+      margin: 12px 0;
+    }
+
+    .cima-process-card h3,
+    .delivery-status-card h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .process-rail {
+      position: relative;
+      display: grid;
+      gap: 10px;
+      padding: 2px 0;
+    }
+
+    .process-rail::before {
+      content: "";
+      position: absolute;
+      left: 22px;
+      top: 20px;
+      bottom: 20px;
+      width: 3px;
+      background: #d7cabc;
+      border-radius: 999px;
+    }
+
+    .process-step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 10px;
+      align-items: center;
+      min-height: 52px;
+      z-index: 1;
+    }
+
+    .process-marker {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 3px solid #b8aa99;
+      background: #f8f5ee;
+      color: #6f7a80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+    }
+
+    .process-step.active .process-marker {
+      border-color: var(--orange);
+      background: #fff7ea;
+      color: var(--ink);
+      box-shadow: 0 0 0 4px rgba(220, 147, 37, 0.14);
+    }
+
+    .process-copy strong {
+      display: block;
+      font-size: 14px;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }
+
+    .process-copy span {
+      display: block;
+      font-size: 12px;
+      line-height: 1.35;
+      color: #5f6b72;
+      font-weight: 700;
+    }
+
+    .process-step.muted .process-copy strong,
+    .process-step.muted .process-copy span {
+      color: #7f8a90;
+    }
+
+    .delivery-status-card {
+      border: 1.7px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 18px;
+      background: #fffdfa;
+      padding: 14px 12px;
+      margin: 12px 0 0 0;
+    }
+
+    .delivery-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--soft-border);
+      padding-top: 8px;
+      margin-top: 8px;
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+
+    .delivery-line span {
+      color: #4a5f6c;
+      font-weight: 800;
+    }
+
+    .delivery-line strong {
+      color: var(--green);
+      font-weight: 900;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .delivery-line strong.pending {
+      color: var(--amber);
+    }
+
+    .delivery-line strong.not-started {
+      color: #6f7a80;
+    }
+
     .field {
       margin-bottom: 9px;
     }
@@ -561,7 +689,7 @@
 
     .centre-workspace {
       flex: 1;
-      background: #ffffff;
+      background: transparent;
       display: grid;
       grid-template-rows: auto 1fr auto;
       gap: 16px;
@@ -634,7 +762,13 @@
       border-radius: 20px;
       background: #ffffff;
       padding: 18px;
-      overflow-y: auto;
+      overflow-y: visible;
+    }
+
+    /* AIVS visual edge fix — centre Ask / Reply cards only */
+    .ask-card,
+    .reply-card {
+      border-left: 5px solid var(--orange);
     }
 
     .reply-card h2 {
@@ -1045,6 +1179,18 @@
       display: none !important;
     }
 
+  /* AIVS title size alignment — CIMA Context, Process Status, Delivery Status */
+    .context-box h3,
+    .cima-process-card h3,
+    .delivery-status-card h3 {
+      margin: 0 0 12px 0;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 900;
+      color: var(--ink);
+
+    }
+
     @media (max-width: 1180px) {
       html,
       body {
@@ -1082,6 +1228,51 @@
         grid-template-columns: 1fr 1fr;
       }
     }
+
+/* AIVS scroll fix — single usable screen scroll area */
+html,
+body {
+  height: 100% !important;
+  min-height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Front access page scrolls inside the available screen */
+.access-gate {
+  height: calc(100vh - 152px) !important;
+  min-height: 0 !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+}
+
+/* Action page scrolls inside the available screen */
+.app.unlocked {
+  height: calc(100vh - 152px) !important;
+  min-height: 0 !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  align-items: start !important;
+}
+
+/* Make each column report its real content height to the app scroller */
+.left-panel,
+.centre-panel,
+.right-panel {
+  height: max-content !important;
+  min-height: max-content !important;
+  align-self: start !important;
+  overflow: hidden !important;
+}
+
+/* Remove inner scroll traps */
+.left-scroll,
+.centre-workspace,
+.reply-card,
+.right-body,
+.status-area {
+  overflow: visible !important;
+}
+
   </style>
 </head>
 
@@ -1202,10 +1393,10 @@
       </div>
 
       <div class="left-scroll">
-        <div class="context-heading">CIMA Context</div>
+        
 
         <div class="context-box">
-          <h3>Operating Setup</h3>
+          <h3>CIMA Context</h3>
 
           <div class="field">
             <label for="modeSelect">Mode</label>
@@ -1251,10 +1442,85 @@
               <option value="Versioned report">Versioned report</option>
             </select>
           </div>
+
+               </div>
+                <h3>Process Status</h3>
+
+          <div style="margin: 2px 0 18px 0; color: var(--orange); font-size: 13px; line-height: 1.35; font-weight: 900; letter-spacing: 0.22em; text-transform: uppercase;">
+            Click below for section return
+          </div>
+
+          <div class="cima-process-card">
+            <div class="process-rail">
+
+            <div class="process-step active">
+              <div class="process-marker">01</div>
+              <div class="process-copy">
+                <strong>Access</strong>
+                <span>Email, terms &amp; access</span>
+              </div>
+            </div>
+
+            <div class="process-step muted">
+              <div class="process-marker">02</div>
+              <div class="process-copy">
+                <strong>Context</strong>
+                <span>Mode, command, persona, output</span>
+              </div>
+            </div>
+
+            <div class="process-step muted">
+              <div class="process-marker">03</div>
+              <div class="process-copy">
+                <strong>Response</strong>
+                <span>Question and CIMA answer</span>
+              </div>
+            </div>
+
+            <div class="process-step muted">
+              <div class="process-marker">04</div>
+              <div class="process-copy">
+                <strong>Delivery</strong>
+                <span>Transcript, email and review</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="delivery-status-card">
+          <h3>Delivery Status</h3>
+
+          <div class="delivery-line">
+            <span>Access gate</span>
+            <strong>Confirmed</strong>
+          </div>
+
+          <div class="delivery-line">
+            <span>Context setup</span>
+            <strong class="pending">Pending</strong>
+          </div>
+
+          <div class="delivery-line">
+            <span>Question submitted</span>
+            <strong class="not-started">Not started</strong>
+          </div>
+
+          <div class="delivery-line">
+            <span>CIMA response</span>
+            <strong class="not-started">Not started</strong>
+          </div>
+
+          <div class="delivery-line">
+            <span>Transcript email</span>
+            <strong class="not-started">Not sent</strong>
+          </div>
+
+          <div class="delivery-line">
+            <span>Human review</span>
+            <strong class="pending">Required</strong>
+          </div>
         </div>
       </div>
-
-      
     </aside>
 
     <section class="panel centre-panel">
@@ -1274,6 +1540,72 @@
             <textarea id="questionInput" placeholder="Ask CIMA a question..."></textarea>
             <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()">↑</button>
           </div>
+        </div>
+
+        <div class="ask-card">
+          <h2>Evidence date range</h2>
+
+          <div style="display: grid; grid-template-columns: 1fr; gap: 14px; align-items: center;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>From</strong>
+                <strong id="fromYearLabel">2010</strong>
+              </div>
+
+              <input
+                id="fromYear"
+                type="range"
+                min="2010"
+                max="2026"
+                value="2010"
+                style="width: 100%; accent-color: var(--orange);"
+                oninput="
+                  const from = document.getElementById('fromYear');
+                  const to = document.getElementById('toYear');
+
+                  if (Number(from.value) > Number(to.value)) {
+                    from.value = to.value;
+                  }
+
+                  document.getElementById('fromYearLabel').textContent = from.value;
+                  document.getElementById('toYearLabel').textContent = to.value;
+                  document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
+                "
+              />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>To</strong>
+                <strong id="toYearLabel">2026</strong>
+              </div>
+
+              <input
+                id="toYear"
+                type="range"
+                min="2010"
+                max="2026"
+                value="2026"
+                style="width: 100%; accent-color: var(--orange);"
+                oninput="
+                  const from = document.getElementById('fromYear');
+                  const to = document.getElementById('toYear');
+
+                  if (Number(to.value) < Number(from.value)) {
+                    to.value = from.value;
+                  }
+
+                  document.getElementById('fromYearLabel').textContent = from.value;
+                  document.getElementById('toYearLabel').textContent = to.value;
+                  document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
+                "
+              />
+            </div>
+          </div>
+
+          <p style="margin: 14px 0 0 0; color: var(--muted); font-size: 14px;">
+            Evidence search range: <strong id="evidenceRangeText">2010 to 2026</strong>
+          </p>
         </div>
 
         <div class="reply-card">
@@ -1932,6 +2264,32 @@
       }
 
       if (rightTab === "sources") {
+        const meta = metaState || {};
+
+        function metaValue(...keys) {
+          for (const key of keys) {
+            if (meta[key] !== undefined && meta[key] !== null && meta[key] !== "") {
+              if (meta[key] === true) return "Yes";
+              if (meta[key] === false) return "No";
+              return String(meta[key]);
+            }
+          }
+
+          return "Not returned";
+        }
+
+        const indexStatusHtml = `
+          <h3>Index Status</h3>
+          <p><strong>Backend:</strong> ${meta.ok ? "Online" : "Not confirmed"}</p>
+          <p><strong>Build:</strong> ${escapeHtml(metaValue("build_iso", "build", "version"))}</p>
+          <p><strong>PDF index:</strong> ${escapeHtml(metaValue("pdf_index_ready", "pdf_ready", "pdfIndexReady"))}</p>
+          <p><strong>HTML index:</strong> ${escapeHtml(metaValue("html_index_ready", "html_ready", "htmlIndexReady"))}</p>
+          <p><strong>PDF documents:</strong> ${escapeHtml(metaValue("pdf_document_count", "pdf_count", "pdfDocuments", "pdfs"))}</p>
+          <p><strong>HTML pages:</strong> ${escapeHtml(metaValue("html_page_count", "html_count", "htmlPages", "html"))}</p>
+          <p><strong>Total chunks:</strong> ${escapeHtml(metaValue("chunk_count", "chunks", "total_chunks"))}</p>
+          <p><strong>Last indexed:</strong> ${escapeHtml(metaValue("last_indexed_at", "lastIndexedAt", "indexed_at"))}</p>
+        `;
+
         const sourceButtons = `
           <div class="source-tabs">
             <button id="sourceBtnResource" class="source-tab ${sourceClass === "resource" ? "active" : ""}" type="button" onclick="setSourceClass('resource')">Index</button>
@@ -1982,10 +2340,9 @@
           ].join("")
         };
 
-        panel.innerHTML = sourceButtons + (sourceText[sourceClass] || sourceText.resource);
+        panel.innerHTML = indexStatusHtml + sourceButtons + (sourceText[sourceClass] || sourceText.resource);
         return;
       }
-
       if (rightTab === "audit") {
         panel.innerHTML = `
           <h3>Audit / Governance Snapshot</h3>
@@ -2323,14 +2680,24 @@
       }
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-      loadStoredGateEmails();
-      syncGateState();
-      loadMeta();
-      updateContextFromControls();
-      setRightTab("answer");
-      renderSessionQa();
-    });
+        document.addEventListener("DOMContentLoaded", () => {
+        const currentYear = Number(document.getElementById("isoTime").textContent.slice(0, 4));
+
+        document.getElementById("fromYear").max = String(currentYear);
+        document.getElementById("toYear").max = String(currentYear);
+        document.getElementById("toYear").value = String(currentYear);
+        
+        document.getElementById("toYearLabel").textContent = String(currentYear);
+        document.getElementById("evidenceRangeText").textContent =
+          document.getElementById("fromYear").value + " to " + String(currentYear);
+
+        loadStoredGateEmails();
+        syncGateState();
+        loadMeta();
+        updateContextFromControls();
+        setRightTab("answer");
+        renderSessionQa();
+      });
   </script>
 </body>
 </html>
