@@ -691,7 +691,7 @@
       flex: 1;
       background: transparent;
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto 1fr auto ;
       gap: 16px;
       padding: 24px;
       overflow: hidden;
@@ -763,6 +763,7 @@
       background: #ffffff;
       padding: 18px;
       overflow-y: visible;
+      min-height: 460px;
     }
 
     /* AIVS visual edge fix — centre Ask / Reply cards only */
@@ -956,11 +957,13 @@
       background: var(--panel-bg);
     }
 
-    .right-header h2 {
-      margin: 0;
-      color: var(--ink);
-      font-size: 18px;
-    }
+      .right-header h2 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 28px;
+        font-weight: 900;
+        line-height: 1;
+      }
 
     .right-header span {
       color: var(--muted);
@@ -1014,7 +1017,7 @@
     .answer-tab {
       padding: 9px 12px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 16px;
       font-weight: bold;
       border: 0;
       background: transparent;
@@ -1045,14 +1048,18 @@
     }
 
     .source-view {
-      border-top: 1.5px solid var(--soft-border);
-      min-height: 130px;
-      color: #5e6970;
-      font-size: 13px;
-      background: rgba(255,255,255,0.40);
-      padding: 14px 18px;
-      line-height: 1.45;
-    }
+        background: #fffdfa;
+        border: 2px solid var(--border);
+        border-left: 5px solid var(--orange);
+        border-radius: 16px;
+        padding: 14px;
+        margin: 18px;
+        min-height: 130px;
+        color: #5e6970;
+        font-size: 13px;
+        line-height: 1.45;
+        box-shadow: 0 8px 18px rgba(40, 35, 25, 0.10);
+      }
 
     .source-view h3 {
       margin: 0 0 8px 0;
