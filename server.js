@@ -1,25 +1,22 @@
 /**
  * AIVS / PGB CIMA Demo Backend - server.js
- * ISO Timestamp: 2026-05-19T18:05:00Z
+ * ISO Timestamp: 2026-06-02T13:55:00Z
  *
  * Change Log:
- * - v0.1.0: clean standalone backend for PGB CIMA demo index
- * - v0.1.0: removed dependency on AIVS Company Examiner / security backend
- * - v0.1.0: added /health and /meta
- * - v0.1.0: added /check-access using ACCESS_CODE or VACANCY_CODE
- * - v0.1.0: added /cima-chat demo response route
- * - v0.1.0: added /send-transcript-email route
- * - v0.1.0: sends transcript as PDF and DOCX via Mailjet
- * - v0.1.0: supports one or two email recipients
+ * - v0.3.0: moved Mailjet email sending into agents/email_agent.js
+ * - v0.3.0: server.js now imports sendAccessCodeEmail, sendTranscriptEmail and getEmailAgentStatus
+ * - v0.3.0: removed direct Mailjet client setup from server.js
+ * - v0.3.0: retained transcript PDF and DOCX generation inside server.js for now
+ * - v0.3.0: retained /health, /meta, /send-access-code-email, /check-access, /cima-chat and /send-transcript-email
+ * - v0.3.0: no Companies House, FCA, insolvency, director, OCR or security agents
  *
  * Notes:
  * - Temporary working CIMA backend.
- * - No Companies House, FCA, insolvency, director, OCR or security agents.
- * - Designed to match the current CIMA demo index.
- * - All operational outputs are demo outputs and require human review.
+ * - Designed to match the current CIMA demo index.html.
+ * - All operational outputs are draft support only and require human review.
  */
 
-const BUILD_ISO = "2026-05-19T18:05:00Z";
+const BUILD_ISO = "2026-06-02T13:55:00Z";
 console.log("PGB CIMA BACKEND BUILD:", BUILD_ISO);
 
 import express from "express";
@@ -27,7 +24,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import MailjetPackage from "node-mailjet";
 import PDFDocument from "pdfkit";
 import {
   Document,
@@ -42,10 +38,15 @@ import {
   BorderStyle
 } from "docx";
 
+import {
+  sendAccessCodeEmail,
+  sendTranscriptEmail,
+  getEmailAgentStatus
+} from "./export/mailjetExporter.js";
+
 dotenv.config();
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 10000);
 
 const ACCESS_CODE = String(
@@ -59,34 +60,13 @@ const DATA_REVIEW_EMAIL = String(
   "michael@aivs.uk"
 ).trim();
 
-const MAILJET_API_KEY = String(
-  process.env.MAILJET_API_KEY ||
-  process.env.MJ_APIKEY_PUBLIC ||
-  ""
-).trim();
-
-const MAILJET_API_SECRET = String(
-  process.env.MAILJET_API_SECRET ||
-  process.env.MJ_APIKEY_PRIVATE ||
-  ""
-).trim();
-
-const MAILJET_FROM_EMAIL = String(
-  process.env.MAILJET_FROM_EMAIL ||
-  process.env.MJ_FROM_EMAIL ||
-  "noreply@securemaildrop.uk"
-).trim();
-
-const MAILJET_FROM_NAME = String(
-  process.env.MAILJET_FROM_NAME ||
-  process.env.MJ_FROM_NAME ||
-  "AIVS Software Limited"
-).trim();
+const EMAIL_AGENT_STATUS = getEmailAgentStatus();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.use(cors());
+app.options("*", cors());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -94,15 +74,18 @@ app.use(express.static(path.join(__dirname, "public")));
 console.log("ENV CHECK:", {
   accessCodeSet: Boolean(ACCESS_CODE),
   accessCodeLength: ACCESS_CODE.length,
-  mailjetReady: Boolean(MAILJET_API_KEY && MAILJET_API_SECRET),
-  fromEmail: MAILJET_FROM_EMAIL,
+  emailAgentReady: EMAIL_AGENT_STATUS.mailjet_ready,
+  fromEmailReady: EMAIL_AGENT_STATUS.from_email_ready,
   dataReviewEmail: DATA_REVIEW_EMAIL
 });
 
 /* -------------------------- BASIC HELPERS -------------------------- */
 
 function safeString(value = "") {
-  if (value === null || value === undefined || value === "") return "Not supplied";
+  if (value === null || value === undefined || value === "") {
+    return "Not supplied";
+  }
+
   return String(value);
 }
 
@@ -144,65 +127,7 @@ function safeFilenamePart(value = "") {
     .slice(0, 80) || "CIMA";
 }
 
-function getMailjetClient() {
-  if (!MAILJET_API_KEY || !MAILJET_API_SECRET) {
-    throw new Error("Missing Mailjet credentials. Set MAILJET_API_KEY and MAILJET_API_SECRET, or MJ_APIKEY_PUBLIC and MJ_APIKEY_PRIVATE.");
-  }
-
-  const Mailjet = MailjetPackage?.default || MailjetPackage;
-
-  if (Mailjet?.apiConnect) {
-    return Mailjet.apiConnect(MAILJET_API_KEY, MAILJET_API_SECRET);
-  }
-
-  return new Mailjet({
-    apiKey: MAILJET_API_KEY,
-    apiSecret: MAILJET_API_SECRET
-  });
-}
-
-async function sendMailjetEmail({
-  toEmails,
-  subject,
-  textPart,
-  htmlPart,
-  attachments = []
-}) {
-  const recipients = normaliseEmailList(toEmails);
-
-  if (!recipients.length) {
-    throw new Error("At least one valid recipient email address is required.");
-  }
-
-  const mailjet = getMailjetClient();
-
-  const message = {
-    From: {
-      Email: MAILJET_FROM_EMAIL,
-      Name: MAILJET_FROM_NAME
-    },
-    To: recipients.map((email) => ({ Email: email })),
-    Subject: subject,
-    TextPart: textPart,
-    HTMLPart: htmlPart,
-    Attachments: attachments
-  };
-
-  const response = await mailjet
-    .post("send", { version: "v3.1" })
-    .request({
-      Messages: [message]
-    });
-
-  return {
-    sent: true,
-    provider: "Mailjet",
-    to: recipients,
-    status: response?.body?.Messages?.[0]?.Status || "sent"
-  };
-}
-
-/* -------------------------- REPORT BUILDERS -------------------------- */
+/* -------------------------- TRANSCRIPT BUILDERS -------------------------- */
 
 function buildTranscriptText({
   transcript = "",
@@ -225,6 +150,9 @@ function buildTranscriptText({
         return [
           `${index + 1}. ${safeString(item.question)}`,
           `   Path: ${safeString(item.path)}`,
+          `   RAG: ${safeString(item.rag)}`,
+          `   HITL: ${safeString(item.hitl)}`,
+          `   Confidence: ${safeString(item.confidence)}`,
           `   Answer: ${safeString(item.answer)}`
         ].join("\n");
       }).join("\n\n")
@@ -239,9 +167,7 @@ function buildTranscriptText({
     `Thread: ${safeString(context.thread)}`,
     `Mode: ${safeString(context.mode)}`,
     `Command level: ${safeString(context.level)}`,
-    `Scenario: ${safeString(context.scenario)}`,
-    `Location: ${safeString(context.location)}`,
-    `People at risk: ${safeString(context.people)}`,
+    `Persona: ${safeString(context.persona)}`,
     `Requested output: ${safeString(context.output)}`,
     "",
     "Transcript",
@@ -476,9 +402,7 @@ async function buildTranscriptDocxBuffer({
         docxCell("Thread", safeString(context.thread)),
         docxCell("Mode", safeString(context.mode)),
         docxCell("Command level", safeString(context.level)),
-        docxCell("Scenario", safeString(context.scenario)),
-        docxCell("Location", safeString(context.location)),
-        docxCell("People at risk", safeString(context.people)),
+        docxCell("Persona", safeString(context.persona)),
         docxCell("Requested output", safeString(context.output))
       ]
     })
@@ -560,6 +484,117 @@ async function buildTranscriptDocxBuffer({
   return Packer.toBuffer(document);
 }
 
+/* -------------------------- CIMA DEMO ANSWER LOGIC -------------------------- */
+
+function determineResponsePath(question = "", context = {}) {
+  const text = [
+    question,
+    context.mode,
+    context.level,
+    context.persona,
+    context.output,
+    context.thread
+  ].join(" ").toLowerCase();
+
+  if (
+    text.includes("assurance") ||
+    text.includes("compliance") ||
+    text.includes("statutory") ||
+    text.includes("validate") ||
+    text.includes("source") ||
+    text.includes("citation") ||
+    text.includes("policy") ||
+    text.includes("safeguarding")
+  ) {
+    return "ASSURANCE PATH";
+  }
+
+  return "FAST PATH";
+}
+
+function inferRagStatus(question = "", context = {}, responsePath = "FAST PATH") {
+  const text = [
+    question,
+    context.mode,
+    context.level,
+    context.persona,
+    context.output
+  ].join(" ").toLowerCase();
+
+  if (
+    text.includes("death") ||
+    text.includes("serious injury") ||
+    text.includes("life safety") ||
+    text.includes("evacuation") ||
+    text.includes("emergency") ||
+    text.includes("missing person") ||
+    text.includes("safeguarding")
+  ) {
+    return "RED";
+  }
+
+  if (responsePath === "ASSURANCE PATH") {
+    return "AMBER";
+  }
+
+  return "GREEN";
+}
+
+function buildDemoCimaAnswer({ question = "", context = {}, path = "FAST PATH" }) {
+  const sections = [];
+
+  sections.push("## Executive Summary");
+
+  if (path === "ASSURANCE PATH") {
+    sections.push(
+      "This has been treated as an assurance-style request. In the production system, the answer would be checked against the approved Source Register, policy abstracts and controlled internal material before being issued."
+    );
+  } else {
+    sections.push(
+      "This has been treated as a fast operational request. The immediate priority is to clarify the facts, identify people at risk, stabilise the situation and set a clear next action owner."
+    );
+  }
+
+  sections.push("");
+  sections.push("## Selected Context");
+  sections.push(`- Thread: ${safeString(context.thread)}`);
+  sections.push(`- Mode: ${safeString(context.mode)}`);
+  sections.push(`- Command level: ${safeString(context.level)}`);
+  sections.push(`- Persona: ${safeString(context.persona)}`);
+  sections.push(`- Requested output: ${safeString(context.output)}`);
+
+  sections.push("");
+  sections.push("## Immediate Actions");
+  sections.push("- Confirm what is known, what is assumed and what is still unknown.");
+  sections.push("- Identify whether anyone is at immediate risk.");
+  sections.push("- Set an owner for the next action.");
+  sections.push("- Agree the next update time.");
+  sections.push("- Record the decision and the reason for it.");
+
+  sections.push("");
+  sections.push("## Risk and Safety");
+  sections.push("- Do not present uncertain information as confirmed.");
+  sections.push("- Separate operational facts from assumptions.");
+  sections.push("- Escalate immediately if life safety, safeguarding or public confidence is affected.");
+  sections.push("- Keep a clear decision log.");
+
+  sections.push("");
+  sections.push("## Information Gaps");
+  sections.push("- Exact location and time of incident.");
+  sections.push("- Number and status of people affected.");
+  sections.push("- Current command owner.");
+  sections.push("- Any external authority involvement.");
+  sections.push("- Whether a formal assurance or source-cited answer is required.");
+
+  sections.push("");
+  sections.push("## Human Review");
+  sections.push(
+    "This is a CIMA demo response. A responsible human lead must review and approve operational decisions before action."
+  );
+
+  return sections.join("\n");
+}
+
 /* -------------------------- ROUTES -------------------------- */
 
 app.get("/health", (req, res) => {
@@ -578,17 +613,59 @@ app.get("/meta", (req, res) => {
     build_iso: BUILD_ISO,
     iso_timestamp: new Date().toISOString(),
     access_ready: Boolean(ACCESS_CODE),
-    mailjet_ready: Boolean(MAILJET_API_KEY && MAILJET_API_SECRET),
+    email_agent: getEmailAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
+
+    pdf_index_ready: false,
+    html_index_ready: false,
+    pdf_document_count: 0,
+    html_page_count: 0,
+    chunk_count: 0,
+    last_indexed_at: "Not indexed in demo starter backend",
+
     routes: [
       "/health",
       "/meta",
+      "/send-access-code-email",
       "/check-access",
       "/cima-chat",
       "/send-transcript-email",
       "/send-cima-transcript-email"
     ]
   });
+});
+
+app.post("/send-access-code-email", async (req, res) => {
+  try {
+    const toEmail = String(req.body.toEmail || "").trim();
+    const secondEmail = String(req.body.secondEmail || "").trim();
+
+    const result = await sendAccessCodeEmail({
+      toEmail,
+      secondEmail,
+      accessCode: ACCESS_CODE
+    });
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      sent_at: new Date().toISOString(),
+      email_sent: true,
+      provider: result.provider,
+      status: result.status,
+      to: result.to,
+      email_agent_build_iso: result.email_agent_build_iso
+    });
+  } catch (err) {
+    console.error("ERROR /send-access-code-email failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Access code email failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
 });
 
 app.post("/check-access", (req, res) => {
@@ -602,7 +679,11 @@ app.post("/check-access", (req, res) => {
   console.log("ACCESS CHECK:", {
     submittedLength: submittedCode.length,
     requiredLength: ACCESS_CODE.length,
-    accessCodeSource: process.env.ACCESS_CODE ? "ACCESS_CODE" : process.env.VACANCY_CODE ? "VACANCY_CODE" : "DEMO"
+    accessCodeSource: process.env.ACCESS_CODE
+      ? "ACCESS_CODE"
+      : process.env.VACANCY_CODE
+        ? "VACANCY_CODE"
+        : "DEMO"
   });
 
   if (!submittedCode) {
@@ -628,80 +709,10 @@ app.post("/check-access", (req, res) => {
   });
 });
 
-function determineResponsePath(question = "", context = {}) {
-  const text = [
-    question,
-    context.mode,
-    context.output,
-    context.scenario
-  ].join(" ").toLowerCase();
-
-  if (
-    text.includes("assurance") ||
-    text.includes("compliance") ||
-    text.includes("statutory") ||
-    text.includes("validate") ||
-    text.includes("source") ||
-    text.includes("citation") ||
-    text.includes("policy")
-  ) {
-    return "ASSURANCE PATH";
-  }
-
-  return "FAST PATH";
-}
-
-function buildDemoCimaAnswer({ question = "", context = {}, path = "FAST PATH" }) {
-  const sections = [];
-
-  sections.push("## Executive Summary");
-
-  if (path === "ASSURANCE PATH") {
-    sections.push(
-      "This has been treated as an assurance-style request. In the production system, the answer would be checked against the approved Source Register, policy abstracts and relevant SharePoint-controlled material before being issued."
-    );
-  } else {
-    sections.push(
-      "This has been treated as a fast operational request. The immediate priority is to clarify the facts, identify people at risk, stabilise the situation and set a clear next action owner."
-    );
-  }
-
-  sections.push("");
-  sections.push("## Selected Context");
-  sections.push(`- Thread: ${safeString(context.thread)}`);
-  sections.push(`- Mode: ${safeString(context.mode)}`);
-  sections.push(`- Command level: ${safeString(context.level)}`);
-  sections.push(`- Scenario: ${safeString(context.scenario)}`);
-  sections.push(`- Location: ${safeString(context.location)}`);
-  sections.push(`- People at risk: ${safeString(context.people)}`);
-  sections.push(`- Requested output: ${safeString(context.output)}`);
-
-  sections.push("");
-  sections.push("## Immediate Actions");
-  sections.push("- Confirm what is known, what is assumed and what is still unknown.");
-  sections.push("- Identify whether anyone is at immediate risk.");
-  sections.push("- Set an owner for the next action.");
-  sections.push("- Agree the next update time.");
-  sections.push("- Record the decision and the reason for it.");
-
-  sections.push("");
-  sections.push("## Information Gaps");
-  sections.push("- Exact location and time of incident.");
-  sections.push("- Number and status of people affected.");
-  sections.push("- Current command owner.");
-  sections.push("- Any external authority involvement.");
-  sections.push("- Whether a formal assurance / source-cited answer is required.");
-
-  sections.push("");
-  sections.push("## Human Review");
-  sections.push("This is a CIMA demo response. A responsible human lead must review and approve operational decisions before action.");
-
-  return sections.join("\n");
-}
-
 app.post("/cima-chat", (req, res) => {
   try {
     const question = String(req.body.question || "").trim();
+
     const context = req.body.context && typeof req.body.context === "object"
       ? req.body.context
       : {};
@@ -727,6 +738,8 @@ app.post("/cima-chat", (req, res) => {
     }
 
     const responsePath = determineResponsePath(question, context);
+    const rag = inferRagStatus(question, context, responsePath);
+
     const answer = buildDemoCimaAnswer({
       question,
       context,
@@ -738,15 +751,25 @@ app.post("/cima-chat", (req, res) => {
       build_iso: BUILD_ISO,
       answered_at: new Date().toISOString(),
       response_path: responsePath,
-      hitl: responsePath === "ASSURANCE PATH" ? "May be required" : "Not triggered",
-      source_mode: responsePath === "ASSURANCE PATH" ? "Source Register required in production" : "Internal first",
+      path: responsePath,
+      rag,
+      rag_status: rag,
+      hitl: responsePath === "ASSURANCE PATH" || rag === "RED"
+        ? "May be required"
+        : "Not triggered",
+      confidence: responsePath === "ASSURANCE PATH"
+        ? "Requires source check"
+        : "Provisional",
+      source_mode: responsePath === "ASSURANCE PATH"
+        ? "Source Register required in production"
+        : "Internal first",
       answer,
       sources: responsePath === "ASSURANCE PATH"
         ? [
             {
               title: "Production source-register lookup required",
               type: "placeholder",
-              note: "The demo backend does not retrieve SharePoint sources."
+              note: "The demo starter backend does not retrieve controlled sources."
             }
           ]
         : []
@@ -829,37 +852,29 @@ async function handleTranscriptEmail(req, res) {
       "AIVS Software Limited copyright 2026. All rights reserved."
     ].join("\n");
 
-    const htmlPart = `
-      <div style="font-family:Arial,Helvetica,sans-serif;color:#14232B;line-height:1.5;">
-        <h2 style="margin-bottom:4px;">PGB CIMA transcript attached</h2>
-        <p><strong>Generated at:</strong> ${escapeHtml(generatedAt)}</p>
-        <p>The Word and PDF transcript files are attached.</p>
-        <p style="font-size:12px;color:#4A5F6C;">
-          This transcript is a demo operational support output and requires human review before reliance.
-        </p>
-        <p style="font-size:12px;color:#4A5F6C;">
-          AIVS Software Limited copyright 2026. All rights reserved.
-        </p>
-      </div>
-    `;
+    const htmlPart = [
+      '<div style="font-family:Arial,Helvetica,sans-serif;color:#14232B;line-height:1.5;">',
+      '<h2 style="margin-bottom:4px;">PGB CIMA transcript attached</h2>',
+      `<p><strong>Generated at:</strong> ${escapeHtml(generatedAt)}</p>`,
+      "<p>The Word and PDF transcript files are attached.</p>",
+      '<p style="font-size:12px;color:#4A5F6C;">',
+      "This transcript is a demo operational support output and requires human review before reliance.",
+      "</p>",
+      '<p style="font-size:12px;color:#4A5F6C;">',
+      "AIVS Software Limited copyright 2026. All rights reserved.",
+      "</p>",
+      "</div>"
+    ].join("");
 
-    const result = await sendMailjetEmail({
+    const result = await sendTranscriptEmail({
       toEmails: emails,
       subject,
-      textPart,
+      bodyText: textPart,
       htmlPart,
-      attachments: [
-        {
-          ContentType: "application/pdf",
-          Filename: pdfFilename,
-          Base64Content: pdfBuffer.toString("base64")
-        },
-        {
-          ContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          Filename: docxFilename,
-          Base64Content: docxBuffer.toString("base64")
-        }
-      ]
+      pdfBuffer,
+      pdfFilename,
+      docxBuffer,
+      docxFilename
     });
 
     return res.json({
@@ -870,6 +885,7 @@ async function handleTranscriptEmail(req, res) {
       provider: result.provider,
       status: result.status,
       to: result.to,
+      email_agent_build_iso: result.email_agent_build_iso,
       pdfFilename,
       docxFilename,
       attachment_bytes: {
