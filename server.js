@@ -46,7 +46,7 @@ import {
 
 import {
   getAuditAgentStatus
-} from "./agents/audit_agent.js";
+} from "./audit_agent.js";
 
 dotenv.config();
 
