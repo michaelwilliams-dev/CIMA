@@ -45,7 +45,8 @@ import {
 } from "./export/mailjetExporter.js";
 
 import {
-  getAuditAgentStatus
+  getAuditAgentStatus,
+  writeAuditEvent
 } from "./audit_agent.js";
 
 dotenv.config();
