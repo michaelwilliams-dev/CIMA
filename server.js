@@ -697,11 +697,22 @@ app.post("/send-access-code-email", async (req, res) => {
   }
 });
 
-app.post("/check-access", (req, res) => {
+app.post("/check-access", async (req, res) => {
   const submittedCode = String(
     req.body.accessCode ||
     req.body.vacancyCode ||
     req.body.code ||
+    ""
+  ).trim();
+
+  const userEmail = String(
+    req.body.email ||
+    req.body.toEmail ||
+    ""
+  ).trim();
+
+  const secondEmail = String(
+    req.body.secondEmail ||
     ""
   ).trim();
 
@@ -716,6 +727,18 @@ app.post("/check-access", (req, res) => {
   });
 
   if (!submittedCode) {
+    await writeAuditEvent({
+      event_type: "access_check_failed",
+      route: "/check-access",
+      success: false,
+      error: "Access code required.",
+      user_email: userEmail,
+      second_email: secondEmail,
+      access_mode: "one-time-code",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
+
     return res.status(400).json({
       ok: false,
       error: "Access code required.",
@@ -724,12 +747,35 @@ app.post("/check-access", (req, res) => {
   }
 
   if (submittedCode !== ACCESS_CODE) {
+    await writeAuditEvent({
+      event_type: "access_check_failed",
+      route: "/check-access",
+      success: false,
+      error: "Invalid access code.",
+      user_email: userEmail,
+      second_email: secondEmail,
+      access_mode: "one-time-code",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
+
     return res.status(403).json({
       ok: false,
       error: "Invalid access code.",
       build_iso: BUILD_ISO
     });
   }
+
+  await writeAuditEvent({
+    event_type: "access_check_success",
+    route: "/check-access",
+    success: true,
+    user_email: userEmail,
+    second_email: secondEmail,
+    access_mode: "one-time-code",
+    ip_address: req.ip,
+    user_agent: req.get("user-agent")
+  });
 
   return res.json({
     ok: true,
