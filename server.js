@@ -44,6 +44,10 @@ import {
   getEmailAgentStatus
 } from "./export/mailjetExporter.js";
 
+import {
+  getAuditAgentStatus
+} from "./agents/audit_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -614,6 +618,7 @@ app.get("/meta", (req, res) => {
     iso_timestamp: new Date().toISOString(),
     access_ready: Boolean(ACCESS_CODE),
     email_agent: getEmailAgentStatus(),
+    audit_agent: getAuditAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
 
     pdf_index_ready: false,
