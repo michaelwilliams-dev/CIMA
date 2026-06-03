@@ -642,14 +642,25 @@ app.get("/meta", (req, res) => {
 });
 
 app.post("/send-access-code-email", async (req, res) => {
-  try {
-    const toEmail = String(req.body.toEmail || "").trim();
-    const secondEmail = String(req.body.secondEmail || "").trim();
+  const toEmail = String(req.body.toEmail || "").trim();
+  const secondEmail = String(req.body.secondEmail || "").trim();
 
+  try {
     const result = await sendAccessCodeEmail({
       toEmail,
       secondEmail,
       accessCode: ACCESS_CODE
+    });
+
+    await writeAuditEvent({
+      event_type: "access_code_email_sent",
+      route: "/send-access-code-email",
+      success: true,
+      user_email: toEmail,
+      second_email: secondEmail,
+      access_mode: "one-time-code",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
     });
 
     return res.json({
@@ -664,6 +675,18 @@ app.post("/send-access-code-email", async (req, res) => {
     });
   } catch (err) {
     console.error("ERROR /send-access-code-email failed:", err);
+
+    await writeAuditEvent({
+      event_type: "access_code_email_failed",
+      route: "/send-access-code-email",
+      success: false,
+      error: err.message,
+      user_email: toEmail,
+      second_email: secondEmail,
+      access_mode: "one-time-code",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
 
     return res.status(500).json({
       ok: false,
