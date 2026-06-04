@@ -784,19 +784,47 @@ app.post("/check-access", async (req, res) => {
   });
 });
 
-app.post("/cima-chat", (req, res) => {
+app.post("/cima-chat", async (req, res) => {
+  const question = String(req.body.question || "").trim();
+
+  const context = req.body.context && typeof req.body.context === "object"
+    ? req.body.context
+    : {};
+
+  const terms = req.body.terms && typeof req.body.terms === "object"
+    ? req.body.terms
+    : {};
+
+  const access = req.body.access && typeof req.body.access === "object"
+    ? req.body.access
+    : {};
+
+  const userEmail = String(
+    access.email ||
+    req.body.email ||
+    req.body.user_email ||
+    ""
+  ).trim();
+
   try {
-    const question = String(req.body.question || "").trim();
-
-    const context = req.body.context && typeof req.body.context === "object"
-      ? req.body.context
-      : {};
-
-    const terms = req.body.terms && typeof req.body.terms === "object"
-      ? req.body.terms
-      : {};
-
     if (!terms.accepted) {
+      await writeAuditEvent({
+        event_type: "cima_question_rejected",
+        route: "/cima-chat",
+        success: false,
+        error: "Terms and Conditions not accepted.",
+        user_email: userEmail,
+        access_mode: access.mode || "",
+        terms_accepted: false,
+        question,
+        context_mode: context.mode || "",
+        command_level: context.level || "",
+        persona: context.persona || "",
+        requested_output: context.output || "",
+        ip_address: req.ip,
+        user_agent: req.get("user-agent")
+      });
+
       return res.status(403).json({
         ok: false,
         error: "Terms and Conditions must be confirmed before using the assistant.",
@@ -805,6 +833,23 @@ app.post("/cima-chat", (req, res) => {
     }
 
     if (!question) {
+      await writeAuditEvent({
+        event_type: "cima_question_rejected",
+        route: "/cima-chat",
+        success: false,
+        error: "Question required.",
+        user_email: userEmail,
+        access_mode: access.mode || "",
+        terms_accepted: true,
+        question,
+        context_mode: context.mode || "",
+        command_level: context.level || "",
+        persona: context.persona || "",
+        requested_output: context.output || "",
+        ip_address: req.ip,
+        user_agent: req.get("user-agent")
+      });
+
       return res.status(400).json({
         ok: false,
         error: "Question required.",
@@ -812,13 +857,57 @@ app.post("/cima-chat", (req, res) => {
       });
     }
 
+    await writeAuditEvent({
+      event_type: "cima_question_submitted",
+      route: "/cima-chat",
+      success: true,
+      user_email: userEmail,
+      access_mode: access.mode || "",
+      terms_accepted: true,
+      question,
+      context_mode: context.mode || "",
+      command_level: context.level || "",
+      persona: context.persona || "",
+      requested_output: context.output || "",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
+
     const responsePath = determineResponsePath(question, context);
     const rag = inferRagStatus(question, context, responsePath);
+
+    const hitl = responsePath === "ASSURANCE PATH" || rag === "RED"
+      ? "May be required"
+      : "Not triggered";
+
+    const confidence = responsePath === "ASSURANCE PATH"
+      ? "Requires source check"
+      : "Provisional";
 
     const answer = buildDemoCimaAnswer({
       question,
       context,
       path: responsePath
+    });
+
+    await writeAuditEvent({
+      event_type: "cima_answer_generated",
+      route: "/cima-chat",
+      success: true,
+      user_email: userEmail,
+      access_mode: access.mode || "",
+      terms_accepted: true,
+      question,
+      context_mode: context.mode || "",
+      command_level: context.level || "",
+      persona: context.persona || "",
+      requested_output: context.output || "",
+      response_path: responsePath,
+      rag_status: rag,
+      hitl_status: hitl,
+      confidence,
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
     });
 
     return res.json({
@@ -829,12 +918,8 @@ app.post("/cima-chat", (req, res) => {
       path: responsePath,
       rag,
       rag_status: rag,
-      hitl: responsePath === "ASSURANCE PATH" || rag === "RED"
-        ? "May be required"
-        : "Not triggered",
-      confidence: responsePath === "ASSURANCE PATH"
-        ? "Requires source check"
-        : "Provisional",
+      hitl,
+      confidence,
       source_mode: responsePath === "ASSURANCE PATH"
         ? "Source Register required in production"
         : "Internal first",
@@ -851,6 +936,23 @@ app.post("/cima-chat", (req, res) => {
     });
   } catch (err) {
     console.error("ERROR /cima-chat failed:", err);
+
+    await writeAuditEvent({
+      event_type: "cima_chat_failed",
+      route: "/cima-chat",
+      success: false,
+      error: err.message,
+      user_email: userEmail,
+      access_mode: access.mode || "",
+      terms_accepted: terms.accepted === true,
+      question,
+      context_mode: context.mode || "",
+      command_level: context.level || "",
+      persona: context.persona || "",
+      requested_output: context.output || "",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
 
     return res.status(500).json({
       ok: false,
