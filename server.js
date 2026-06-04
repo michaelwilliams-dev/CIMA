@@ -964,15 +964,32 @@ app.post("/cima-chat", async (req, res) => {
 });
 
 async function handleTranscriptEmail(req, res) {
-  try {
-    const generatedAt = String(req.body.generated_at || new Date().toISOString());
+  const generatedAt = String(req.body.generated_at || new Date().toISOString());
 
-    const emails = normaliseEmailList(
+  let emails = [];
+  let context = {};
+  let questions = [];
+  let subject = "PGB CIMA transcript";
+
+  try {
+    emails = normaliseEmailList(
       req.body.emails ||
       [req.body.toEmail, req.body.secondEmail]
     );
 
     if (!emails.length) {
+      await writeAuditEvent({
+        event_type: "transcript_email_failed",
+        route: "/send-transcript-email",
+        success: false,
+        error: "At least one recipient email is required.",
+        user_email: "",
+        transcript_sent: false,
+        email_recipients: [],
+        ip_address: req.ip,
+        user_agent: req.get("user-agent")
+      });
+
       return res.status(400).json({
         ok: false,
         error: "At least one recipient email is required.",
@@ -980,15 +997,15 @@ async function handleTranscriptEmail(req, res) {
       });
     }
 
-    const context = req.body.context && typeof req.body.context === "object"
+    context = req.body.context && typeof req.body.context === "object"
       ? req.body.context
       : {};
 
-    const questions = Array.isArray(req.body.questions)
+    questions = Array.isArray(req.body.questions)
       ? req.body.questions
       : [];
 
-    const subject = String(req.body.subject || "PGB CIMA transcript").trim();
+    subject = String(req.body.subject || "PGB CIMA transcript").trim();
 
     const transcriptText = buildTranscriptText({
       transcript: req.body.transcript,
@@ -1054,6 +1071,21 @@ async function handleTranscriptEmail(req, res) {
       docxFilename
     });
 
+    await writeAuditEvent({
+      event_type: "transcript_email_sent",
+      route: "/send-transcript-email",
+      success: true,
+      user_email: emails[0] || "",
+      transcript_sent: true,
+      email_recipients: emails,
+      context_mode: context.mode || "",
+      command_level: context.level || "",
+      persona: context.persona || "",
+      requested_output: context.output || "",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
+
     return res.json({
       ok: true,
       build_iso: BUILD_ISO,
@@ -1072,6 +1104,22 @@ async function handleTranscriptEmail(req, res) {
     });
   } catch (err) {
     console.error("ERROR transcript email failed:", err);
+
+    await writeAuditEvent({
+      event_type: "transcript_email_failed",
+      route: "/send-transcript-email",
+      success: false,
+      error: err.message,
+      user_email: emails[0] || "",
+      transcript_sent: false,
+      email_recipients: emails,
+      context_mode: context.mode || "",
+      command_level: context.level || "",
+      persona: context.persona || "",
+      requested_output: context.output || "",
+      ip_address: req.ip,
+      user_agent: req.get("user-agent")
+    });
 
     return res.status(500).json({
       ok: false,
