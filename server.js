@@ -49,6 +49,11 @@ import {
   writeAuditEvent
 } from "./audit_agent.js";
 
+import {
+  buildCimaResponse,
+  getCimaResponseAgentStatus
+} from "./cima_response_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -620,6 +625,7 @@ app.get("/meta", (req, res) => {
     access_ready: Boolean(ACCESS_CODE),
     email_agent: getEmailAgentStatus(),
     audit_agent: getAuditAgentStatus(),
+    cima_response_agent: getCimaResponseAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
 
     pdf_index_ready: false,
@@ -873,21 +879,9 @@ app.post("/cima-chat", async (req, res) => {
       user_agent: req.get("user-agent")
     });
 
-    const responsePath = determineResponsePath(question, context);
-    const rag = inferRagStatus(question, context, responsePath);
-
-    const hitl = responsePath === "ASSURANCE PATH" || rag === "RED"
-      ? "May be required"
-      : "Not triggered";
-
-    const confidence = responsePath === "ASSURANCE PATH"
-      ? "Requires source check"
-      : "Provisional";
-
-    const answer = buildDemoCimaAnswer({
+    const cimaResponse = buildCimaResponse({
       question,
-      context,
-      path: responsePath
+      context
     });
 
     await writeAuditEvent({
@@ -902,10 +896,10 @@ app.post("/cima-chat", async (req, res) => {
       command_level: context.level || "",
       persona: context.persona || "",
       requested_output: context.output || "",
-      response_path: responsePath,
-      rag_status: rag,
-      hitl_status: hitl,
-      confidence,
+      response_path: cimaResponse.response_path,
+      rag_status: cimaResponse.rag_status,
+      hitl_status: cimaResponse.hitl,
+      confidence: cimaResponse.confidence,
       ip_address: req.ip,
       user_agent: req.get("user-agent")
     });
@@ -914,25 +908,16 @@ app.post("/cima-chat", async (req, res) => {
       ok: true,
       build_iso: BUILD_ISO,
       answered_at: new Date().toISOString(),
-      response_path: responsePath,
-      path: responsePath,
-      rag,
-      rag_status: rag,
-      hitl,
-      confidence,
-      source_mode: responsePath === "ASSURANCE PATH"
-        ? "Source Register required in production"
-        : "Internal first",
-      answer,
-      sources: responsePath === "ASSURANCE PATH"
-        ? [
-            {
-              title: "Production source-register lookup required",
-              type: "placeholder",
-              note: "The demo starter backend does not retrieve controlled sources."
-            }
-          ]
-        : []
+      response_agent_build_iso: cimaResponse.response_agent_build_iso,
+      response_path: cimaResponse.response_path,
+      path: cimaResponse.path,
+      rag: cimaResponse.rag,
+      rag_status: cimaResponse.rag_status,
+      hitl: cimaResponse.hitl,
+      confidence: cimaResponse.confidence,
+      source_mode: cimaResponse.source_mode,
+      answer: cimaResponse.answer,
+      sources: cimaResponse.sources
     });
   } catch (err) {
     console.error("ERROR /cima-chat failed:", err);
