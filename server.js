@@ -54,6 +54,10 @@ import {
   getCimaResponseAgentStatus
 } from "./cima_response_agent.js";
 
+import {
+  getTranscriptAgentStatus
+} from "./transcript_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -623,9 +627,11 @@ app.get("/meta", (req, res) => {
     build_iso: BUILD_ISO,
     iso_timestamp: new Date().toISOString(),
     access_ready: Boolean(ACCESS_CODE),
+
     email_agent: getEmailAgentStatus(),
     audit_agent: getAuditAgentStatus(),
     cima_response_agent: getCimaResponseAgentStatus(),
+    transcript_agent: getTranscriptAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
 
     pdf_index_ready: false,
