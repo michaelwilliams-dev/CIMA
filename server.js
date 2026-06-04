@@ -55,6 +55,7 @@ import {
 } from "./cima_response_agent.js";
 
 import {
+  buildTranscriptPackage,
   getTranscriptAgentStatus
 } from "./transcript_agent.js";
 
@@ -998,29 +999,12 @@ async function handleTranscriptEmail(req, res) {
 
     subject = String(req.body.subject || "PGB CIMA transcript").trim();
 
-    const transcriptText = buildTranscriptText({
+    const transcriptPackage = await buildTranscriptPackage({
       transcript: req.body.transcript,
       generatedAt,
       context,
-      questions
-    });
-
-    const safeName = safeFilenamePart(subject);
-
-    const pdfFilename = `${safeName}_${generatedAt.slice(0, 10)}.pdf`;
-    const docxFilename = `${safeName}_${generatedAt.slice(0, 10)}.docx`;
-
-    const pdfBuffer = await buildTranscriptPdfBuffer({
-      transcriptText,
-      generatedAt,
+      questions,
       subject
-    });
-
-    const docxBuffer = await buildTranscriptDocxBuffer({
-      transcriptText,
-      generatedAt,
-      subject,
-      context
     });
 
     const textPart = [
@@ -1029,8 +1013,8 @@ async function handleTranscriptEmail(req, res) {
       `Generated at: ${generatedAt}`,
       "",
       "Attached files:",
-      `- ${pdfFilename}`,
-      `- ${docxFilename}`,
+      `- ${transcriptPackage.pdfFilename}`,
+      `- ${transcriptPackage.docxFilename}`,
       "",
       "This transcript is a demo operational support output and requires human review before reliance.",
       "",
@@ -1056,10 +1040,10 @@ async function handleTranscriptEmail(req, res) {
       subject,
       bodyText: textPart,
       htmlPart,
-      pdfBuffer,
-      pdfFilename,
-      docxBuffer,
-      docxFilename
+      pdfBuffer: transcriptPackage.pdfBuffer,
+      pdfFilename: transcriptPackage.pdfFilename,
+      docxBuffer: transcriptPackage.docxBuffer,
+      docxFilename: transcriptPackage.docxFilename
     });
 
     await writeAuditEvent({
@@ -1080,18 +1064,16 @@ async function handleTranscriptEmail(req, res) {
     return res.json({
       ok: true,
       build_iso: BUILD_ISO,
+      transcript_agent_build_iso: transcriptPackage.transcript_agent_build_iso,
       sent_at: new Date().toISOString(),
       email_sent: true,
       provider: result.provider,
       status: result.status,
       to: result.to,
       email_agent_build_iso: result.email_agent_build_iso,
-      pdfFilename,
-      docxFilename,
-      attachment_bytes: {
-        pdf: pdfBuffer.length,
-        docx: docxBuffer.length
-      }
+      pdfFilename: transcriptPackage.pdfFilename,
+      docxFilename: transcriptPackage.docxFilename,
+      attachment_bytes: transcriptPackage.attachment_bytes
     });
   } catch (err) {
     console.error("ERROR transcript email failed:", err);
