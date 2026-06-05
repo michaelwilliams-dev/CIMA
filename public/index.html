@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <!--
     AIVS / PGB CIMA Front End
     File: index.html
-    ISO Timestamp: 2026-05-25T11:15:00Z
+    ISO Timestamp: 2026-06-06T11:15:00Z
 
     Change Log:
     - v1.1.0: added front access gate using email access code and T&C acceptance
@@ -23,7 +22,8 @@
     - v1.1.1: shortened source selector labels to Index, Source, Policy, Playbooks
     - v1.1.1: removed temporary bottom label-patching script
     - v1.1.2: NOT VERIFIED evidence date range sliders now set their maximum year from the live ISO timestamp so the range rolls forward automatically each year
-  -->
+    - v1.1.3: expanded terms and conditions text, enlarged terms box, enlarged terms checkbox and increased desktop scrollbar width
+    -->
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -287,41 +287,62 @@
     }
 
     .terms-box {
-      border: 1.6px solid var(--border);
-      border-radius: 16px;
-      padding: 14px;
+      border: 1.8px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
       background: #f8f5ee;
-      margin-top: 14px;
+      margin-top: 18px;
+      max-height: 360px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .terms-box::-webkit-scrollbar {
+      width: 18px;
+    }
+
+    .terms-box::-webkit-scrollbar-track {
+      background: #efe6d8;
+      border-radius: 999px;
+    }
+
+    .terms-box::-webkit-scrollbar-thumb {
+      background: var(--orange);
+      border-radius: 999px;
+      border: 4px solid #efe6d8;
     }
 
     .terms-box h3 {
-      margin: 0 0 8px 0;
-      font-size: 15px;
+      margin: 0 0 10px 0;
+      font-size: 20px;
       color: var(--ink);
     }
 
     .terms-box p {
-      margin: 0 0 8px 0;
-      font-size: 13px;
-      line-height: 1.45;
-      color: #5f6b72;
+      margin: 0 0 12px 0;
+      font-size: 15px;
+      line-height: 1.55;
+      color: #4a5f6c;
     }
 
     .terms-check {
       display: grid;
-      grid-template-columns: 22px 1fr;
-      gap: 10px;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
       align-items: start;
-      margin-top: 10px;
-      font-size: 13px;
-      line-height: 1.45;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1.5px solid var(--border);
+      font-size: 15px;
+      line-height: 1.5;
       color: var(--ink);
     }
 
     .terms-check input {
       margin-top: 2px;
-      width: 18px;
-      height: 18px;
+      width: 28px;
+      height: 28px;
       accent-color: var(--orange);
     }
 
@@ -1366,17 +1387,54 @@ body {
 
         <div class="terms-box">
           <h3>Terms and conditions</h3>
+
           <p>
-            CIMA produces draft operational support only. It does not replace command judgement,
-            safeguarding judgement, professional advice, legal advice, medical advice or emergency-service instructions.
+            CIMA is a critical incident management support tool. It provides draft operational, planning and assurance support only.
+            It does not replace command judgement, safeguarding judgement, professional advice, legal advice, medical advice,
+            emergency-service instructions or the decision-making responsibilities of authorised personnel.
           </p>
+
           <p>
-            All outputs must be checked by an authorised human before reliance, onward communication or operational action.
+            CIMA outputs may be incomplete, provisional, out of date or unsuitable for the circumstances unless checked against
+            current facts, live source material, local procedures and the judgement of the responsible human decision maker.
+          </p>
+
+          <p>
+            All outputs must be reviewed by an authorised human before reliance, onward communication, operational action,
+            external disclosure, public statement, escalation, de-escalation or record entry.
+          </p>
+
+          <p>
+            CIMA must not be used as the sole basis for decisions involving life safety, safeguarding, medical risk, legal rights,
+            disciplinary action, public communications, evacuation, restraint, security response, police liaison or emergency response.
+          </p>
+
+          <p>
+            Users remain responsible for checking facts, identifying uncertainty, recording decisions, preserving audit trails,
+            protecting confidential information and escalating matters to the appropriate human authority where required.
+          </p>
+
+          <p>
+            Do not enter unnecessary personal, confidential, medical, safeguarding or legally privileged information. Where such
+            information is required for a legitimate operational purpose, enter only the minimum necessary information.
+          </p>
+
+          <p>
+            Transcripts, access records and session outputs may be retained for governance, audit, quality assurance, incident review
+            and compliance purposes, subject to the organisation's agreed data handling rules.
+          </p>
+
+          <p>
+            Demo access is for temporary testing only. It must not be treated as production access control and must not be used for
+            live incidents unless specifically authorised.
           </p>
 
           <label class="terms-check">
             <input id="gateTermsCheck" type="checkbox" onchange="syncGateState()" />
-            <span>I understand and accept the terms of use. CIMA outputs are draft support only and require human review before reliance.</span>
+            <span>
+              I understand and accept the terms of use. CIMA outputs are draft support only, require authorised human review before
+              reliance, and must not replace professional, command, safeguarding, legal, medical or emergency judgement.
+            </span>
           </label>
         </div>
 
@@ -1466,23 +1524,24 @@ body {
             </div>
 
             <div class="process-rail">
-            <div class="process-step muted">
-            <div class="process-marker">01</div>
-            <div class="process-copy">
-              <strong>Access</strong>
-              <span>Email, terms &amp; access confirmed</span>
+            
+            <div id="processStepAccess" class="process-step muted">
+              <div class="process-marker">01</div>
+              <div class="process-copy">
+                <strong>Access</strong>
+                <span>Email, terms &amp; access confirmed</span>
+              </div>
             </div>
-          </div>
 
-          <div class="process-step active">
-            <div class="process-marker">02</div>
-            <div class="process-copy">
-              <strong>Context</strong>
-              <span>Mode, command, persona, output</span>
+            <div id="processStepContext" class="process-step active">
+              <div class="process-marker">02</div>
+              <div class="process-copy">
+                <strong>Context</strong>
+                <span>Mode, command, persona, output</span>
+              </div>
             </div>
-          </div>
 
-            <div class="process-step muted">
+            <div id="processStepResponse" class="process-step muted">
               <div class="process-marker">03</div>
               <div class="process-copy">
                 <strong>Response</strong>
@@ -1490,59 +1549,66 @@ body {
               </div>
             </div>
 
-            <div class="process-step muted">
+            <div id="processStepDelivery" class="process-step muted">
               <div class="process-marker">04</div>
               <div class="process-copy">
                 <strong>Delivery</strong>
                 <span>Transcript, email and review</span>
               </div>
             </div>
-          </div>
-        </div>
+              </div>
+            </div>
 
-        <div class="delivery-status-card">
-          <h3>Delivery Status</h3>
+            <div class="delivery-status-card">
+              <h3>Delivery Status</h3>
 
-          <div class="delivery-line">
-            <span>Access gate</span>
-            <strong>Confirmed</strong>
-          </div>
+              <div class="delivery-line">
+                <span>Access gate</span>
+                <strong id="deliveryAccessStatus">Confirmed</strong>
+              </div>
 
-          <div class="delivery-line">
-            <span>Context setup</span>
-            <strong class="pending">Pending</strong>
-          </div>
+              <div class="delivery-line">
+                <span>Context setup</span>
+                <strong id="deliveryContextStatus" class="pending">Pending</strong>
+              </div>
 
-          <div class="delivery-line">
-            <span>Question submitted</span>
-            <strong class="not-started">Not started</strong>
-          </div>
+              <div class="delivery-line">
+                <span>Question submitted</span>
+                <strong id="deliveryQuestionStatus" class="not-started">Not started</strong>
+              </div>
 
-          <div class="delivery-line">
-            <span>CIMA response</span>
-            <strong class="not-started">Not started</strong>
-          </div>
+              <div class="delivery-line">
+                <span>CIMA response</span>
+                <strong id="deliveryResponseStatus" class="not-started">Not started</strong>
+              </div>
 
-          <div class="delivery-line">
-            <span>Transcript email</span>
-            <strong class="not-started">Not sent</strong>
-          </div>
+              <div class="delivery-line">
+                <span>Transcript email</span>
+                <strong id="deliveryEmailStatus" class="not-started">Not sent</strong>
+              </div>
 
-          <div class="delivery-line">
-            <span>Human review</span>
-            <strong class="pending">Required</strong>
+              <div class="delivery-line">
+                <span>Human review</span>
+                <strong id="deliveryReviewStatus" class="pending">Required</strong>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </aside>
+        </aside>
 
     <section class="panel centre-panel">
+
       <div class="main-header" style="height:96px; min-height:96px; flex:0 0 96px;">
-        <div class="thread-left">
-         <div class="thread-title" id="threadTitle">CIMA Incident Thread</div>
-          <div id="accessPill" class="access-pill">Access confirmed</div>
-        </div>
+      <div class="thread-left">
+        <div class="thread-title" id="threadTitle">CIMA Incident Thread</div>
+        <div id="accessPill" class="access-pill">Access confirmed</div>
       </div>
+
+      <div class="main-actions">
+        <button class="clean-action-btn" type="button" onclick="clearSession()">
+          Clear session
+        </button>
+      </div>
+    </div>
 
       <div class="centre-workspace">
         <div class="ask-card">
@@ -1571,7 +1637,7 @@ body {
                 min="2010"
                 max="2026"
                 value="2010"
-                style="width: 100%; accent-color: var(--orange);"
+                style="width: 100%; height: 34px; accent-color: var(--orange);"
                 oninput="
                   const from = document.getElementById('fromYear');
                   const to = document.getElementById('toYear');
@@ -1599,7 +1665,7 @@ body {
                 min="2010"
                 max="2026"
                 value="2026"
-                style="width: 100%; accent-color: var(--orange);"
+                style="width: 100%; height: 34px; accent-color: var(--orange);"
                 oninput="
                   const from = document.getElementById('fromYear');
                   const to = document.getElementById('toYear');
@@ -1740,7 +1806,7 @@ body {
   </main>
 
   <script>
-    const BUILD_ISO = "2026-05-25T11:15:00Z";
+    const BUILD_ISO = "2026-06-06T11:15:00Z";
 
     let accessConfirmed = false;
     let accessMode = "locked";
@@ -2068,6 +2134,24 @@ body {
 
       document.getElementById("modeStatus").textContent = context.mode;
       document.getElementById("levelStatus").textContent = context.level;
+
+      const hasContext =
+        context.mode !== "N/A" ||
+        context.level !== "N/A" ||
+        context.persona !== "N/A" ||
+        context.output !== "N/A";
+
+      const deliveryContextStatus = document.getElementById("deliveryContextStatus");
+
+      if (deliveryContextStatus) {
+        if (hasContext) {
+          deliveryContextStatus.textContent = "Confirmed";
+          deliveryContextStatus.className = "";
+        } else {
+          deliveryContextStatus.textContent = "Pending";
+          deliveryContextStatus.className = "pending";
+        }
+      }
 
       renderRightView();
     }
@@ -2449,6 +2533,19 @@ body {
       document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
       document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
 
+      document.getElementById("processStepAccess").className = "process-step muted";
+      document.getElementById("processStepContext").className = "process-step muted";
+      document.getElementById("processStepResponse").className = "process-step active";
+      document.getElementById("processStepDelivery").className = "process-step muted";
+
+      updateContextFromControls();
+
+      document.getElementById("deliveryQuestionStatus").textContent = "Submitted";
+      document.getElementById("deliveryQuestionStatus").className = "";
+
+      document.getElementById("deliveryResponseStatus").textContent = "Preparing";
+      document.getElementById("deliveryResponseStatus").className = "pending";
+
       addMessage("user", "You", `<p>${escapeHtml(question)}</p>`);
 
       let answer = "";
@@ -2543,6 +2640,10 @@ body {
       });
 
       document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
+
+      document.getElementById("deliveryResponseStatus").textContent = "Complete";
+      document.getElementById("deliveryResponseStatus").className = "";
+
       input.value = "";
 
       renderSessionQa();
@@ -2631,6 +2732,14 @@ body {
         }
 
         document.getElementById("lastOutput").textContent = `Transcript sent to ${emails.join(", ")}.`;
+
+        document.getElementById("deliveryEmailStatus").textContent = "Sent";
+        document.getElementById("deliveryEmailStatus").className = "";
+
+        document.getElementById("processStepAccess").className = "process-step muted";
+        document.getElementById("processStepContext").className = "process-step muted";
+        document.getElementById("processStepResponse").className = "process-step muted";
+        document.getElementById("processStepDelivery").className = "process-step active";
       } catch (error) {
         document.getElementById("lastOutput").textContent = `Transcript email failed: ${error.message}`;
       } finally {
@@ -2653,9 +2762,29 @@ body {
       document.getElementById("pathStatus").textContent = "FAST PATH";
       document.getElementById("hitlStatus").textContent = "Not triggered";
       document.getElementById("confidenceStatus").textContent = "Provisional";
+
       document.getElementById("lastOutput").textContent = "CIMA session reset. Ask a question.";
       document.getElementById("threadTitle").textContent = "CIMA Incident Thread";
-      
+
+      document.getElementById("processStepAccess").className = "process-step muted";
+      document.getElementById("processStepContext").className = "process-step active";
+      document.getElementById("processStepResponse").className = "process-step muted";
+      document.getElementById("processStepDelivery").className = "process-step muted";
+
+      document.getElementById("deliveryContextStatus").textContent = "Pending";
+      document.getElementById("deliveryContextStatus").className = "pending";
+
+      document.getElementById("deliveryQuestionStatus").textContent = "Not started";
+      document.getElementById("deliveryQuestionStatus").className = "not-started";
+
+      document.getElementById("deliveryResponseStatus").textContent = "Not started";
+      document.getElementById("deliveryResponseStatus").className = "not-started";
+
+      document.getElementById("deliveryEmailStatus").textContent = "Not sent";
+      document.getElementById("deliveryEmailStatus").className = "not-started";
+
+      document.getElementById("deliveryReviewStatus").textContent = "Required";
+      document.getElementById("deliveryReviewStatus").className = "pending";
 
       const replyArea = document.getElementById("replyArea");
       replyArea.className = "reply-placeholder";
