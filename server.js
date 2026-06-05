@@ -47,6 +47,10 @@ import {
   getTranscriptAgentStatus
 } from "./transcript_agent.js";
 
+import {
+  getSourceIndexAgentStatus
+} from "./source_index_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -154,8 +158,8 @@ app.get("/meta", (req, res) => {
     audit_agent: getAuditAgentStatus(),
     cima_response_agent: getCimaResponseAgentStatus(),
     transcript_agent: getTranscriptAgentStatus(),
+    source_index_agent: getSourceIndexAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
-
     pdf_index_ready: false,
     html_index_ready: false,
     pdf_document_count: 0,
