@@ -1,15 +1,16 @@
 /**
  * AIVS / PGB CIMA - Source Index Agent
  * File: source_index_agent.js
- * ISO Timestamp: 2026-06-05T06:45:00Z
+ * ISO Timestamp: 2026-06-05T07:05:00Z
  *
  * Purpose:
  * - Reports the current source/index status for the CIMA system.
  * - Keeps source-index logic outside server.js.
- * - Provides a safe controlled status layer before FAISS/source retrieval is connected.
+ * - Provides a controlled status layer before FAISS/source retrieval is connected.
  *
  * Change Log:
  * - v0.1.0: created controlled source index status agent.
+ * - v0.2.0: tightened readiness checks to require controlled manifest files.
  *
  * ISO Control Notes:
  * - This agent must not invent source availability.
@@ -22,10 +23,18 @@
 import fs from "fs";
 import path from "path";
 
-const SOURCE_INDEX_AGENT_BUILD_ISO = "2026-06-05T06:45:00Z";
+const SOURCE_INDEX_AGENT_BUILD_ISO = "2026-06-05T07:05:00Z";
 
 const DEFAULT_SOURCE_ROOT = process.env.CIMA_SOURCE_ROOT || "/mnt/data/cima_sources";
 const DEFAULT_INDEX_ROOT = process.env.CIMA_INDEX_ROOT || "/mnt/data/cima_index";
+
+const SOURCE_MANIFEST_PATH =
+  process.env.CIMA_SOURCE_MANIFEST_PATH ||
+  path.join(DEFAULT_SOURCE_ROOT, "source_manifest.jsonl");
+
+const INDEX_MANIFEST_PATH =
+  process.env.CIMA_INDEX_MANIFEST_PATH ||
+  path.join(DEFAULT_INDEX_ROOT, "index_manifest.json");
 
 function fileExists(filePath = "") {
   try {
@@ -90,12 +99,23 @@ function countFilesInDirectory(dirPath = "") {
 export function getSourceIndexAgentStatus() {
   const sourceRootStatus = safeStat(DEFAULT_SOURCE_ROOT);
   const indexRootStatus = safeStat(DEFAULT_INDEX_ROOT);
+  const sourceManifestStatus = safeStat(SOURCE_MANIFEST_PATH);
+  const indexManifestStatus = safeStat(INDEX_MANIFEST_PATH);
 
   const sourceFileCount = countFilesInDirectory(DEFAULT_SOURCE_ROOT);
   const indexFileCount = countFilesInDirectory(DEFAULT_INDEX_ROOT);
 
-  const source_ready = sourceRootStatus.exists && sourceRootStatus.type === "directory" && sourceFileCount > 0;
-  const index_ready = indexRootStatus.exists && indexRootStatus.type === "directory" && indexFileCount > 0;
+  const source_ready =
+    sourceRootStatus.exists &&
+    sourceRootStatus.type === "directory" &&
+    sourceManifestStatus.exists &&
+    sourceManifestStatus.type === "file";
+
+  const index_ready =
+    indexRootStatus.exists &&
+    indexRootStatus.type === "directory" &&
+    indexManifestStatus.exists &&
+    indexManifestStatus.type === "file";
 
   return {
     ok: true,
@@ -104,14 +124,18 @@ export function getSourceIndexAgentStatus() {
     mode: "status-only-no-retrieval",
     source_root: DEFAULT_SOURCE_ROOT,
     index_root: DEFAULT_INDEX_ROOT,
+    source_manifest_path: SOURCE_MANIFEST_PATH,
+    index_manifest_path: INDEX_MANIFEST_PATH,
     source_root_status: sourceRootStatus,
     index_root_status: indexRootStatus,
+    source_manifest_status: sourceManifestStatus,
+    index_manifest_status: indexManifestStatus,
     source_file_count: sourceFileCount,
     index_file_count: indexFileCount,
     source_ready,
     index_ready,
     retrieval_ready: false,
-    note: "CIMA source/index retrieval is not connected yet. This agent currently reports status only."
+    note: "CIMA source/index retrieval is not connected yet. Readiness requires controlled manifest files."
   };
 }
 
