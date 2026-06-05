@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1455,31 +1456,31 @@ body {
             </select>
           </div>
 
-               </div>
-                <h3>Process Status</h3>
-
-          <div style="margin: 2px 0 18px 0; color: var(--orange); font-size: 13px; line-height: 1.35; font-weight: 900; letter-spacing: 0.22em; text-transform: uppercase;">
-            Use the steps below to track progress
-          </div>
+                 </div>
 
           <div class="cima-process-card">
+            <h3>Process Status</h3>
+
+            <div style="margin: 2px 0 18px 0; color: var(--orange); font-size: 13px; line-height: 1.35; font-weight: 900; letter-spacing: 0.22em; text-transform: uppercase;">
+              Use the steps below to track progress
+            </div>
+
             <div class="process-rail">
-
-            <div class="process-step active">
-              <div class="process-marker">01</div>
-              <div class="process-copy">
-                <strong>Access</strong>
-                <span>Email, terms &amp; access</span>
-              </div>
-            </div>
-
             <div class="process-step muted">
-              <div class="process-marker">02</div>
-              <div class="process-copy">
-                <strong>Context</strong>
-                <span>Mode, command, persona, output</span>
-              </div>
+            <div class="process-marker">01</div>
+            <div class="process-copy">
+              <strong>Access</strong>
+              <span>Email, terms &amp; access confirmed</span>
             </div>
+          </div>
+
+          <div class="process-step active">
+            <div class="process-marker">02</div>
+            <div class="process-copy">
+              <strong>Context</strong>
+              <span>Mode, command, persona, output</span>
+            </div>
+          </div>
 
             <div class="process-step muted">
               <div class="process-marker">03</div>
@@ -1538,7 +1539,7 @@ body {
     <section class="panel centre-panel">
       <div class="main-header" style="height:96px; min-height:96px; flex:0 0 96px;">
         <div class="thread-left">
-          <div class="thread-title" id="threadTitle">New Incident Thread</div>
+         <div class="thread-title" id="threadTitle">CIMA Incident Thread</div>
           <div id="accessPill" class="access-pill">Access confirmed</div>
         </div>
       </div>
@@ -1546,7 +1547,7 @@ body {
       <div class="centre-workspace">
         <div class="ask-card">
           <h2>Ask CIMA</h2>
-          <p>Use the context selectors on the left, then ask a clear operational, planning or assurance question.</p>
+          <p>Use the context selectors, then ask a clear operational, planning or assurance question.</p>
 
           <div class="clear-composer">
             <textarea id="questionInput" placeholder="Ask CIMA a question..."></textarea>
@@ -2054,7 +2055,7 @@ body {
 
     function getContext() {
       return {
-        thread: document.getElementById("threadTitle").textContent || "New Incident Thread",
+        thread: document.getElementById("threadTitle").textContent || "CIMA Incident Thread",
         mode: document.getElementById("modeSelect").value || "N/A",
         level: document.getElementById("levelSelect").value || "N/A",
         persona: document.getElementById("personaSelect").value || "N/A",
@@ -2445,7 +2446,7 @@ body {
 
       document.getElementById("questionCount").textContent = String(questions.length);
       document.getElementById("pathStatus").textContent = predictedPath;
-      document.getElementById("threadTitle").textContent = "Active Incident Thread";
+      document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
       document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
 
       addMessage("user", "You", `<p>${escapeHtml(question)}</p>`);
@@ -2652,8 +2653,9 @@ body {
       document.getElementById("pathStatus").textContent = "FAST PATH";
       document.getElementById("hitlStatus").textContent = "Not triggered";
       document.getElementById("confidenceStatus").textContent = "Provisional";
-      document.getElementById("lastOutput").textContent = "New incident started.";
-      document.getElementById("threadTitle").textContent = "New Incident Thread";
+      document.getElementById("lastOutput").textContent = "CIMA session reset. Ask a question.";
+      document.getElementById("threadTitle").textContent = "CIMA Incident Thread";
+      
 
       const replyArea = document.getElementById("replyArea");
       replyArea.className = "reply-placeholder";
