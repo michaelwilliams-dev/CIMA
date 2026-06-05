@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Source Index Agent
  * File: source_index_agent.js
- * ISO Timestamp: 2026-06-05T07:05:00Z
+ * ISO Timestamp: 2026-06-05T07:15:00Z
  *
  * Purpose:
  * - Reports the current source/index status for the CIMA system.
@@ -11,6 +11,7 @@
  * Change Log:
  * - v0.1.0: created controlled source index status agent.
  * - v0.2.0: tightened readiness checks to require controlled manifest files.
+ * - v0.3.0: requires non-empty valid source manifest and retrieval_enabled true in index manifest.
  *
  * ISO Control Notes:
  * - This agent must not invent source availability.
@@ -23,7 +24,7 @@
 import fs from "fs";
 import path from "path";
 
-const SOURCE_INDEX_AGENT_BUILD_ISO = "2026-06-05T07:05:00Z";
+const SOURCE_INDEX_AGENT_BUILD_ISO = "2026-06-05T07:15:00Z";
 
 const DEFAULT_SOURCE_ROOT = process.env.CIMA_SOURCE_ROOT || "/mnt/data/cima_sources";
 const DEFAULT_INDEX_ROOT = process.env.CIMA_INDEX_ROOT || "/mnt/data/cima_index";
@@ -96,6 +97,69 @@ function countFilesInDirectory(dirPath = "") {
   }
 }
 
+function readJsonFile(filePath = "") {
+  try {
+    if (!fileExists(filePath)) {
+      return {
+        ok: false,
+        data: null,
+        error: "File does not exist."
+      };
+    }
+
+    const raw = fs.readFileSync(filePath, "utf8").trim();
+
+    if (!raw) {
+      return {
+        ok: false,
+        data: null,
+        error: "File is empty."
+      };
+    }
+
+    return {
+      ok: true,
+      data: JSON.parse(raw),
+      error: ""
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      data: null,
+      error: err.message
+    };
+  }
+}
+
+function countJsonlRecords(filePath = "") {
+  try {
+    if (!fileExists(filePath)) {
+      return 0;
+    }
+
+    const raw = fs.readFileSync(filePath, "utf8").trim();
+
+    if (!raw) {
+      return 0;
+    }
+
+    return raw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => {
+        try {
+          JSON.parse(line);
+          return true;
+        } catch {
+          return false;
+        }
+      }).length;
+  } catch {
+    return 0;
+  }
+}
+
 export function getSourceIndexAgentStatus() {
   const sourceRootStatus = safeStat(DEFAULT_SOURCE_ROOT);
   const indexRootStatus = safeStat(DEFAULT_INDEX_ROOT);
@@ -105,17 +169,34 @@ export function getSourceIndexAgentStatus() {
   const sourceFileCount = countFilesInDirectory(DEFAULT_SOURCE_ROOT);
   const indexFileCount = countFilesInDirectory(DEFAULT_INDEX_ROOT);
 
+  const sourceManifestRecordCount = countJsonlRecords(SOURCE_MANIFEST_PATH);
+  const indexManifestRead = readJsonFile(INDEX_MANIFEST_PATH);
+
+  const retrievalEnabled =
+    indexManifestRead.ok &&
+    indexManifestRead.data &&
+    indexManifestRead.data.retrieval_enabled === true;
+
   const source_ready =
     sourceRootStatus.exists &&
     sourceRootStatus.type === "directory" &&
     sourceManifestStatus.exists &&
-    sourceManifestStatus.type === "file";
+    sourceManifestStatus.type === "file" &&
+    sourceManifestStatus.size_bytes > 0 &&
+    sourceManifestRecordCount > 0;
 
   const index_ready =
     indexRootStatus.exists &&
     indexRootStatus.type === "directory" &&
     indexManifestStatus.exists &&
-    indexManifestStatus.type === "file";
+    indexManifestStatus.type === "file" &&
+    indexManifestStatus.size_bytes > 0 &&
+    retrievalEnabled === true;
+
+  const retrieval_ready =
+    source_ready &&
+    index_ready &&
+    retrievalEnabled === true;
 
   return {
     ok: true,
@@ -132,10 +213,14 @@ export function getSourceIndexAgentStatus() {
     index_manifest_status: indexManifestStatus,
     source_file_count: sourceFileCount,
     index_file_count: indexFileCount,
+    source_manifest_record_count: sourceManifestRecordCount,
+    index_manifest_valid: indexManifestRead.ok,
+    index_manifest_error: indexManifestRead.error,
+    retrieval_enabled: retrievalEnabled,
     source_ready,
     index_ready,
-    retrieval_ready: false,
-    note: "CIMA source/index retrieval is not connected yet. Readiness requires controlled manifest files."
+    retrieval_ready,
+    note: "CIMA source/index retrieval is not connected unless controlled source and index manifests are present and retrieval_enabled is true."
   };
 }
 
@@ -148,6 +233,7 @@ export function getSourceIndexReadinessSummary() {
     source_index_agent_build_iso: SOURCE_INDEX_AGENT_BUILD_ISO,
     source_ready: status.source_ready,
     index_ready: status.index_ready,
+    retrieval_enabled: status.retrieval_enabled,
     retrieval_ready: status.retrieval_ready,
     summary: status.retrieval_ready
       ? "Source retrieval is connected."
