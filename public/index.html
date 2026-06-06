@@ -1724,12 +1724,7 @@ body {
           </div>
         </div>
 
-        <div id="sessionQaPanel" class="session-qa-panel">
-          <h2>Session Q&amp;A</h2>
-          <div id="sessionQaList">
-            No questions asked yet.
-          </div>
-        </div>
+        
       </div>
     </section>
 
@@ -1740,11 +1735,12 @@ body {
 
       <div class="right-body">
         <div class="answer-tabs">
-          <button id="threadTab" class="answer-tab active" type="button" onclick="setRightTab('thread')">Email</button>
-          <button id="answerTab" class="answer-tab" type="button" onclick="setRightTab('answer')">Training</button>
-          <button id="sourcesTab" class="answer-tab" type="button" onclick="setRightTab('sources')">Sources</button>
-          <button id="auditTab" class="answer-tab" type="button" onclick="setRightTab('audit')">Audit</button>
-        </div>
+        <button id="threadTab" class="answer-tab active" type="button" onclick="setRightTab('thread')">Email</button>
+        <button id="answerTab" class="answer-tab" type="button" onclick="setRightTab('answer')">Training</button>
+        <button id="sessionTab" class="answer-tab" type="button" onclick="setRightTab('session')">Session Q&amp;A</button>
+        <button id="sourcesTab" class="answer-tab" type="button" onclick="setRightTab('sources')">Sources</button>
+        <button id="auditTab" class="answer-tab" type="button" onclick="setRightTab('audit')">Audit</button>
+      </div>
 
         <div id="sourceSearchWrap" class="source-search hidden">
           <input id="sourceSearch" placeholder="Search sources / personas..." />
@@ -1780,10 +1776,6 @@ body {
               <strong id="confidenceStatus">Provisional</strong>
             </div>
 
-            <label class="toggle-line">
-              <input id="showQaToggle" type="checkbox" onchange="toggleSessionQa()" />
-              <span>Show Session Q&amp;A on screen</span>
-            </label>
 
             <label class="toggle-line">
               <input id="includeTranscriptToggle" type="checkbox" checked onchange="renderRightView()" />
@@ -2305,7 +2297,7 @@ body {
     function setRightTab(value) {
       rightTab = value;
 
-      for (const id of ["answerTab", "threadTab", "sourcesTab", "auditTab"]) {
+      for (const id of ["answerTab", "threadTab", "sessionTab", "sourcesTab", "auditTab"]) {
         const el = document.getElementById(id);
         if (el) el.classList.remove("active");
       }
@@ -2313,11 +2305,12 @@ body {
       const activeMap = {
         answer: "answerTab",
         thread: "threadTab",
+        session: "sessionTab",
         sources: "sourcesTab",
         audit: "auditTab"
       };
 
-      const active = document.getElementById(activeMap[value] || "answerTab");
+      const active = document.getElementById(activeMap[value] || "threadTab");
       if (active) active.classList.add("active");
 
       const sourceSearchWrap = document.getElementById("sourceSearchWrap");
@@ -2335,9 +2328,10 @@ body {
       if (rightTab === "answer") {
         panel.innerHTML = `
           <h3>Training</h3>
-          <p><strong>Training output:</strong> Not generated yet.</p>
-          <p>This panel will show training material generated from the same CIMA question and answer.</p>
-          <p>The main operational answer remains in the centre Reply panel.</p>
+          <p><strong>Training agent:</strong> Not built yet.</p>
+          <p>This area is reserved for a separate CIMA training agent.</p>
+          <p>The training agent will create a separate training session email with its own design and workflow.</p>
+          <p>It should not be treated as the same output as the operational CIMA reply.</p>
           <p><strong>Current response path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
           <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
           <p><strong>HITL:</strong> ${escapeHtml(document.getElementById("hitlStatus").textContent)}</p>
@@ -2347,47 +2341,61 @@ body {
       }
 
       if (rightTab === "thread") {
-  const showSessionQa = document.getElementById("showQaToggle")?.checked === true;
-  const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
+        const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
 
-  panel.innerHTML = `
-    <h3>Email</h3>
-    <p>Send the current CIMA transcript as Word and PDF attachments.</p>
+        panel.innerHTML = `
+          <h3>Email</h3>
+          <p>Send the current CIMA transcript as Word and PDF attachments.</p>
 
-    <label class="toggle-line">
-      <input
-        type="checkbox"
-        ${showSessionQa ? "checked" : ""}
-        onchange="
-          document.getElementById('showQaToggle').checked = this.checked;
-          toggleSessionQa();
-        "
-      />
-      <span>Show continuing questions and answers on screen</span>
-    </label>
+          <label class="toggle-line">
+            <input
+              type="checkbox"
+              ${includeTranscript ? "checked" : ""}
+              onchange="
+                document.getElementById('includeTranscriptToggle').checked = this.checked;
+                renderRightView();
+              "
+            />
+            <span>Include transcript in email</span>
+          </label>
 
-    <label class="toggle-line">
-      <input
-        type="checkbox"
-        ${includeTranscript ? "checked" : ""}
-        onchange="
-          document.getElementById('includeTranscriptToggle').checked = this.checked;
-          renderRightView();
-        "
-      />
-      <span>Include transcript in email</span>
-    </label>
+          <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
+          <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
 
-    <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
-    <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
+          <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
 
-    <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
+          <p class="small-note">Questions recorded this session: ${questions.length}</p>
+          <p class="small-note">Include transcript in email: ${includeTranscript ? "Yes" : "No"}</p>
+        `;
+        return;
+      }
 
-    <p class="small-note">Questions recorded this session: ${questions.length}</p>
-    <p class="small-note">Include transcript in email: ${includeTranscript ? "Yes" : "No"}</p>
-  `;
-  return;
-}
+      if (rightTab === "session") {
+        const sessionHtml = transcriptEntries.length
+          ? transcriptEntries
+              .map((entry, index) => {
+                return `
+                  <div class="qa-item">
+                    <div class="q">Q${index + 1}. ${escapeHtml(entry.question)}</div>
+                    <div class="a">${markdownToHtml(entry.answer)}</div>
+                  </div>
+                `;
+              })
+              .join("")
+          : "<p>No questions asked yet.</p>";
+
+        panel.innerHTML = `
+          <h3>Session Q&amp;A</h3>
+          <p>Review the continuing questions and answers recorded during this CIMA session.</p>
+
+          <div class="session-qa-panel on" style="display:block; max-height:none; overflow:visible;">
+            ${sessionHtml}
+          </div>
+
+          <p class="small-note">Questions recorded this session: ${questions.length}</p>
+        `;
+        return;
+      }
 
       if (rightTab === "sources") {
         const meta = metaState || {};
@@ -2484,7 +2492,7 @@ body {
           <p><strong>Path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
           <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
           <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
-          <p><strong>Show Session Q&A:</strong> ${document.getElementById("showQaToggle")?.checked ? "On" : "Off"}</p>
+
           <p><strong>Include transcript in email:</strong> ${document.getElementById("includeTranscriptToggle")?.checked !== false ? "Yes" : "No"}</p>
         `;
       }
@@ -2604,7 +2612,6 @@ body {
             },
             session: {
               question_count: questions.length,
-              show_session_qa_on_screen: document.getElementById("showQaToggle")?.checked === true,
               include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
             }
           })
@@ -2682,31 +2689,29 @@ body {
     function renderSessionQa() {
       const list = document.getElementById("sessionQaList");
 
-      if (!transcriptEntries.length) {
-        list.innerHTML = "No questions asked yet.";
-        return;
+      const sessionHtml = transcriptEntries.length
+        ? transcriptEntries
+            .map((entry, index) => {
+              return `
+                <div class="qa-item">
+                  <div class="q">Q${index + 1}. ${escapeHtml(entry.question)}</div>
+                  <div class="a">${markdownToHtml(entry.answer)}</div>
+                </div>
+              `;
+            })
+            .join("")
+        : "No questions asked yet.";
+
+      if (list) {
+        list.innerHTML = sessionHtml;
       }
 
-      list.innerHTML = transcriptEntries
-        .map((entry, index) => {
-          return `
-            <div class="qa-item">
-              <div class="q">Q${index + 1}. ${escapeHtml(entry.question)}</div>
-              <div class="a">${markdownToHtml(entry.answer)}</div>
-            </div>
-          `;
-        })
-        .join("");
+      if (rightTab === "session") {
+        renderRightView();
+      }
     }
 
-    function toggleSessionQa() {
-      const panel = document.getElementById("sessionQaPanel");
-      const checked = document.getElementById("showQaToggle").checked;
-
-      panel.classList.toggle("on", checked);
-      renderSessionQa();
-      renderRightView();
-    }
+ 
 
     async function sendTranscriptEmail() {
       const emailOne = document.getElementById("emailOne")?.value.trim() || "";
