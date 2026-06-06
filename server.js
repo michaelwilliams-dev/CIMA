@@ -55,7 +55,7 @@ import {
   buildCimaTrainingOutput,
   buildCimaTrainingPrompt,
   getCimaTrainingAgentStatus
-} from "./training_agent.js";
+} from "./cima_training_agent.js";
 
 dotenv.config();
 
