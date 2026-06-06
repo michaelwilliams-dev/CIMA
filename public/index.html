@@ -1740,7 +1740,7 @@ body {
 
       <div class="right-body">
         <div class="answer-tabs">
-          <button id="answerTab" class="answer-tab active" type="button" onclick="setRightTab('answer')">Answer</button>
+          <button id="answerTab" class="answer-tab active" type="button" onclick="setRightTab('answer')">Training</button>
           <button id="threadTab" class="answer-tab" type="button" onclick="setRightTab('thread')">Email</button>
           <button id="sourcesTab" class="answer-tab" type="button" onclick="setRightTab('sources')">Sources</button>
           <button id="auditTab" class="answer-tab" type="button" onclick="setRightTab('audit')">Audit</button>
@@ -2334,13 +2334,14 @@ body {
 
       if (rightTab === "answer") {
         panel.innerHTML = `
-          <h3>Answer</h3>
+          <h3>Training</h3>
+          <p><strong>Training output:</strong> Not generated yet.</p>
+          <p>This panel will show training material generated from the same CIMA question and answer.</p>
+          <p>The main operational answer remains in the centre Reply panel.</p>
           <p><strong>Current response path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
           <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
           <p><strong>HITL:</strong> ${escapeHtml(document.getElementById("hitlStatus").textContent)}</p>
           <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
-          <p><strong>Latest answer:</strong></p>
-          ${latestAnswer ? markdownToHtml(latestAnswer) : "<p>No answer has been generated in this session yet.</p>"}
         `;
         return;
       }
