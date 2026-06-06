@@ -1818,7 +1818,7 @@ body {
     let latestAnswer = "";
     let latestSources = [];
     let latestDashboard = null;
-    let rightTab = "answer";
+    let rightTab = "thread";
     let sourceClass = "resource";
     let metaState = null;
 
@@ -2107,7 +2107,7 @@ body {
           : "Access confirmed. Ask a question.";
 
       updateContextFromControls();
-      setRightTab("answer");
+      setRightTab("thread");
       renderRightView();
     }
 
@@ -2839,7 +2839,7 @@ body {
         syncGateState();
         loadMeta();
         updateContextFromControls();
-        setRightTab("answer");
+        setRightTab("thread");
         renderSessionQa();
       });
   </script>
