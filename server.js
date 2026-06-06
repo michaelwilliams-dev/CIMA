@@ -28,8 +28,7 @@ import { fileURLToPath } from "url";
 
 import {
   sendAccessCodeEmail,
-  sendTranscriptEmail,
-  getEmailAgentStatus
+  sendTranscriptEmail
 } from "./export/mailjetExporter.js";
 
 import {
@@ -72,6 +71,24 @@ const DATA_REVIEW_EMAIL = String(
   process.env.DATA_REVIEW_EMAIL ||
   "michael@aivs.uk"
 ).trim();
+
+function getEmailAgentStatus() {
+  return {
+    ok: true,
+    agent: "mailjetExporter",
+    mailjet_ready: Boolean(
+      process.env.MAILJET_API_KEY ||
+      process.env.MJ_APIKEY_PUBLIC
+    ) && Boolean(
+      process.env.MAILJET_API_SECRET ||
+      process.env.MJ_APIKEY_PRIVATE
+    ),
+    from_email_ready: Boolean(
+      process.env.MAILJET_FROM_EMAIL ||
+      process.env.MJ_FROM_EMAIL
+    )
+  };
+}
 
 const EMAIL_AGENT_STATUS = getEmailAgentStatus();
 
