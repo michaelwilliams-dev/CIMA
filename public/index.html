@@ -1553,7 +1553,7 @@ body {
               <div class="process-marker">04</div>
               <div class="process-copy">
                 <strong>Delivery</strong>
-                <span>Transcript, email and review</span>
+                <span>Word/PDF email and review</span>
               </div>
             </div>
               </div>
@@ -1583,7 +1583,7 @@ body {
               </div>
 
               <div class="delivery-line">
-                <span>Transcript email</span>
+                <span>Word/PDF email</span>
                 <strong id="deliveryEmailStatus" class="not-started">Not sent</strong>
               </div>
 
@@ -1788,9 +1788,9 @@ body {
 
          <label class="toggle-line">
             <input id="includeTranscriptToggle" type="checkbox" checked onchange="renderRightView()" />
-            <span>Include Q&amp;A in transcript email</span>
+            <span>Include Q&amp;A in Word/PDF email</span>
           </label>
-
+        </div>
           <div class="status-card">
             <h3>Last Output</h3>
             <p id="lastOutput">CIMA is ready. Ask a question.</p>
@@ -2351,30 +2351,31 @@ body {
       if (rightTab === "thread") {
         const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
 
-        panel.innerHTML = `
-          <h3>Email</h3>
-          <p>Send the current CIMA transcript as Word and PDF attachments.</p>
+    panel.innerHTML = `
+      <h3>Email</h3>
+      <p>Send the current CIMA session as Word and PDF attachments.</p>
 
-          <label class="toggle-line">
-            <input
-              type="checkbox"
-              ${includeTranscript ? "checked" : ""}
-              onchange="
-                document.getElementById('includeTranscriptToggle').checked = this.checked;
-                renderRightView();
-              "
-            />
-            <span>Include transcript in email</span>
-          </label>
+      <label class="toggle-line">
+        <input
+          type="checkbox"
+          ${includeTranscript ? "checked" : ""}
+          onchange="
+            document.getElementById('includeTranscriptToggle').checked = this.checked;
+            renderRightView();
+          "
+        />
+        <span>Include full Q&amp;A in Word/PDF email</span>
+      </label>
 
-          <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
-          <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
+      <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
+      <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
 
-          <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
+      <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Email</button>
 
-          <p class="small-note">Questions recorded this session: ${questions.length}</p>
-          <p class="small-note">Include transcript in email: ${includeTranscript ? "Yes" : "No"}</p>
-        `;
+      <p class="small-note">Questions recorded this session: ${questions.length}</p>
+      <p class="small-note">Full Q&amp;A included: ${includeTranscript ? "Yes" : "No"}</p>
+    `;
+        
         return;
       }
 
@@ -2804,7 +2805,7 @@ body {
       } finally {
         if (button) {
           button.disabled = false;
-          button.textContent = "Send Word + PDF Transcript";
+          button.textContent = "Send Word + PDF Email";
         }
       }
     }
