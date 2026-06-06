@@ -51,6 +51,12 @@ import {
   getSourceIndexAgentStatus
 } from "./source_index_agent.js";
 
+import {
+  buildCimaTrainingOutput,
+  buildCimaTrainingPrompt,
+  getCimaTrainingAgentStatus
+} from "./training_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -157,6 +163,7 @@ app.get("/meta", (req, res) => {
     email_agent: getEmailAgentStatus(),
     audit_agent: getAuditAgentStatus(),
     cima_response_agent: getCimaResponseAgentStatus(),
+    training_agent: getCimaTrainingAgentStatus(),
     transcript_agent: getTranscriptAgentStatus(),
     source_index_agent: getSourceIndexAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
