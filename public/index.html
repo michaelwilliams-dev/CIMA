@@ -1099,7 +1099,24 @@
     }
 
     .status-area {
+      padding: 18px;
+    }
+
+    .status-area .status-card {
       display: none;
+    }
+
+    .status-area .status-card:first-child {
+      display: block;
+    }
+
+    .status-area .status-card:first-child h3,
+    .status-area .status-card:first-child .status-line {
+      display: none;
+    }
+
+    .status-area .status-card:first-child .toggle-line {
+      display: grid;
     }
 
     .status-card {
@@ -2347,19 +2364,47 @@ body {
       }
 
       if (rightTab === "thread") {
-        const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
+  const showSessionQa = document.getElementById("showQaToggle")?.checked === true;
+  const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
 
-        panel.innerHTML = `
-          <h3>Email</h3>
-          <p>Send the current CIMA transcript as Word and PDF attachments.</p>
-          <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
-          <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
-          <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
-          <p class="small-note">Questions recorded this session: ${questions.length}</p>
-          <p class="small-note">Include transcript in email: ${includeTranscript ? "Yes" : "No"}</p>
-        `;
-        return;
-      }
+  panel.innerHTML = `
+    <h3>Email</h3>
+    <p>Send the current CIMA transcript as Word and PDF attachments.</p>
+
+    <label class="toggle-line">
+      <input
+        type="checkbox"
+        ${showSessionQa ? "checked" : ""}
+        onchange="
+          document.getElementById('showQaToggle').checked = this.checked;
+          toggleSessionQa();
+        "
+      />
+      <span>Show continuing questions and answers on screen</span>
+    </label>
+
+    <label class="toggle-line">
+      <input
+        type="checkbox"
+        ${includeTranscript ? "checked" : ""}
+        onchange="
+          document.getElementById('includeTranscriptToggle').checked = this.checked;
+          renderRightView();
+        "
+      />
+      <span>Include transcript in email</span>
+    </label>
+
+    <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
+    <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
+
+    <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Transcript</button>
+
+    <p class="small-note">Questions recorded this session: ${questions.length}</p>
+    <p class="small-note">Include transcript in email: ${includeTranscript ? "Yes" : "No"}</p>
+  `;
+  return;
+}
 
       if (rightTab === "sources") {
         const meta = metaState || {};
@@ -2648,7 +2693,7 @@ body {
       input.value = "";
 
       renderSessionQa();
-      setRightTab("answer");
+      setRightTab("thread");
     }
 
     function renderSessionQa() {
