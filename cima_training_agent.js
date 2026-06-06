@@ -1,7 +1,7 @@
 /*
   AIVS / PGB CIMA Training Output Agent
   File: cima_training_agent.js
-  ISO Timestamp: 2026-06-06T12:00:00Z
+  ISO Timestamp: 2026-06-06T12:20:00Z
 
   Change Log:
   - v0.1.0: created standalone training output agent
@@ -9,9 +9,11 @@
   - v0.1.0: does not send email
   - v0.1.0: does not create Word or PDF files
   - v0.1.0: intended to be called by server.js and displayed in index.html
+  - v0.2.0: added training prompt builder for server-side OpenAI call
+  - v0.2.0: added structured training prompt sections for scenario, learning objectives, facilitator prompts and governance
 */
 
-const TRAINING_AGENT_BUILD_ISO = "2026-06-06T12:00:00Z";
+const TRAINING_AGENT_BUILD_ISO = "2026-06-06T12:20:00Z";
 
 function safeText(value) {
   return String(value || "").trim();
@@ -34,6 +36,62 @@ function normaliseContext(context = {}) {
     persona: safeText(context.persona) || "N/A",
     output: safeText(context.output) || "Training output"
   };
+}
+
+export function buildCimaTrainingPrompt(payload = {}) {
+  const context = normaliseContext(payload.context || {});
+  const question = safeText(payload.question);
+
+  return [
+    "You are the AIVS / PGB CIMA Training Agent.",
+    "",
+    "Your task is to turn the user's scenario or question into a structured training output.",
+    "",
+    "This is for training, rehearsal, exercise and learning use only.",
+    "It must not be written as a live operational instruction.",
+    "It must reinforce human review, command judgement, safeguarding judgement and audit discipline.",
+    "",
+    "Training context:",
+    "Thread: " + context.thread,
+    "Mode: " + context.mode,
+    "Command level: " + context.level,
+    "Persona: " + context.persona,
+    "Requested output: " + context.output,
+    "",
+    "User scenario or question:",
+    question || "No training scenario supplied.",
+    "",
+    "Write the training output using these exact sections:",
+    "",
+    "1. Training scenario summary",
+    "Summarise the scenario in plain English.",
+    "",
+    "2. Expected trainee response",
+    "Explain what a good trainee response should cover.",
+    "",
+    "3. Key risks and uncertainty",
+    "List the main risks, unknowns, assumptions and weak points.",
+    "",
+    "4. Human review and escalation triggers",
+    "List what must be escalated to authorised human decision makers.",
+    "",
+    "5. Learning objectives",
+    "Give clear learning objectives for the exercise.",
+    "",
+    "6. Facilitator prompts",
+    "Give questions a trainer can ask the group.",
+    "",
+    "7. Governance and audit note",
+    "Explain what should be recorded and why.",
+    "",
+    "Rules:",
+    "- Use clear practical language.",
+    "- Do not overstate certainty.",
+    "- Do not invent facts.",
+    "- Do not give live emergency instructions.",
+    "- State that the output is for training use only.",
+    "- Keep the answer structured and suitable for display in the CIMA Training tab."
+  ].join("\n");
 }
 
 function buildPlainTextTrainingOutput({
@@ -60,18 +118,6 @@ function buildPlainTextTrainingOutput({
     "",
     "Training response",
     answer || "No training response supplied.",
-    "",
-    "Learning objectives",
-    "1. Identify the operational facts that must be confirmed.",
-    "2. Identify the risks, assumptions and uncertainty in the scenario.",
-    "3. Decide what should be escalated for human review.",
-    "4. Record a clear decision path and next action owner.",
-    "",
-    "Facilitator prompts",
-    "1. What facts are known and what facts are assumed?",
-    "2. What would change the risk rating?",
-    "3. Who owns the next decision?",
-    "4. What should be recorded for audit?",
     "",
     "Governance note",
     "This training output is for learning and exercise use only. It is not an operational instruction."
@@ -103,23 +149,7 @@ function buildHtmlTrainingOutput({
     "<p>" + escapeHtml(question || "No training scenario supplied.") + "</p>",
 
     "<h3>Training response</h3>",
-    "<p>" + escapeHtml(answer || "No training response supplied.") + "</p>",
-
-    "<h3>Learning objectives</h3>",
-    "<ol>",
-    "<li>Identify the operational facts that must be confirmed.</li>",
-    "<li>Identify the risks, assumptions and uncertainty in the scenario.</li>",
-    "<li>Decide what should be escalated for human review.</li>",
-    "<li>Record a clear decision path and next action owner.</li>",
-    "</ol>",
-
-    "<h3>Facilitator prompts</h3>",
-    "<ol>",
-    "<li>What facts are known and what facts are assumed?</li>",
-    "<li>What would change the risk rating?</li>",
-    "<li>Who owns the next decision?</li>",
-    "<li>What should be recorded for audit?</li>",
-    "</ol>",
+    "<div>" + escapeHtml(answer || "No training response supplied.").replaceAll("\n", "<br>") + "</div>",
 
     "<h3>Governance note</h3>",
     "<p>This training output is for learning and exercise use only. It is not an operational instruction.</p>",
@@ -133,6 +163,11 @@ export function buildCimaTrainingOutput(payload = {}) {
   const context = normaliseContext(payload.context || {});
   const question = safeText(payload.question);
   const answer = safeText(payload.answer);
+
+  const trainingPrompt = buildCimaTrainingPrompt({
+    question,
+    context
+  });
 
   const html = buildHtmlTrainingOutput({
     question,
@@ -154,6 +189,7 @@ export function buildCimaTrainingOutput(payload = {}) {
     build_iso: TRAINING_AGENT_BUILD_ISO,
     generated_at: generatedAt,
     context,
+    training_prompt: trainingPrompt,
     html,
     plain_text: plainText
   };
@@ -164,11 +200,12 @@ export function getCimaTrainingAgentStatus() {
     ok: true,
     agent: "cima_training_agent",
     build_iso: TRAINING_AGENT_BUILD_ISO,
-    purpose: "Builds CIMA training output for display. It does not send email or create Word/PDF files."
+    purpose: "Builds CIMA training prompts and training display output. It does not send email or create Word/PDF files."
   };
 }
 
 export default {
+  buildCimaTrainingPrompt,
   buildCimaTrainingOutput,
   getCimaTrainingAgentStatus
 };
