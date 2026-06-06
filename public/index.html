@@ -1604,6 +1604,10 @@ body {
       </div>
 
       <div class="main-actions">
+        <button id="showQaButton" class="clean-action-btn" type="button" onclick="toggleSessionQa()">
+          Show Q&A
+        </button>
+
         <button class="clean-action-btn" type="button" onclick="clearSession()">
           Clear
         </button>
@@ -1724,7 +1728,12 @@ body {
           </div>
         </div>
 
-        
+        <div id="sessionQaPanel" class="session-qa-panel">
+          <h2>Session Q&amp;A</h2>
+          <div id="sessionQaList">
+            No questions asked yet.
+          </div>
+        </div>
       </div>
     </section>
 
@@ -2711,7 +2720,24 @@ body {
       }
     }
 
- 
+    function toggleSessionQa() {
+      const panel = document.getElementById("sessionQaPanel");
+      const button = document.getElementById("showQaButton");
+
+      if (!panel) {
+        return;
+      }
+
+      const isOpen = panel.classList.toggle("on");
+
+      if (button) {
+        button.textContent = isOpen ? "Hide Q&A" : "Show Q&A";
+      }
+
+      renderSessionQa();
+    }
+
+    
 
     async function sendTranscriptEmail() {
       const emailOne = document.getElementById("emailOne")?.value.trim() || "";
