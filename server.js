@@ -29,7 +29,7 @@ import { fileURLToPath } from "url";
 import {
   sendAccessCodeEmail,
   sendTranscriptEmail,
-  getEmailAgentStatus
+
 } from "./export/mailjetExporter.js";
 
 import {
