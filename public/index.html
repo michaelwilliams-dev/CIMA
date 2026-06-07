@@ -2334,16 +2334,16 @@ body {
         ? transcriptEntries[transcriptEntries.length - 1]
         : null;
 
-      const question = lastEntry?.question || String(document.getElementById("questionInput")?.value || "").trim();
-      const answer = lastEntry?.answer || latestAnswer || "";
-
-      if (!question) {
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
         document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training output.";
         if (panel) {
-          panel.innerHTML = "<p>No CIMA question is available for training output yet.</p>";
+          panel.innerHTML = "<p>No completed CIMA question and answer is available for training output yet.</p>";
         }
         return;
       }
+
+      const question = lastEntry.question;
+      const answer = lastEntry.answer;
 
       try {
         if (button) {
