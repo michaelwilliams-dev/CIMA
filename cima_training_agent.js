@@ -203,11 +203,11 @@ export function getCimaTrainingAgentStatus() {
     build_iso: TRAINING_AGENT_BUILD_ISO,
     training_agent_build_iso: TRAINING_AGENT_BUILD_ISO,
     mode: "status-and-output-builder",
-    route_connected: false,
+    route_connected: true,
     frontend_connected: false,
     email_connected: false,
     pdf_docx_connected: false,
-    purpose: "Builds CIMA training prompts and training display output. It does not send email or create Word/PDF files."
+    purpose: "Builds CIMA training prompts and training display output. The /cima-training backend route is connected. Frontend, email and Word/PDF output are not connected yet."
   };
 }
 
