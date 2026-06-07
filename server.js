@@ -181,8 +181,8 @@ app.get("/meta", (req, res) => {
     email_agent: getEmailAgentStatus(),
     audit_agent: getAuditAgentStatus(),
     cima_response_agent: getCimaResponseAgentStatus(),
-
     transcript_agent: getTranscriptAgentStatus(),
+    training_agent: getCimaTrainingAgentStatus(),
     source_index_agent: getSourceIndexAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
     pdf_index_ready: false,
