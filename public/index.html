@@ -2305,9 +2305,8 @@ body {
     function setRightTab(value) {
       rightTab = value;
 
-      for (const id of ["answerTab", "threadTab", "sessionTab", "sourcesTab", "auditTab"]) {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove("active");
+      for (const id of ["threadTab", "answerTab", "sessionTab", "sourcesTab", "auditTab"]) {
+        document.getElementById(id)?.classList.remove("active");
       }
 
       const activeMap = {
@@ -2329,21 +2328,110 @@ body {
       renderRightView();
     }
 
+    async function generateTrainingOutput(button) {
+      const panel = document.getElementById("trainingOutputWrap");
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      const question = lastEntry?.question || String(document.getElementById("questionInput")?.value || "").trim();
+      const answer = lastEntry?.answer || latestAnswer || "";
+
+      if (!question) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training output.";
+        if (panel) {
+          panel.innerHTML = "<p>No CIMA question is available for training output yet.</p>";
+        }
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (panel) {
+          panel.innerHTML = "<p>Generating training output...</p>";
+        }
+
+        const res = await fetch("/cima-training", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question,
+            answer,
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            },
+            context: getContext()
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training output failed.");
+        }
+
+        if (panel) {
+          panel.innerHTML = data.training?.html || `<pre>${escapeHtml(data.training?.plain_text || "No training output returned.")}</pre>`;
+        }
+
+        document.getElementById("lastOutput").textContent = "CIMA training output generated.";
+      } catch (error) {
+        if (panel) {
+          panel.innerHTML = `<p>Training output failed: ${escapeHtml(error.message)}</p>`;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training output failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Output";
+        }
+      }
+    }
+
+
+
     function renderRightView() {
       const panel = document.getElementById("rightView");
       const context = getContext();
 
       if (rightTab === "answer") {
+        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
         panel.innerHTML = `
           <h3>Training</h3>
-          <p><strong>Training agent:</strong> Not built yet.</p>
-          <p>This area is reserved for a separate CIMA training agent.</p>
-          <p>The training agent will create a separate training session email with its own design and workflow.</p>
-          <p>It should not be treated as the same output as the operational CIMA reply.</p>
+          <p><strong>Training agent:</strong> Connected to /cima-training.</p>
+          <p>This creates a training output from the latest CIMA question and answer. It is for learning and exercise use only.</p>
+
           <p><strong>Current response path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
           <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
           <p><strong>HITL:</strong> ${escapeHtml(document.getElementById("hitlStatus").textContent)}</p>
           <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
+
+          <button
+            id="generateTrainingBtn"
+            class="report-btn"
+            type="button"
+            onclick="generateTrainingOutput(this)"
+            ${hasTrainingSource ? "" : "disabled"}
+          >
+            Generate Training Output
+          </button>
+
+          <div id="trainingOutputWrap" style="margin-top:14px;">
+            ${hasTrainingSource ? "<p>Click Generate Training Output to build the training version of the latest CIMA response.</p>" : "<p>Ask a CIMA question first, then return to this tab to generate training output.</p>"}
+          </div>
         `;
         return;
       }
