@@ -162,23 +162,87 @@ export function buildCimaTrainingOutput(payload = {}) {
 
   const context = normaliseContext(payload.context || {});
   const question = safeText(payload.question);
-  const answer = safeText(payload.answer);
+  const operationalAnswer = safeText(payload.answer);
 
   const trainingPrompt = buildCimaTrainingPrompt({
     question,
     context
   });
 
+  const structuredTrainingAnswer = [
+    "1. Training scenario summary",
+    "",
+    question
+      ? "This exercise is based on the following scenario: " + question
+      : "This exercise is based on a CIMA incident-management scenario supplied by the user.",
+    "",
+    "The purpose of the exercise is to test whether trainees can separate known facts from assumptions, identify immediate risk, appoint clear ownership and maintain an auditable decision trail.",
+    "",
+    "2. Expected trainee response",
+    "",
+    "- Confirm what is known, what is assumed and what is still unknown.",
+    "- Identify whether any person may be at immediate risk.",
+    "- Appoint a named action owner.",
+    "- Agree the next update time.",
+    "- Record the decision, the reason for it and the information available at the time.",
+    "- Escalate where life safety, safeguarding, public confidence or legal exposure may be affected.",
+    "",
+    "3. Key risks and uncertainty",
+    "",
+    "- The missing person may be safe, delayed, uncontactable or at risk.",
+    "- Location, timing and last confirmed contact may be unclear.",
+    "- Information may come from incomplete or unreliable sources.",
+    "- The team may confuse assumption with confirmed fact.",
+    "- Delayed escalation may increase risk.",
+    "- Over-communication may create unnecessary alarm or reputational harm.",
+    "",
+    "4. Human review and escalation triggers",
+    "",
+    "- Escalate to the authorised incident lead if the person cannot be located promptly.",
+    "- Escalate if there is any indication of medical, safeguarding, security or travel risk.",
+    "- Escalate if police, venue security, family contact or external authority liaison may be required.",
+    "- Escalate before any public, client-facing or media communication is issued.",
+    "- Ensure a responsible human decision maker approves operational actions.",
+    "",
+    "5. Learning objectives",
+    "",
+    "- Practise structured incident triage.",
+    "- Practise fact/assumption separation.",
+    "- Practise command ownership and handover discipline.",
+    "- Practise escalation judgement.",
+    "- Practise concise audit logging.",
+    "- Practise producing a clear next-action plan under uncertainty.",
+    "",
+    "6. Facilitator prompts",
+    "",
+    "- What is the first fact the team must confirm?",
+    "- Who owns the next action?",
+    "- What would make this incident escalate from routine to urgent?",
+    "- What assumptions are being made?",
+    "- What should be recorded in the decision log?",
+    "- What should not be communicated externally until verified?",
+    "",
+    "7. Governance and audit note",
+    "",
+    "This training output is for learning and exercise use only. It is not an operational instruction.",
+    "",
+    "Trainees should record the facts available, the uncertainty, the options considered, the decision made, the person responsible and the next review time.",
+    "",
+    operationalAnswer
+      ? "Source operational answer used for training conversion:\n\n" + operationalAnswer
+      : "No operational answer was supplied for conversion."
+  ].join("\n");
+
   const html = buildHtmlTrainingOutput({
     question,
-    answer,
+    answer: structuredTrainingAnswer,
     context,
     generatedAt
   });
 
   const plainText = buildPlainTextTrainingOutput({
     question,
-    answer,
+    answer: structuredTrainingAnswer,
     context,
     generatedAt
   });
@@ -191,6 +255,7 @@ export function buildCimaTrainingOutput(payload = {}) {
     generated_at: generatedAt,
     context,
     training_prompt: trainingPrompt,
+    structured_training_output: structuredTrainingAnswer,
     html,
     plain_text: plainText
   };
