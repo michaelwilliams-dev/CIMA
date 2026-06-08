@@ -1656,21 +1656,16 @@ body {
         <div class="ask-card">
           <h2>Evidence date range</h2>
 
-          <div style="display: grid; grid-template-columns: 1fr; gap: 14px; align-items: center;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end;">
             <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <strong>From</strong>
-                <strong id="fromYearLabel">2010</strong>
-              </div>
+              <label for="fromYear" style="display: block; font-size: 12px; font-weight: bold; color: #5f6b72; margin-bottom: 4px;">
+                Evidence from
+              </label>
 
-              <input
+              <select
                 id="fromYear"
-                type="range"
-                min="2010"
-                max="2026"
-                value="2010"
-                style="width: 100%; height: 34px; accent-color: var(--orange);"
-                oninput="
+                style="width: 100%; height: 40px; border: 1.5px solid var(--border); border-radius: 10px; background: #f8f5ee; color: var(--ink); padding: 0 10px; outline: none; font-size: 14px; font-family: inherit;"
+                onchange="
                   const from = document.getElementById('fromYear');
                   const to = document.getElementById('toYear');
 
@@ -1682,23 +1677,36 @@ body {
                   document.getElementById('toYearLabel').textContent = to.value;
                   document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
                 "
-              />
+              >
+                <option value="2010">2010</option>
+                <option value="2011">2011</option>
+                <option value="2012">2012</option>
+                <option value="2013">2013</option>
+                <option value="2014">2014</option>
+                <option value="2015">2015</option>
+                <option value="2016">2016</option>
+                <option value="2017">2017</option>
+                <option value="2018">2018</option>
+                <option value="2019">2019</option>
+                <option value="2020">2020</option>
+                <option value="2021">2021</option>
+                <option value="2022">2022</option>
+                <option value="2023">2023</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+              </select>
             </div>
 
             <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <strong>To</strong>
-                <strong id="toYearLabel">2026</strong>
-              </div>
+              <label for="toYear" style="display: block; font-size: 12px; font-weight: bold; color: #5f6b72; margin-bottom: 4px;">
+                Evidence to
+              </label>
 
-              <input
+              <select
                 id="toYear"
-                type="range"
-                min="2010"
-                max="2026"
-                value="2026"
-                style="width: 100%; height: 34px; accent-color: var(--orange);"
-                oninput="
+                style="width: 100%; height: 40px; border: 1.5px solid var(--border); border-radius: 10px; background: #f8f5ee; color: var(--ink); padding: 0 10px; outline: none; font-size: 14px; font-family: inherit;"
+                onchange="
                   const from = document.getElementById('fromYear');
                   const to = document.getElementById('toYear');
 
@@ -1710,13 +1718,34 @@ body {
                   document.getElementById('toYearLabel').textContent = to.value;
                   document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
                 "
-              />
+              >
+                <option value="2010">2010</option>
+                <option value="2011">2011</option>
+                <option value="2012">2012</option>
+                <option value="2013">2013</option>
+                <option value="2014">2014</option>
+                <option value="2015">2015</option>
+                <option value="2016">2016</option>
+                <option value="2017">2017</option>
+                <option value="2018">2018</option>
+                <option value="2019">2019</option>
+                <option value="2020">2020</option>
+                <option value="2021">2021</option>
+                <option value="2022">2022</option>
+                <option value="2023">2023</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026" selected>2026</option>
+              </select>
             </div>
           </div>
 
           <p style="margin: 14px 0 0 0; color: var(--muted); font-size: 14px;">
             Evidence search range: <strong id="evidenceRangeText">2010 to 2026</strong>
           </p>
+
+          <span id="fromYearLabel" style="display:none;">2010</span>
+          <span id="toYearLabel" style="display:none;">2026</span>
         </div>
 
         <div class="reply-card">
