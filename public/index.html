@@ -1534,7 +1534,88 @@ body {
             </select>
           </div>
 
-                 </div>
+          <div class="field">
+            <label for="fromYear">Evidence from</label>
+            <select
+              id="fromYear"
+              onchange="
+                const from = document.getElementById('fromYear');
+                const to = document.getElementById('toYear');
+
+                if (Number(from.value) > Number(to.value)) {
+                  from.value = to.value;
+                }
+
+                document.getElementById('fromYearLabel').textContent = from.value;
+                document.getElementById('toYearLabel').textContent = to.value;
+                document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
+              "
+            >
+              <option value="2010">2010</option>
+              <option value="2011">2011</option>
+              <option value="2012">2012</option>
+              <option value="2013">2013</option>
+              <option value="2014">2014</option>
+              <option value="2015">2015</option>
+              <option value="2016">2016</option>
+              <option value="2017">2017</option>
+              <option value="2018">2018</option>
+              <option value="2019">2019</option>
+              <option value="2020">2020</option>
+              <option value="2021">2021</option>
+              <option value="2022">2022</option>
+              <option value="2023">2023</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="toYear">Evidence to</label>
+            <select
+              id="toYear"
+              onchange="
+                const from = document.getElementById('fromYear');
+                const to = document.getElementById('toYear');
+
+                if (Number(to.value) < Number(from.value)) {
+                  to.value = from.value;
+                }
+
+                document.getElementById('fromYearLabel').textContent = from.value;
+                document.getElementById('toYearLabel').textContent = to.value;
+                document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
+              "
+            >
+              <option value="2010">2010</option>
+              <option value="2011">2011</option>
+              <option value="2012">2012</option>
+              <option value="2013">2013</option>
+              <option value="2014">2014</option>
+              <option value="2015">2015</option>
+              <option value="2016">2016</option>
+              <option value="2017">2017</option>
+              <option value="2018">2018</option>
+              <option value="2019">2019</option>
+              <option value="2020">2020</option>
+              <option value="2021">2021</option>
+              <option value="2022">2022</option>
+              <option value="2023">2023</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
+            </select>
+          </div>
+
+          <p style="margin: 6px 0 0 0; color: var(--muted); font-size: 13px;">
+            Evidence search range: <strong id="evidenceRangeText">2010 to 2026</strong>
+          </p>
+
+          <span id="fromYearLabel" style="display:none;">2010</span>
+          <span id="toYearLabel" style="display:none;">2026</span>
+
+          </div>
 
 
           <div class="cima-process-card">
@@ -1651,101 +1732,6 @@ body {
             <textarea id="questionInput" placeholder="Ask CIMA a question..."></textarea>
             <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()">↑</button>
           </div>
-        </div>
-
-        <div class="ask-card">
-          <h2>Evidence date range</h2>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end;">
-            <div>
-              <label for="fromYear" style="display: block; font-size: 12px; font-weight: bold; color: #5f6b72; margin-bottom: 4px;">
-                Evidence from
-              </label>
-
-              <select
-                id="fromYear"
-                style="width: 100%; height: 40px; border: 1.5px solid var(--border); border-radius: 10px; background: #f8f5ee; color: var(--ink); padding: 0 10px; outline: none; font-size: 14px; font-family: inherit;"
-                onchange="
-                  const from = document.getElementById('fromYear');
-                  const to = document.getElementById('toYear');
-
-                  if (Number(from.value) > Number(to.value)) {
-                    from.value = to.value;
-                  }
-
-                  document.getElementById('fromYearLabel').textContent = from.value;
-                  document.getElementById('toYearLabel').textContent = to.value;
-                  document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
-                "
-              >
-                <option value="2010">2010</option>
-                <option value="2011">2011</option>
-                <option value="2012">2012</option>
-                <option value="2013">2013</option>
-                <option value="2014">2014</option>
-                <option value="2015">2015</option>
-                <option value="2016">2016</option>
-                <option value="2017">2017</option>
-                <option value="2018">2018</option>
-                <option value="2019">2019</option>
-                <option value="2020">2020</option>
-                <option value="2021">2021</option>
-                <option value="2022">2022</option>
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
-                <option value="2025">2025</option>
-                <option value="2026">2026</option>
-              </select>
-            </div>
-
-            <div>
-              <label for="toYear" style="display: block; font-size: 12px; font-weight: bold; color: #5f6b72; margin-bottom: 4px;">
-                Evidence to
-              </label>
-
-              <select
-                id="toYear"
-                style="width: 100%; height: 40px; border: 1.5px solid var(--border); border-radius: 10px; background: #f8f5ee; color: var(--ink); padding: 0 10px; outline: none; font-size: 14px; font-family: inherit;"
-                onchange="
-                  const from = document.getElementById('fromYear');
-                  const to = document.getElementById('toYear');
-
-                  if (Number(to.value) < Number(from.value)) {
-                    to.value = from.value;
-                  }
-
-                  document.getElementById('fromYearLabel').textContent = from.value;
-                  document.getElementById('toYearLabel').textContent = to.value;
-                  document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
-                "
-              >
-                <option value="2010">2010</option>
-                <option value="2011">2011</option>
-                <option value="2012">2012</option>
-                <option value="2013">2013</option>
-                <option value="2014">2014</option>
-                <option value="2015">2015</option>
-                <option value="2016">2016</option>
-                <option value="2017">2017</option>
-                <option value="2018">2018</option>
-                <option value="2019">2019</option>
-                <option value="2020">2020</option>
-                <option value="2021">2021</option>
-                <option value="2022">2022</option>
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
-                <option value="2025">2025</option>
-                <option value="2026" selected>2026</option>
-              </select>
-            </div>
-          </div>
-
-          <p style="margin: 14px 0 0 0; color: var(--muted); font-size: 14px;">
-            Evidence search range: <strong id="evidenceRangeText">2010 to 2026</strong>
-          </p>
-
-          <span id="fromYearLabel" style="display:none;">2010</span>
-          <span id="toYearLabel" style="display:none;">2026</span>
         </div>
 
         <div class="reply-card">
