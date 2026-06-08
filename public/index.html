@@ -1536,99 +1536,91 @@ body {
 
                  </div>
 
+
           <div class="cima-process-card">
-            <h3>Process Status</h3>
+            <h3>Delivery Status</h3>
 
             <div style="margin: 2px 0 18px 0; color: var(--orange); font-size: 13px; line-height: 1.35; font-weight: 900; letter-spacing: 0.22em; text-transform: uppercase;">
               Use the steps below to track progress
             </div>
 
             <div class="process-rail">
-            
-            <div id="processStepAccess" class="process-step muted">
-              <div class="process-marker">01</div>
-              <div class="process-copy">
-                <strong>Access</strong>
-                <span>Email, terms &amp; access confirmed</span>
-              </div>
-            </div>
 
-            <div id="processStepContext" class="process-step active">
-              <div class="process-marker">02</div>
-              <div class="process-copy">
-                <strong>Context</strong>
-                <span>Mode, command, persona, output</span>
-              </div>
-            </div>
-
-            <div id="processStepResponse" class="process-step muted">
-              <div class="process-marker">03</div>
-              <div class="process-copy">
-                <strong>Response</strong>
-                <span>Question and CIMA answer</span>
-              </div>
-            </div>
-
-            <div id="processStepDelivery" class="process-step muted">
-              <div class="process-marker">04</div>
-              <div class="process-copy">
-                <strong>Delivery</strong>
-                <span>Word/PDF email and review</span>
-              </div>
-            </div>
-              </div>
-            </div>
-
-            <div class="delivery-status-card">
-              <h3>Delivery Status</h3>
-
-              <div class="delivery-line">
-                <span>Access gate</span>
-                <strong id="deliveryAccessStatus">Confirmed</strong>
+              <div id="processStepAccess" class="process-step muted">
+                <div class="process-marker">01</div>
+                <div class="process-copy">
+                  <strong>Access gate</strong>
+                  <span id="deliveryAccessStatus">Confirmed</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Context setup</span>
-                <strong id="deliveryContextStatus" class="pending">Pending</strong>
+              <div id="processStepContext" class="process-step active">
+                <div class="process-marker">02</div>
+                <div class="process-copy">
+                  <strong>Context setup</strong>
+                  <span id="deliveryContextStatus" class="pending">Pending</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Question submitted</span>
-                <strong id="deliveryQuestionStatus" class="not-started">Not started</strong>
+              <div id="processStepQuestion" class="process-step muted">
+                <div class="process-marker">03</div>
+                <div class="process-copy">
+                  <strong>Question submitted</strong>
+                  <span id="deliveryQuestionStatus" class="not-started">Not started</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>CIMA response</span>
-                <strong id="deliveryResponseStatus" class="not-started">Not started</strong>
+              <div id="processStepResponse" class="process-step muted">
+                <div class="process-marker">04</div>
+                <div class="process-copy">
+                  <strong>CIMA response</strong>
+                  <span id="deliveryResponseStatus" class="not-started">Not started</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Word/PDF email</span>
-                <strong id="deliveryEmailStatus" class="not-started">Not sent</strong>
+              <div id="processStepDelivery" class="process-step muted">
+                <div class="process-marker">05</div>
+                <div class="process-copy">
+                  <strong>Word/PDF email</strong>
+                  <span id="deliveryEmailStatus" class="not-started">Not sent</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Training Synopsis</span>
-                <strong id="deliveryTrainingSynopsisStatus" class="not-started">Not generated</strong>
+              <div id="processStepTrainingSynopsis" class="process-step muted">
+                <div class="process-marker">06</div>
+                <div class="process-copy">
+                  <strong>Training Synopsis</strong>
+                  <span id="deliveryTrainingSynopsisStatus" class="not-started">Not generated</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Training Questions</span>
-                <strong id="deliveryTrainingQuestionsStatus" class="not-started">Not generated</strong>
+              <div id="processStepTrainingQuestions" class="process-step muted">
+                <div class="process-marker">07</div>
+                <div class="process-copy">
+                  <strong>Training Questions</strong>
+                  <span id="deliveryTrainingQuestionsStatus" class="not-started">Not generated</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Training Q &amp; A</span>
-                <strong id="deliveryTrainingQaStatus" class="not-started">Not generated</strong>
+              <div id="processStepTrainingQa" class="process-step muted">
+                <div class="process-marker">08</div>
+                <div class="process-copy">
+                  <strong>Training Q &amp; A</strong>
+                  <span id="deliveryTrainingQaStatus" class="not-started">Not generated</span>
+                </div>
               </div>
 
-              <div class="delivery-line">
-                <span>Human review</span>
-                <strong id="deliveryReviewStatus" class="pending">Required</strong>
+              <div id="processStepReview" class="process-step muted">
+                <div class="process-marker">09</div>
+                <div class="process-copy">
+                  <strong>Human review</strong>
+                  <span id="deliveryReviewStatus" class="pending">Required</span>
+                </div>
               </div>
 
             </div>
           </div>
+
         </aside>
 
     <section class="panel centre-panel">
