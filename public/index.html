@@ -1626,6 +1626,7 @@ body {
                 <span>Human review</span>
                 <strong id="deliveryReviewStatus" class="pending">Required</strong>
               </div>
+
             </div>
           </div>
         </aside>
@@ -2531,7 +2532,7 @@ body {
           panel.innerHTML = data.training?.html || `<pre>${escapeHtml(data.training?.plain_text || "No training output returned.")}</pre>`;
         }
 
-                const trainingSynopsisStatus = document.getElementById("deliveryTrainingSynopsisStatus");
+        const trainingSynopsisStatus = document.getElementById("deliveryTrainingSynopsisStatus");
         if (trainingSynopsisStatus) {
           trainingSynopsisStatus.textContent = "Generated";
           trainingSynopsisStatus.className = "";
