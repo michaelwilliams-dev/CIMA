@@ -2756,15 +2756,16 @@ body {
         answer
       });
 
+      latestStandardHtml = `
+        <p><strong>Path:</strong> ${escapeHtml(finalPath)}</p>
+        ${markdownToHtml(answer)}
+      `;
+
       addMessage(
         "agent",
         "CIMA Assistant",
-        `
-          <p><strong>Path:</strong> ${escapeHtml(finalPath)}</p>
-          ${markdownToHtml(answer)}
-        `
+        latestStandardHtml
       );
-
       transcriptEntries.push({
         at: new Date().toISOString(),
         question,
@@ -2905,9 +2906,11 @@ body {
       questions = [];
       transcriptEntries = [];
       latestAnswer = "";
+      latestStandardHtml = "";
+      latestTrainingHtml = "";
+      activeReplyView = "standard";
       latestSources = [];
       latestDashboard = null;
-
       document.getElementById("questionInput").value = "";
       document.getElementById("questionCount").textContent = "0";
       document.getElementById("pathStatus").textContent = "FAST PATH";
