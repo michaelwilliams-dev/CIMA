@@ -1056,22 +1056,20 @@
     .output-tabs {
       margin: 0 0 14px 0;
       border-bottom: 1.5px solid var(--border);
-      display: flex;
-      justify-content: flex-start;
-      gap: 8px;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding-bottom: 2px;
-      -webkit-overflow-scrolling: touch;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding-bottom: 8px;
+      overflow: visible;
     }
 
     .output-tabs .answer-tab {
-      flex: 0 0 auto;
-      white-space: nowrap;
-      padding: 8px 6px;
-      font-size: 16px;
-      line-height: 1.2;
+      width: 100%;
+      text-align: left;
+      white-space: normal;
+      padding: 6px 0;
+      font-size: 14px;
+      line-height: 1.25;
       font-weight: 900;
     }
 
