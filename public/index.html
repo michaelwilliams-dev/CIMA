@@ -1694,6 +1694,15 @@ body {
         <div class="reply-card">
           <h2>Reply</h2>
 
+          <div class="answer-tabs" style="margin: 0 0 14px 0; justify-content: flex-start;">
+            <button id="replyStandardTab" class="answer-tab active" type="button" onclick="setReplyView('standard')">
+              Standard Answer
+            </button>
+            <button id="replyTrainingTab" class="answer-tab" type="button" onclick="setReplyView('training')">
+              Training Output
+            </button>
+          </div>
+
           <div id="responseDashboard" class="response-dashboard">
             <div class="dashboard-title">CIMA Response Dashboard</div>
             <div class="dashboard-grid">
@@ -2303,6 +2312,26 @@ body {
       if (active) active.classList.add("active");
 
       setRightTab("sources");
+    }
+
+    function setReplyView(value) {
+      activeReplyView = value === "training" ? "training" : "standard";
+
+      document.getElementById("replyStandardTab")?.classList.remove("active");
+      document.getElementById("replyTrainingTab")?.classList.remove("active");
+
+      if (activeReplyView === "training") {
+        document.getElementById("replyTrainingTab")?.classList.add("active");
+        document.getElementById("lastOutput").textContent = latestTrainingHtml
+          ? "Showing training output."
+          : "Training output has not been generated yet.";
+        return;
+      }
+
+      document.getElementById("replyStandardTab")?.classList.add("active");
+      document.getElementById("lastOutput").textContent = latestStandardHtml
+        ? "Showing standard CIMA answer."
+        : "No standard CIMA answer available yet.";
     }
 
     function setRightTab(value) {
