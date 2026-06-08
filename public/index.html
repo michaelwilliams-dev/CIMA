@@ -1053,6 +1053,28 @@
       border-bottom-color: var(--orange);
     }
 
+    .output-tabs {
+      margin: 0 0 14px 0;
+      border-bottom: 1.5px solid var(--border);
+      display: flex;
+      justify-content: flex-start;
+      gap: 8px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 2px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .output-tabs .answer-tab {
+      flex: 0 0 auto;
+      white-space: nowrap;
+      padding: 8px 6px;
+      font-size: 16px;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+
     .source-search {
       margin: 0 42px 18px 42px;
     }
@@ -1694,7 +1716,7 @@ body {
         <div class="reply-card">
           <h2>Reply</h2>
 
-          <div class="answer-tabs" style="margin: 0 0 14px 0; justify-content: flex-start;">
+          <div class="output-tabs">
           <button id="replyStandardTab" class="answer-tab active" type="button" onclick="setReplyView('standard')">
             CIMA Answer
           </button>
@@ -2554,7 +2576,7 @@ body {
           <h3>Email</h3>
           <p>Send one of the generated CIMA outputs by email.</p>
 
-          <div class="answer-tabs" style="margin: 0 0 14px 0; justify-content: flex-start;">
+          <div class="output-tabs">
             <button
               id="emailCimaAnswerTab"
               class="answer-tab active"
