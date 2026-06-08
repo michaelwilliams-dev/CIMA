@@ -1695,14 +1695,23 @@ body {
           <h2>Reply</h2>
 
           <div class="answer-tabs" style="margin: 0 0 14px 0; justify-content: flex-start;">
-            <button id="replyStandardTab" class="answer-tab active" type="button" onclick="setReplyView('standard')">
-              CIMA Answer
-            </button>
-            <button id="replyTrainingTab" class="answer-tab" type="button" onclick="setReplyView('training')">
-              Training Request
-            </button>
-          </div>
+          <button id="replyStandardTab" class="answer-tab active" type="button" onclick="setReplyView('standard')">
+            CIMA Answer
+          </button>
 
+          <button id="replySynopsisTab" class="answer-tab" type="button" onclick="setReplyView('synopsis')">
+            Training Synopsis
+          </button>
+
+          <button id="replyQuestionsTab" class="answer-tab" type="button" onclick="setReplyView('questions')">
+            Training Questions
+          </button>
+
+          <button id="replyCombinedTab" class="answer-tab" type="button" onclick="setReplyView('combined')">
+            Training Questions and Answers
+          </button>
+        </div>
+        
           <div id="responseDashboard" class="response-dashboard">
             <div class="dashboard-title">CIMA Response Dashboard</div>
             <div class="dashboard-grid">
@@ -2314,64 +2323,94 @@ body {
     }
 
     function setReplyView(value) {
-      activeReplyView = value === "training" ? "training" : "standard";
+      const allowedViews = ["standard", "synopsis", "questions", "combined"];
+      activeReplyView = allowedViews.includes(value) ? value : "standard";
 
       const replyArea = document.getElementById("replyArea");
 
       document.getElementById("replyStandardTab")?.classList.remove("active");
-      document.getElementById("replyTrainingTab")?.classList.remove("active");
+      document.getElementById("replySynopsisTab")?.classList.remove("active");
+      document.getElementById("replyQuestionsTab")?.classList.remove("active");
+      document.getElementById("replyCombinedTab")?.classList.remove("active");
 
-      if (activeReplyView === "training") {
-        document.getElementById("replyTrainingTab")?.classList.add("active");
+      const activeTabMap = {
+        standard: "replyStandardTab",
+        synopsis: "replySynopsisTab",
+        questions: "replyQuestionsTab",
+        combined: "replyCombinedTab"
+      };
 
-        replyArea.className = "";
-
-        if (latestTrainingHtml) {
-          replyArea.innerHTML = latestTrainingHtml;
-          document.getElementById("lastOutput").textContent = "Showing training output.";
-          return;
-        }
-
-        replyArea.innerHTML = `
-          <div class="message agent">
-            <strong>Training Output</strong>
-            <p>No training output has been generated yet.</p>
-            <p>Click below to generate a training version of the latest completed CIMA answer.</p>
-            <button
-              id="generateTrainingBtn"
-              class="report-btn"
-              type="button"
-              onclick="generateTrainingOutput(this)"
-              ${transcriptEntries.length ? "" : "disabled"}
-            >
-              Generate Training Output
-            </button>
-            <div id="trainingOutputWrap" style="margin-top:14px;"></div>
-          </div>
-        `;
-
-        document.getElementById("lastOutput").textContent = "Training output has not been generated yet.";
-        return;
-      }
-
-      document.getElementById("replyStandardTab")?.classList.add("active");
+      document.getElementById(activeTabMap[activeReplyView])?.classList.add("active");
 
       replyArea.className = "";
 
-      if (latestStandardHtml) {
-        replyArea.innerHTML = `
-          <div class="message agent">
-            <strong>CIMA Assistant</strong>
-            ${latestStandardHtml}
-          </div>
-        `;
-        document.getElementById("lastOutput").textContent = "Showing standard CIMA answer.";
+      if (activeReplyView === "standard") {
+        if (latestStandardHtml) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>CIMA Assistant</strong>
+              ${latestStandardHtml}
+            </div>
+          `;
+          document.getElementById("lastOutput").textContent = "Showing CIMA answer.";
+          return;
+        }
+
+        replyArea.className = "reply-placeholder";
+        replyArea.textContent = "Ask a question. CIMA's response and dashboard will appear here.";
+        document.getElementById("lastOutput").textContent = "No CIMA answer available yet.";
         return;
       }
 
-      replyArea.className = "reply-placeholder";
-      replyArea.textContent = "Ask a question. CIMA's response and dashboard will appear here.";
-      document.getElementById("lastOutput").textContent = "No standard CIMA answer available yet.";
+      if (activeReplyView === "synopsis") {
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>Training Synopsis</strong>
+            <p>No training synopsis has been generated yet.</p>
+            <p>This tab will generate and display a short training synopsis based on the latest CIMA answer.</p>
+            <button class="report-btn" type="button" disabled>
+              Generate Training Synopsis
+            </button>
+            <p class="small-note">Backend route not connected yet.</p>
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = "Training synopsis is not connected yet.";
+        return;
+      }
+
+      if (activeReplyView === "questions") {
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>Training Questions</strong>
+            <p>No training questions have been generated yet.</p>
+            <p>This tab will generate training questions around the latest CIMA topic.</p>
+            <button class="report-btn" type="button" disabled>
+              Generate Training Questions
+            </button>
+            <p class="small-note">Backend route not connected yet.</p>
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = "Training questions are not connected yet.";
+        return;
+      }
+
+      if (activeReplyView === "combined") {
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>Training Questions and Answers</strong>
+            <p>No training question and answer set has been generated yet.</p>
+            <p>This tab will generate training questions together with model answers.</p>
+            <button class="report-btn" type="button" disabled>
+              Generate Training Questions and Answers
+            </button>
+            <p class="small-note">Backend route not connected yet.</p>
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = "Training questions and answers are not connected yet.";
+      }
     }
 
     function setRightTab(value) {
@@ -2513,23 +2552,26 @@ body {
 
         panel.innerHTML = `
           <h3>Email</h3>
-          <p>Choose the email output for the current CIMA session.</p>
+          <p>Send one of the generated CIMA outputs by email.</p>
 
           <div class="answer-tabs" style="margin: 0 0 14px 0; justify-content: flex-start;">
             <button
-              id="emailOverviewTab"
+              id="emailCimaAnswerTab"
               class="answer-tab active"
               type="button"
               onclick="
-                document.getElementById('emailOverviewTab').classList.add('active');
+                document.getElementById('emailCimaAnswerTab').classList.add('active');
                 document.getElementById('emailSynopsisTab').classList.remove('active');
-                document.getElementById('emailInstructorTab').classList.remove('active');
-                document.getElementById('emailOverviewPanel').classList.remove('hidden');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.remove('hidden');
                 document.getElementById('emailSynopsisPanel').classList.add('hidden');
-                document.getElementById('emailInstructorPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
               "
             >
-              Overview Email
+              CIMA Answer
             </button>
 
             <button
@@ -2537,40 +2579,65 @@ body {
               class="answer-tab"
               type="button"
               onclick="
-                document.getElementById('emailOverviewTab').classList.remove('active');
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
                 document.getElementById('emailSynopsisTab').classList.add('active');
-                document.getElementById('emailInstructorTab').classList.remove('active');
-                document.getElementById('emailOverviewPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
                 document.getElementById('emailSynopsisPanel').classList.remove('hidden');
-                document.getElementById('emailInstructorPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
               "
             >
               Training Synopsis
             </button>
 
             <button
-              id="emailInstructorTab"
+              id="emailQuestionsTab"
               class="answer-tab"
               type="button"
               onclick="
-                document.getElementById('emailOverviewTab').classList.remove('active');
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
                 document.getElementById('emailSynopsisTab').classList.remove('active');
-                document.getElementById('emailInstructorTab').classList.add('active');
-                document.getElementById('emailOverviewPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsTab').classList.add('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
                 document.getElementById('emailSynopsisPanel').classList.add('hidden');
-                document.getElementById('emailInstructorPanel').classList.remove('hidden');
+                document.getElementById('emailQuestionsPanel').classList.remove('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
               "
             >
-              Instructor Notes
+              Training Questions
+            </button>
+
+            <button
+              id="emailCombinedTab"
+              class="answer-tab"
+              type="button"
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.add('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.remove('hidden');
+              "
+            >
+              Training Questions and Answers
             </button>
           </div>
 
           <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
           <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
 
-          <div id="emailOverviewPanel">
-            <p><strong>Overview Email</strong></p>
-            <p>Send the current CIMA session overview as Word and PDF attachments.</p>
+          <div id="emailCimaAnswerPanel">
+            <p><strong>CIMA Answer</strong></p>
+            <p>Send the current CIMA answer as Word and PDF attachments.</p>
 
             <label class="toggle-line">
               <input
@@ -2585,7 +2652,7 @@ body {
             </label>
 
             <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">
-              Send Overview Email
+              Send CIMA Answer
             </button>
 
             <p class="small-note">Questions recorded this session: ${questions.length}</p>
@@ -2594,24 +2661,35 @@ body {
 
           <div id="emailSynopsisPanel" class="hidden">
             <p><strong>Training Synopsis</strong></p>
-            <p>Send a separate training synopsis based on the current CIMA topic and answer.</p>
+            <p>Send the generated training synopsis.</p>
 
             <button class="report-btn" type="button" disabled>
               Send Training Synopsis
             </button>
 
-            <p class="small-note">Backend route not connected yet.</p>
+            <p class="small-note">Generate the training synopsis before sending.</p>
           </div>
 
-          <div id="emailInstructorPanel" class="hidden">
-            <p><strong>Instructor Notes</strong></p>
-            <p>Send instructor notes and sample questions around the current CIMA topic.</p>
+          <div id="emailQuestionsPanel" class="hidden">
+            <p><strong>Training Questions</strong></p>
+            <p>Send the generated training questions.</p>
 
             <button class="report-btn" type="button" disabled>
-              Send Instructor Notes
+              Send Training Questions
             </button>
 
-            <p class="small-note">Backend route not connected yet.</p>
+            <p class="small-note">Generate the training questions before sending.</p>
+          </div>
+
+          <div id="emailCombinedPanel" class="hidden">
+            <p><strong>Training Questions and Answers</strong></p>
+            <p>Send the generated training questions and model answers.</p>
+
+            <button class="report-btn" type="button" disabled>
+              Send Training Questions and Answers
+            </button>
+
+            <p class="small-note">Generate the training questions and answers before sending.</p>
           </div>
         `;
 
@@ -3045,7 +3123,7 @@ body {
       } finally {
         if (button) {
           button.disabled = false;
-          button.textContent = "Send Overview Email";
+          button.textContent = "Send CIMA Answer";
         }
       }
     }
