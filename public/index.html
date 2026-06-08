@@ -2511,31 +2511,110 @@ body {
       if (rightTab === "thread") {
         const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
 
-    panel.innerHTML = `
-      <h3>Email</h3>
-      <p>Send the current CIMA session as Word and PDF attachments.</p>
+        panel.innerHTML = `
+          <h3>Email</h3>
+          <p>Choose the email output for the current CIMA session.</p>
 
-      <label class="toggle-line">
-        <input
-          type="checkbox"
-          ${includeTranscript ? "checked" : ""}
-          onchange="
-            document.getElementById('includeTranscriptToggle').checked = this.checked;
-            renderRightView();
-          "
-        />
-        <span>Include full Q&amp;A in Word/PDF email</span>
-      </label>
+          <div class="answer-tabs" style="margin: 0 0 14px 0; justify-content: flex-start;">
+            <button
+              id="emailOverviewTab"
+              class="answer-tab active"
+              type="button"
+              onclick="
+                document.getElementById('emailOverviewTab').classList.add('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailInstructorTab').classList.remove('active');
+                document.getElementById('emailOverviewPanel').classList.remove('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailInstructorPanel').classList.add('hidden');
+              "
+            >
+              Overview Email
+            </button>
 
-      <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
-      <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
+            <button
+              id="emailSynopsisTab"
+              class="answer-tab"
+              type="button"
+              onclick="
+                document.getElementById('emailOverviewTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.add('active');
+                document.getElementById('emailInstructorTab').classList.remove('active');
+                document.getElementById('emailOverviewPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.remove('hidden');
+                document.getElementById('emailInstructorPanel').classList.add('hidden');
+              "
+            >
+              Training Synopsis
+            </button>
 
-      <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">Send Word + PDF Email</button>
+            <button
+              id="emailInstructorTab"
+              class="answer-tab"
+              type="button"
+              onclick="
+                document.getElementById('emailOverviewTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailInstructorTab').classList.add('active');
+                document.getElementById('emailOverviewPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailInstructorPanel').classList.remove('hidden');
+              "
+            >
+              Instructor Notes
+            </button>
+          </div>
 
-      <p class="small-note">Questions recorded this session: ${questions.length}</p>
-      <p class="small-note">Full Q&amp;A included: ${includeTranscript ? "Yes" : "No"}</p>
-    `;
-        
+          <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
+          <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
+
+          <div id="emailOverviewPanel">
+            <p><strong>Overview Email</strong></p>
+            <p>Send the current CIMA session overview as Word and PDF attachments.</p>
+
+            <label class="toggle-line">
+              <input
+                type="checkbox"
+                ${includeTranscript ? "checked" : ""}
+                onchange="
+                  document.getElementById('includeTranscriptToggle').checked = this.checked;
+                  renderRightView();
+                "
+              />
+              <span>Include full Q&amp;A in Word/PDF email</span>
+            </label>
+
+            <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">
+              Send Overview Email
+            </button>
+
+            <p class="small-note">Questions recorded this session: ${questions.length}</p>
+            <p class="small-note">Full Q&amp;A included: ${includeTranscript ? "Yes" : "No"}</p>
+          </div>
+
+          <div id="emailSynopsisPanel" class="hidden">
+            <p><strong>Training Synopsis</strong></p>
+            <p>Send a separate training synopsis based on the current CIMA topic and answer.</p>
+
+            <button class="report-btn" type="button" disabled>
+              Send Training Synopsis
+            </button>
+
+            <p class="small-note">Backend route not connected yet.</p>
+          </div>
+
+          <div id="emailInstructorPanel" class="hidden">
+            <p><strong>Instructor Notes</strong></p>
+            <p>Send instructor notes and sample questions around the current CIMA topic.</p>
+
+            <button class="report-btn" type="button" disabled>
+              Send Instructor Notes
+            </button>
+
+            <p class="small-note">Backend route not connected yet.</p>
+          </div>
+        `;
+
         return;
       }
 
@@ -2966,7 +3045,7 @@ body {
       } finally {
         if (button) {
           button.disabled = false;
-          button.textContent = "Send Word + PDF Email";
+          button.textContent = "Send Overview Email";
         }
       }
     }
