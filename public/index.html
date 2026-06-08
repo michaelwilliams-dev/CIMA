@@ -2317,21 +2317,62 @@ body {
     function setReplyView(value) {
       activeReplyView = value === "training" ? "training" : "standard";
 
+      const replyArea = document.getElementById("replyArea");
+
       document.getElementById("replyStandardTab")?.classList.remove("active");
       document.getElementById("replyTrainingTab")?.classList.remove("active");
 
       if (activeReplyView === "training") {
         document.getElementById("replyTrainingTab")?.classList.add("active");
-        document.getElementById("lastOutput").textContent = latestTrainingHtml
-          ? "Showing training output."
-          : "Training output has not been generated yet.";
+
+        replyArea.className = "";
+
+        if (latestTrainingHtml) {
+          replyArea.innerHTML = latestTrainingHtml;
+          document.getElementById("lastOutput").textContent = "Showing training output.";
+          return;
+        }
+
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>Training Output</strong>
+            <p>No training output has been generated yet.</p>
+            <p>Click below to generate a training version of the latest completed CIMA answer.</p>
+            <button
+              id="generateTrainingBtn"
+              class="report-btn"
+              type="button"
+              onclick="generateTrainingOutput(this)"
+              ${transcriptEntries.length ? "" : "disabled"}
+            >
+              Generate Training Output
+            </button>
+            <div id="trainingOutputWrap" style="margin-top:14px;"></div>
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = "Training output has not been generated yet.";
         return;
       }
 
       document.getElementById("replyStandardTab")?.classList.add("active");
-      document.getElementById("lastOutput").textContent = latestStandardHtml
-        ? "Showing standard CIMA answer."
-        : "No standard CIMA answer available yet.";
+
+      replyArea.className = "";
+
+      if (latestStandardHtml) {
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>CIMA Assistant</strong>
+            ${latestStandardHtml}
+          </div>
+        `;
+        document.getElementById("lastOutput").textContent = "Showing standard CIMA answer.";
+        return;
+      }
+
+      replyArea.className = "reply-placeholder";
+      replyArea.textContent = "Ask a question. CIMA's response and dashboard will appear here.";
+      document.getElementById("lastOutput").textContent = "No standard CIMA answer available yet.";
     }
 
     function setRightTab(value) {
