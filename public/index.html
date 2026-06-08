@@ -1608,18 +1608,18 @@ body {
               </div>
 
               <div class="delivery-line">
-                <span>Training Synopsis email</span>
-                <strong id="deliveryTrainingSynopsisStatus" class="not-started">Not sent</strong>
+                <span>Training Synopsis</span>
+                <strong id="deliveryTrainingSynopsisStatus" class="not-started">Not generated</strong>
               </div>
 
               <div class="delivery-line">
-                <span>Training Questions email</span>
-                <strong id="deliveryTrainingQuestionsStatus" class="not-started">Not sent</strong>
+                <span>Training Questions</span>
+                <strong id="deliveryTrainingQuestionsStatus" class="not-started">Not generated</strong>
               </div>
 
               <div class="delivery-line">
-                <span>Training Q &amp; A email</span>
-                <strong id="deliveryTrainingQaStatus" class="not-started">Not sent</strong>
+                <span>Training Q &amp; A</span>
+                <strong id="deliveryTrainingQaStatus" class="not-started">Not generated</strong>
               </div>
 
               <div class="delivery-line">
@@ -2531,7 +2531,26 @@ body {
           panel.innerHTML = data.training?.html || `<pre>${escapeHtml(data.training?.plain_text || "No training output returned.")}</pre>`;
         }
 
+                const trainingSynopsisStatus = document.getElementById("deliveryTrainingSynopsisStatus");
+        if (trainingSynopsisStatus) {
+          trainingSynopsisStatus.textContent = "Generated";
+          trainingSynopsisStatus.className = "";
+        }
+
+        const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
+        if (trainingQuestionsStatus) {
+          trainingQuestionsStatus.textContent = "Generated";
+          trainingQuestionsStatus.className = "";
+        }
+
+        const trainingQaStatus = document.getElementById("deliveryTrainingQaStatus");
+        if (trainingQaStatus) {
+          trainingQaStatus.textContent = "Generated";
+          trainingQaStatus.className = "";
+        }
+
         document.getElementById("lastOutput").textContent = "CIMA training output generated.";
+      
       } catch (error) {
         if (panel) {
           panel.innerHTML = `<p>Training output failed: ${escapeHtml(error.message)}</p>`;
@@ -3197,6 +3216,15 @@ body {
 
       document.getElementById("deliveryEmailStatus").textContent = "Not sent";
       document.getElementById("deliveryEmailStatus").className = "not-started";
+
+      document.getElementById("deliveryTrainingSynopsisStatus").textContent = "Not generated";
+      document.getElementById("deliveryTrainingSynopsisStatus").className = "not-started";
+
+      document.getElementById("deliveryTrainingQuestionsStatus").textContent = "Not generated";
+      document.getElementById("deliveryTrainingQuestionsStatus").className = "not-started";
+
+      document.getElementById("deliveryTrainingQaStatus").textContent = "Not generated";
+      document.getElementById("deliveryTrainingQaStatus").className = "not-started";
 
       document.getElementById("deliveryReviewStatus").textContent = "Required";
       document.getElementById("deliveryReviewStatus").className = "pending";
