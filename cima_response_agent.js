@@ -105,6 +105,9 @@ function buildDemoCimaAnswer({ question = "", context = {}, path = "FAST PATH" }
   sections.push(`- Command level: ${safeString(context.level)}`);
   sections.push(`- Persona: ${safeString(context.persona)}`);
   sections.push(`- Requested output: ${safeString(context.output)}`);
+  sections.push(`- Evidence from: ${safeString(context.evidence_from_year)}`);
+  sections.push(`- Evidence to: ${safeString(context.evidence_to_year)}`);
+ 
 
   sections.push("");
   sections.push("## Immediate Actions");
