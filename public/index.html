@@ -2407,20 +2407,44 @@ body {
         return;
       }
 
-      if (activeReplyView === "synopsis") {
+       if (activeReplyView === "synopsis") {
+        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+        if (latestTrainingHtml) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              ${latestTrainingHtml}
+              <button class="report-btn" type="button" onclick="generateTrainingSynopsisOutput(this)">
+                Regenerate Training Synopsis
+              </button>
+            </div>
+          `;
+
+          document.getElementById("lastOutput").textContent = "Showing training synopsis.";
+          return;
+        }
+
         replyArea.innerHTML = `
           <div class="message agent">
             <strong>Training Synopsis</strong>
             <p>No training synopsis has been generated yet.</p>
             <p>This tab will generate and display a short training synopsis based on the latest CIMA answer.</p>
-            <button class="report-btn" type="button" disabled>
+            <button
+              class="report-btn"
+              type="button"
+              onclick="generateTrainingSynopsisOutput(this)"
+            >
               Generate Training Synopsis
             </button>
-            <p class="small-note">Backend route not connected yet.</p>
+            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
           </div>
         `;
 
-        document.getElementById("lastOutput").textContent = "Training synopsis is not connected yet.";
+        document.getElementById("lastOutput").textContent = hasTrainingSource
+          ? "Training synopsis is ready to generate."
+          : "Ask a CIMA question before generating a training synopsis.";
+
         return;
       }
 
@@ -2575,7 +2599,106 @@ body {
       }
     }
 
+    async function generateTrainingSynopsisOutput(button) {
+      const replyArea = document.getElementById("replyArea");
 
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating a training synopsis.";
+
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              <p>No completed CIMA question and answer is available for training synopsis yet.</p>
+            </div>
+          `;
+        }
+
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              <p>Generating training synopsis...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-training-synopsis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training synopsis failed.");
+        }
+
+        latestTrainingHtml = data.synopsis?.html || `<pre>${escapeHtml(data.synopsis?.plain_text || "No training synopsis returned.")}</pre>`;
+
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              ${latestTrainingHtml}
+            </div>
+          `;
+        }
+
+        const trainingSynopsisStatus = document.getElementById("deliveryTrainingSynopsisStatus");
+        if (trainingSynopsisStatus) {
+          trainingSynopsisStatus.textContent = "Generated";
+          trainingSynopsisStatus.className = "";
+        }
+
+        document.getElementById("lastOutput").textContent = "Training synopsis generated.";
+      } catch (error) {
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              <p>Training synopsis failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training synopsis failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Synopsis";
+        }
+      }
+    }
 
     function renderRightView() {
       const panel = document.getElementById("rightView");
