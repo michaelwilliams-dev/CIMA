@@ -1,3 +1,4 @@
+
 /**
  * AIVS / PGB CIMA Demo Backend - server.js
  * ISO Timestamp: 2026-06-02T13:55:00Z
@@ -58,8 +59,16 @@ import {
 } from "./training/training_synopsis_agent.js";
 
 import {
+  getTrainingQuestionsAgentStatus
+} from "./training/training_questions_agent.js";
+
+import {
   registerTrainingSynopsisRoute
 } from "./training/training_synopsis_route.js";
+
+import {
+  registerTrainingQuestionsRoute
+} from "./training/training_questions_route.js";
 
 import {
   getSourceIndexAgentStatus
@@ -112,6 +121,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 registerTrainingSynopsisRoute(app, {
+  BUILD_ISO,
+  writeAuditEvent
+});
+
+registerTrainingQuestionsRoute(app, {
   BUILD_ISO,
   writeAuditEvent
 });
