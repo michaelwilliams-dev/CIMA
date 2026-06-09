@@ -63,6 +63,10 @@ import {
 } from "./training/training_questions_agent.js";
 
 import {
+  getTrainingQaAgentStatus
+} from "./training/training_qa_agent.js";
+
+import {
   registerTrainingSynopsisRoute
 } from "./training/training_synopsis_route.js";
 
@@ -71,8 +75,8 @@ import {
 } from "./training/training_questions_route.js";
 
 import {
-  getSourceIndexAgentStatus
-} from "./source_index_agent.js";
+  registerTrainingQaRoute
+} from "./training/training_qa_route.js";
 
 
 dotenv.config();
@@ -126,6 +130,11 @@ registerTrainingSynopsisRoute(app, {
 });
 
 registerTrainingQuestionsRoute(app, {
+  BUILD_ISO,
+  writeAuditEvent
+});
+
+registerTrainingQaRoute(app, {
   BUILD_ISO,
   writeAuditEvent
 });
