@@ -53,6 +53,11 @@ import {
 } from "./cima_training_agent.js";
 
 import {
+  buildTrainingSynopsis,
+  getTrainingSynopsisAgentStatus
+} from "./agents/training/training_synopsis_agent.js";
+
+import {
   getSourceIndexAgentStatus
 } from "./source_index_agent.js";
 
@@ -183,6 +188,7 @@ app.get("/meta", (req, res) => {
     cima_response_agent: getCimaResponseAgentStatus(),
     transcript_agent: getTranscriptAgentStatus(),
     training_agent: getCimaTrainingAgentStatus(),
+    training_synopsis_agent: getTrainingSynopsisAgentStatus(),
     source_index_agent: getSourceIndexAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
     pdf_index_ready: false,
