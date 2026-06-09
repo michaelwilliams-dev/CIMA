@@ -1,24 +1,18 @@
 /**
  * AIVS / PGB CIMA - Training Synopsis Agent
- * File: training_synopsis_agent.js
- * ISO Timestamp: 2026-06-08T19:00:00Z
+ * File: agents/training/training_synopsis_agent.js
+ * ISO Timestamp: 2026-06-09T14:45:00Z
  *
  * Purpose:
  * - Builds a training synopsis from the latest CIMA question, answer and selected context.
  * - Kept separate from server.js so it can be tuned independently.
  *
- * Change Log:
- * - v0.1.0: created standalone Training Synopsis agent.
- *
- * ISO Control Notes:
- * - This agent must not send email.
- * - This agent must not write audit records directly.
- * - This agent must not perform uncontrolled source retrieval.
- * - This agent does not use FAISS until the controlled index is connected.
- * - All outputs remain draft training support only and require human review.
+ * Status:
+ * - First wired training synopsis agent.
+ * - No FAISS retrieval yet.
  */
 
-const TRAINING_SYNOPSIS_AGENT_BUILD_ISO = "2026-06-08T19:00:00Z";
+const TRAINING_SYNOPSIS_AGENT_BUILD_ISO = "2026-06-09T14:45:00Z";
 
 function safeString(value = "") {
   if (value === null || value === undefined || value === "") {
@@ -63,10 +57,6 @@ function linesToHtml(lines = []) {
         return `<h3>${escapeHtml(line.replace(/^##\s+/, ""))}</h3>`;
       }
 
-      if (line.startsWith("- ")) {
-        return `<p>${escapeHtml(line)}</p>`;
-      }
-
       return `<p>${escapeHtml(line)}</p>`;
     })
     .join("\n");
@@ -83,9 +73,7 @@ export function buildTrainingSynopsis({
   const lines = [];
 
   lines.push("## Training Synopsis");
-  lines.push(
-    "This synopsis converts the latest CIMA response into a short training note for review, briefing or exercise preparation."
-  );
+  lines.push("This synopsis converts the latest CIMA response into a short training note for review, briefing or exercise preparation.");
 
   lines.push("");
   lines.push("## Scenario Context");
@@ -114,9 +102,7 @@ export function buildTrainingSynopsis({
 
   lines.push("");
   lines.push("## Human Review");
-  lines.push(
-    "This is a draft training synopsis. It must be reviewed by a responsible human before use in training, assurance or operational briefings."
-  );
+  lines.push("This is a draft training synopsis. It must be reviewed by a responsible human before use in training, assurance or operational briefings.");
 
   const plainText = lines.join("\n");
 
