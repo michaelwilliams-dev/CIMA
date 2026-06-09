@@ -1,165 +1,131 @@
 /**
- * AIVS / PGB CIMA - Training Synopsis Route
- * File: training/training_synopsis_route.js
- * ISO Timestamp: 2026-06-09T15:00:00Z
+ * AIVS / PGB CIMA - Training Synopsis Agent
+ * File: training/training_synopsis_agent.js
+ * ISO Timestamp: 2026-06-09T15:45:00Z
  *
  * Purpose:
- * - Registers the /cima-training-synopsis route.
- * - Keeps server.js clean by moving route logic out of server.js.
+ * - Builds a training synopsis from the latest CIMA question, answer and selected context.
+ * - Kept separate from server.js so it can be tuned independently.
  *
  * Change Log:
- * - v0.1.0: created standalone route registration file for Training Synopsis.
+ * - v0.1.0: created standalone Training Synopsis agent.
  *
  * ISO Control Notes:
- * - This route calls the Training Synopsis agent only.
- * - It does not send email.
- * - It writes audit events through the audit function provided by server.js.
- * - It does not use FAISS until the controlled index is connected.
+ * - This agent must not send email.
+ * - This agent must not write audit records directly.
+ * - This agent must not perform uncontrolled source retrieval.
+ * - This agent does not use FAISS until the controlled index is connected.
+ * - All outputs remain draft training support only and require human review.
  */
 
-import {
-  buildTrainingSynopsis
-} from "./training_synopsis_agent.js";
+const TRAINING_SYNOPSIS_AGENT_BUILD_ISO = "2026-06-09T15:45:00Z";
 
-export function registerTrainingSynopsisRoute(app, {
-  BUILD_ISO,
-  writeAuditEvent
-}) {
-  app.post("/cima-training-synopsis", async (req, res) => {
-    const question = String(req.body.question || "").trim();
+function safeString(value = "") {
+  if (value === null || value === undefined || value === "") {
+    return "Not supplied";
+  }
 
-    const answer = String(
-      req.body.answer ||
-      req.body.cima_answer ||
-      ""
-    ).trim();
+  return String(value);
+}
 
-    const context = req.body.context && typeof req.body.context === "object"
-      ? req.body.context
-      : {};
+function trimText(value = "", maxLength = 1200) {
+  const text = String(value || "")
+    .replace(/\u0000/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
-    const terms = req.body.terms && typeof req.body.terms === "object"
-      ? req.body.terms
-      : {};
+  if (text.length <= maxLength) {
+    return text;
+  }
 
-    const access = req.body.access && typeof req.body.access === "object"
-      ? req.body.access
-      : {};
+  return text.slice(0, maxLength).trim() + "...";
+}
 
-    const userEmail = String(
-      access.email ||
-      req.body.email ||
-      req.body.user_email ||
-      ""
-    ).trim();
+function escapeHtml(value = "") {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-    try {
-      if (!terms.accepted) {
-        await writeAuditEvent({
-          event_type: "training_synopsis_rejected",
-          route: "/cima-training-synopsis",
-          success: false,
-          error: "Terms and Conditions not accepted.",
-          user_email: userEmail,
-          access_mode: access.mode || "",
-          terms_accepted: false,
-          question,
-          context_mode: context.mode || "",
-          command_level: context.level || "",
-          persona: context.persona || "",
-          requested_output: context.output || "",
-          ip_address: req.ip,
-          user_agent: req.get("user-agent")
-        });
-
-        return res.status(403).json({
-          ok: false,
-          error: "Terms and Conditions must be confirmed before using the training synopsis agent.",
-          build_iso: BUILD_ISO
-        });
+function linesToHtml(lines = []) {
+  return lines
+    .map((line) => {
+      if (!line) {
+        return "";
       }
 
-      if (!question) {
-        await writeAuditEvent({
-          event_type: "training_synopsis_rejected",
-          route: "/cima-training-synopsis",
-          success: false,
-          error: "Question required.",
-          user_email: userEmail,
-          access_mode: access.mode || "",
-          terms_accepted: true,
-          question,
-          context_mode: context.mode || "",
-          command_level: context.level || "",
-          persona: context.persona || "",
-          requested_output: context.output || "",
-          ip_address: req.ip,
-          user_agent: req.get("user-agent")
-        });
-
-        return res.status(400).json({
-          ok: false,
-          error: "Question required.",
-          build_iso: BUILD_ISO
-        });
+      if (line.startsWith("## ")) {
+        return `<h3>${escapeHtml(line.replace(/^##\s+/, ""))}</h3>`;
       }
 
-      const synopsisOutput = buildTrainingSynopsis({
-        question,
-        answer,
-        context
-      });
+      return `<p>${escapeHtml(line)}</p>`;
+    })
+    .join("\n");
+}
 
-      await writeAuditEvent({
-        event_type: "training_synopsis_generated",
-        route: "/cima-training-synopsis",
-        success: true,
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        training_synopsis_agent_build_iso: synopsisOutput.training_synopsis_agent_build_iso || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
+export function buildTrainingSynopsis({
+  question = "",
+  answer = "",
+  context = {}
+} = {}) {
+  const cleanQuestion = trimText(question, 600);
+  const cleanAnswer = trimText(answer, 1600);
 
-      return res.json({
-        ok: true,
-        build_iso: BUILD_ISO,
-        generated_at: new Date().toISOString(),
-        training_synopsis_agent_build_iso: synopsisOutput.training_synopsis_agent_build_iso || "",
-        synopsis: synopsisOutput
-      });
-    } catch (err) {
-      console.error("ERROR /cima-training-synopsis failed:", err);
+  const lines = [];
 
-      await writeAuditEvent({
-        event_type: "training_synopsis_failed",
-        route: "/cima-training-synopsis",
-        success: false,
-        error: err.message,
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: terms.accepted === true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
+  lines.push("## Training Synopsis");
+  lines.push("This synopsis converts the latest CIMA response into a short training note for review, briefing or exercise preparation.");
 
-      return res.status(500).json({
-        ok: false,
-        error: "CIMA training synopsis route failed.",
-        detail: err.message,
-        build_iso: BUILD_ISO
-      });
-    }
-  });
+  lines.push("");
+  lines.push("## Scenario Context");
+  lines.push(`- Mode: ${safeString(context.mode)}`);
+  lines.push(`- Command level: ${safeString(context.level)}`);
+  lines.push(`- Persona: ${safeString(context.persona)}`);
+  lines.push(`- Requested output: ${safeString(context.output)}`);
+  lines.push(`- Evidence from: ${safeString(context.evidence_from_year)}`);
+  lines.push(`- Evidence to: ${safeString(context.evidence_to_year)}`);
+
+  lines.push("");
+  lines.push("## Training Focus");
+  lines.push("- Clarify the facts before moving to action.");
+  lines.push("- Separate known information from assumptions.");
+  lines.push("- Identify risk, ownership and next review point.");
+  lines.push("- Keep a clear audit trail of decisions.");
+  lines.push("- Escalate where life safety, safeguarding or public confidence may be affected.");
+
+  lines.push("");
+  lines.push("## Source Question");
+  lines.push(cleanQuestion || "No question supplied.");
+
+  lines.push("");
+  lines.push("## Source CIMA Answer Summary");
+  lines.push(cleanAnswer || "No CIMA answer supplied.");
+
+  lines.push("");
+  lines.push("## Human Review");
+  lines.push("This is a draft training synopsis. It must be reviewed by a responsible human before use in training, assurance or operational briefings.");
+
+  const plainText = lines.join("\n");
+
+  return {
+    ok: true,
+    training_synopsis_agent_build_iso: TRAINING_SYNOPSIS_AGENT_BUILD_ISO,
+    type: "training_synopsis",
+    plain_text: plainText,
+    html: linesToHtml(lines)
+  };
+}
+
+export function getTrainingSynopsisAgentStatus() {
+  return {
+    ok: true,
+    agent: "training_synopsis_agent",
+    training_synopsis_agent_build_iso: TRAINING_SYNOPSIS_AGENT_BUILD_ISO,
+    mode: "demo-no-index"
+  };
 }
