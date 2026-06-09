@@ -1878,6 +1878,7 @@ body {
     let latestAnswer = "";
     let latestStandardHtml = "";
     let latestTrainingHtml = "";
+    let latestTrainingQuestionsHtml = "";
     let activeReplyView = "standard";
     let latestSources = [];
     let latestDashboard = null;
@@ -2696,6 +2697,107 @@ body {
         if (button) {
           button.disabled = false;
           button.textContent = "Generate Training Synopsis";
+        }
+      }
+    }
+
+    async function generateTrainingQuestionsOutput(button) {
+      const replyArea = document.getElementById("replyArea");
+
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training questions.";
+
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              <p>No completed CIMA question and answer is available for training questions yet.</p>
+            </div>
+          `;
+        }
+
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              <p>Generating training questions...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-training-questions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training questions failed.");
+        }
+
+        latestTrainingQuestionsHtml = data.questions?.html || `<pre>${escapeHtml(data.questions?.plain_text || "No training questions returned.")}</pre>`;
+
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              ${latestTrainingQuestionsHtml}
+            </div>
+          `;
+        }
+
+        const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
+        if (trainingQuestionsStatus) {
+          trainingQuestionsStatus.textContent = "Generated";
+          trainingQuestionsStatus.className = "";
+        }
+
+        document.getElementById("lastOutput").textContent = "Training questions generated.";
+      } catch (error) {
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              <p>Training questions failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training questions failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Questions";
         }
       }
     }
