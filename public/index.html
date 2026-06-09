@@ -2450,19 +2450,43 @@ body {
       }
 
       if (activeReplyView === "questions") {
+        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+        if (latestTrainingQuestionsHtml) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              ${latestTrainingQuestionsHtml}
+              <button class="report-btn" type="button" onclick="generateTrainingQuestionsOutput(this)">
+                Regenerate Training Questions
+              </button>
+            </div>
+          `;
+
+          document.getElementById("lastOutput").textContent = "Showing training questions.";
+          return;
+        }
+
         replyArea.innerHTML = `
           <div class="message agent">
             <strong>Training Questions</strong>
             <p>No training questions have been generated yet.</p>
-            <p>This tab will generate training questions around the latest CIMA topic.</p>
-            <button class="report-btn" type="button" disabled>
+            <p>This tab will generate training questions around the latest CIMA answer.</p>
+            <button
+              class="report-btn"
+              type="button"
+              onclick="generateTrainingQuestionsOutput(this)"
+            >
               Generate Training Questions
             </button>
-            <p class="small-note">Backend route not connected yet.</p>
+            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
           </div>
         `;
 
-        document.getElementById("lastOutput").textContent = "Training questions are not connected yet.";
+        document.getElementById("lastOutput").textContent = hasTrainingSource
+          ? "Training questions are ready to generate."
+          : "Ask a CIMA question before generating training questions.";
+
         return;
       }
 
