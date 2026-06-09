@@ -58,6 +58,10 @@ import {
 } from "./training/training_synopsis_agent.js";
 
 import {
+  registerTrainingSynopsisRoute
+} from "./training/training_synopsis_route.js";
+
+import {
   getSourceIndexAgentStatus
 } from "./source_index_agent.js";
 
@@ -106,6 +110,11 @@ app.options("*", cors());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
+
+registerTrainingSynopsisRoute(app, {
+  BUILD_ISO,
+  writeAuditEvent
+});
 
 console.log("ENV CHECK:", {
   accessCodeSet: Boolean(ACCESS_CODE),
