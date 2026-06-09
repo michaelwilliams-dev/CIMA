@@ -1879,6 +1879,7 @@ body {
     let latestStandardHtml = "";
     let latestTrainingHtml = "";
     let latestTrainingQuestionsHtml = "";
+    let latestTrainingQaHtml = "";
     let activeReplyView = "standard";
     let latestSources = [];
     let latestDashboard = null;
@@ -2490,22 +2491,49 @@ body {
         return;
       }
 
-      if (activeReplyView === "combined") {
+           if (activeReplyView === "combined") {
+        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+        if (latestTrainingQaHtml) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              ${latestTrainingQaHtml}
+              <button class="report-btn" type="button" onclick="generateTrainingQaOutput(this)">
+                Regenerate Training Questions and Answers
+              </button>
+            </div>
+          `;
+
+          document.getElementById("lastOutput").textContent = "Showing training questions and answers.";
+          return;
+        }
+
         replyArea.innerHTML = `
           <div class="message agent">
             <strong>Training Questions and Answers</strong>
             <p>No training question and answer set has been generated yet.</p>
-            <p>This tab will generate training questions together with model answers.</p>
-            <button class="report-btn" type="button" disabled>
+            <p>This tab will generate training questions together with model answers from the latest CIMA answer.</p>
+            <button
+              class="report-btn"
+              type="button"
+              onclick="generateTrainingQaOutput(this)"
+            >
               Generate Training Questions and Answers
             </button>
-            <p class="small-note">Backend route not connected yet.</p>
+            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
           </div>
         `;
 
-        document.getElementById("lastOutput").textContent = "Training questions and answers are not connected yet.";
-      }
-    }
+        document.getElementById("lastOutput").textContent = hasTrainingSource
+          ? "Training questions and answers are ready to generate."
+          : "Ask a CIMA question before generating training questions and answers.";
+
+        return;
+
+              }
+
+            }
 
     function setRightTab(value) {
       rightTab = value;
@@ -2822,6 +2850,107 @@ body {
         if (button) {
           button.disabled = false;
           button.textContent = "Generate Training Questions";
+        }
+      }
+    }
+
+    async function generateTrainingQaOutput(button) {
+      const replyArea = document.getElementById("replyArea");
+
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training questions and answers.";
+
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              <p>No completed CIMA question and answer is available for training Q&A yet.</p>
+            </div>
+          `;
+        }
+
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              <p>Generating training questions and answers...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-training-qa", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training questions and answers failed.");
+        }
+
+        latestTrainingQaHtml = data.qa?.html || `<pre>${escapeHtml(data.qa?.plain_text || "No training Q&A returned.")}</pre>`;
+
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              ${latestTrainingQaHtml}
+            </div>
+          `;
+        }
+
+        const trainingQaStatus = document.getElementById("deliveryTrainingQaStatus");
+        if (trainingQaStatus) {
+          trainingQaStatus.textContent = "Generated";
+          trainingQaStatus.className = "";
+        }
+
+        document.getElementById("lastOutput").textContent = "Training questions and answers generated.";
+      } catch (error) {
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              <p>Training questions and answers failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training questions and answers failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Questions and Answers";
         }
       }
     }
