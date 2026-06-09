@@ -55,7 +55,7 @@ import {
 import {
   buildTrainingSynopsis,
   getTrainingSynopsisAgentStatus
-} from "./agents/training_synopsis_agent.js";
+} from "./training/training_synopsis_agent.js";
 
 import {
   getSourceIndexAgentStatus
