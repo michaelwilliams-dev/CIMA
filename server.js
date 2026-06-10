@@ -78,6 +78,14 @@ import {
   registerTrainingQaRoute
 } from "./training/training_qa_route.js";
 
+import {
+  registerTrainerNotesRoute
+} from "./training/trainer_notes_route.js";
+
+import {
+  getSourceIndexAgentStatus
+} from "./source_index_agent.js";
+
 
 dotenv.config();
 
@@ -135,6 +143,11 @@ registerTrainingQuestionsRoute(app, {
 });
 
 registerTrainingQaRoute(app, {
+  BUILD_ISO,
+  writeAuditEvent
+});
+
+registerTrainerNotesRoute(app, {
   BUILD_ISO,
   writeAuditEvent
 });
