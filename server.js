@@ -86,6 +86,9 @@ import {
   getSourceIndexAgentStatus
 } from "./source_index_agent.js";
 
+import {
+  getFaissKnowledgeAgentStatus
+} from "./retrieval/faiss_knowledge_agent.js";
 
 dotenv.config();
 
@@ -235,6 +238,7 @@ app.get("/meta", (req, res) => {
     training_agent: getCimaTrainingAgentStatus(),
     training_synopsis_agent: getTrainingSynopsisAgentStatus(),
     source_index_agent: getSourceIndexAgentStatus(),
+    faiss_knowledge_agent: getFaissKnowledgeAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
     pdf_index_ready: false,
     html_index_ready: false,
