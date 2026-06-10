@@ -1,18 +1,19 @@
 /**
  * AIVS / PGB CIMA - Source Index Agent
  * File: source_index_agent.js
- * ISO Timestamp: 2026-06-10T13:55:00Z
+ * ISO Timestamp: 2026-06-10T16:40:00Z
  *
  * Purpose:
  * - Reports the current source/index status for the CIMA system.
  * - Keeps source-index logic outside server.js.
- * - Reports the real FAISS index and metadata files on the Render disk.
+ * - Reports the real FAISS index and JSONL chunk map on the Render disk.
  *
  * Change Log:
  * - v0.1.0: created controlled source index status agent.
  * - v0.2.0: tightened readiness checks to require controlled manifest files.
  * - v0.3.0: requires non-empty valid source manifest and retrieval_enabled true in index manifest.
  * - v0.4.0: reports real Render disk FAISS files at /mnt/data/faiss.index and /mnt/data/faiss_metadata.pkl.
+ * - v0.5.0: reports /mnt/data/faiss_chunks.jsonl and counts chunk records.
  *
  * ISO Control Notes:
  * - This agent reports file readiness only.
@@ -24,7 +25,7 @@
 import fs from "fs";
 import path from "path";
 
-const SOURCE_INDEX_AGENT_BUILD_ISO = "2026-06-10T13:55:00Z";
+const SOURCE_INDEX_AGENT_BUILD_ISO = "2026-06-10T16:40:00Z";
 
 const DEFAULT_SOURCE_ROOT = process.env.CIMA_SOURCE_ROOT || "/mnt/data/cima_sources";
 const DEFAULT_INDEX_ROOT = process.env.CIMA_INDEX_ROOT || "/mnt/data/cima_index";
@@ -44,6 +45,10 @@ const FAISS_INDEX_PATH =
 const FAISS_METADATA_PATH =
   process.env.CIMA_FAISS_METADATA_PATH ||
   "/mnt/data/faiss_metadata.pkl";
+
+const FAISS_CHUNKS_JSONL_PATH =
+  process.env.CIMA_FAISS_CHUNKS_JSONL_PATH ||
+  "/mnt/data/faiss_chunks.jsonl";
 
 function fileExists(filePath = "") {
   try {
@@ -154,15 +159,7 @@ function countJsonlRecords(filePath = "") {
     return raw
       .split("\n")
       .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((line) => {
-        try {
-          JSON.parse(line);
-          return true;
-        } catch {
-          return false;
-        }
-      }).length;
+      .filter(Boolean).length;
   } catch {
     return 0;
   }
@@ -176,11 +173,13 @@ export function getSourceIndexAgentStatus() {
 
   const faissIndexStatus = safeStat(FAISS_INDEX_PATH);
   const faissMetadataStatus = safeStat(FAISS_METADATA_PATH);
+  const faissChunksJsonlStatus = safeStat(FAISS_CHUNKS_JSONL_PATH);
 
   const sourceFileCount = countFilesInDirectory(DEFAULT_SOURCE_ROOT);
   const indexFileCount = countFilesInDirectory(DEFAULT_INDEX_ROOT);
 
   const sourceManifestRecordCount = countJsonlRecords(SOURCE_MANIFEST_PATH);
+  const chunkCount = countJsonlRecords(FAISS_CHUNKS_JSONL_PATH);
   const indexManifestRead = readJsonFile(INDEX_MANIFEST_PATH);
 
   const manifestRetrievalEnabled =
@@ -198,23 +197,27 @@ export function getSourceIndexAgentStatus() {
     faissMetadataStatus.type === "file" &&
     faissMetadataStatus.size_bytes > 0;
 
+  const faiss_chunks_jsonl_ready =
+    faissChunksJsonlStatus.exists &&
+    faissChunksJsonlStatus.type === "file" &&
+    faissChunksJsonlStatus.size_bytes > 0 &&
+    chunkCount > 0;
+
   const faiss_files_ready =
     faiss_index_ready &&
-    faiss_metadata_ready;
+    faiss_chunks_jsonl_ready;
 
-  const source_ready = faiss_metadata_ready;
-
+  const source_ready = faiss_chunks_jsonl_ready;
   const index_ready = faiss_index_ready;
 
   const retrieval_enabled = false;
-
   const retrieval_ready = false;
 
   return {
     ok: true,
     agent: "source_index_agent",
     source_index_agent_build_iso: SOURCE_INDEX_AGENT_BUILD_ISO,
-    mode: "faiss-files-detected-status-only",
+    mode: "faiss-index-and-jsonl-detected-status-only",
 
     source_root: DEFAULT_SOURCE_ROOT,
     index_root: DEFAULT_INDEX_ROOT,
@@ -223,6 +226,7 @@ export function getSourceIndexAgentStatus() {
 
     faiss_index_path: FAISS_INDEX_PATH,
     faiss_metadata_path: FAISS_METADATA_PATH,
+    faiss_chunks_jsonl_path: FAISS_CHUNKS_JSONL_PATH,
 
     source_root_status: sourceRootStatus,
     index_root_status: indexRootStatus,
@@ -231,10 +235,13 @@ export function getSourceIndexAgentStatus() {
 
     faiss_index_status: faissIndexStatus,
     faiss_metadata_status: faissMetadataStatus,
+    faiss_chunks_jsonl_status: faissChunksJsonlStatus,
 
     source_file_count: sourceFileCount,
     index_file_count: indexFileCount,
     source_manifest_record_count: sourceManifestRecordCount,
+
+    chunk_count: chunkCount,
 
     index_manifest_valid: indexManifestRead.ok,
     index_manifest_error: indexManifestRead.error,
@@ -242,6 +249,7 @@ export function getSourceIndexAgentStatus() {
 
     faiss_index_ready,
     faiss_metadata_ready,
+    faiss_chunks_jsonl_ready,
     faiss_files_ready,
 
     source_ready,
@@ -250,8 +258,8 @@ export function getSourceIndexAgentStatus() {
     retrieval_ready,
 
     note: faiss_files_ready
-      ? "FAISS files are present on /mnt/data. Retrieval is not yet wired into /cima-chat."
-      : "FAISS files are not fully present. Retrieval is not connected."
+      ? "FAISS index and JSONL chunk map are present on /mnt/data. Retrieval is not yet wired into /cima-chat."
+      : "FAISS index and JSONL chunk map are not fully present. Retrieval is not connected."
   };
 }
 
@@ -265,12 +273,13 @@ export function getSourceIndexReadinessSummary() {
     source_ready: status.source_ready,
     index_ready: status.index_ready,
     faiss_index_ready: status.faiss_index_ready,
-    faiss_metadata_ready: status.faiss_metadata_ready,
+    faiss_chunks_jsonl_ready: status.faiss_chunks_jsonl_ready,
     faiss_files_ready: status.faiss_files_ready,
+    chunk_count: status.chunk_count,
     retrieval_enabled: status.retrieval_enabled,
     retrieval_ready: status.retrieval_ready,
     summary: status.faiss_files_ready
-      ? "FAISS files are present. Retrieval wiring is the next step."
-      : "FAISS files are not ready."
+      ? "FAISS index and JSONL chunk map are present. Retrieval wiring is the next step."
+      : "FAISS index and JSONL chunk map are not ready."
   };
 }
