@@ -2671,18 +2671,16 @@ body {
           trainingSynopsisStatus.className = "";
         }
 
+        const trainingSynopsisStep = document.getElementById("processStepTrainingSynopsis");
+        if (trainingSynopsisStep) {
+          trainingSynopsisStep.className = "process-step active";
+        }
         const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
         if (trainingQuestionsStatus) {
           trainingQuestionsStatus.textContent = "Generated";
           trainingQuestionsStatus.className = "";
         }
-
-        const trainingQaStatus = document.getElementById("deliveryTrainingQaStatus");
-        if (trainingQaStatus) {
-          trainingQaStatus.textContent = "Generated";
-          trainingQaStatus.className = "";
-        }
-
+ 
         document.getElementById("lastOutput").textContent = "CIMA training output generated.";
       
       } catch (error) {
@@ -2780,6 +2778,11 @@ body {
           trainingSynopsisStatus.className = "";
         }
 
+        const trainingSynopsisStep = document.getElementById("processStepTrainingSynopsis");
+        if (trainingSynopsisStep) {
+          trainingSynopsisStep.className = "process-step active";
+        }
+
         document.getElementById("lastOutput").textContent = "Training synopsis generated.";
       } catch (error) {
         if (activeReplyView === "synopsis" && replyArea) {
@@ -2875,11 +2878,16 @@ body {
           `;
         }
 
-        const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
-        if (trainingQuestionsStatus) {
-          trainingQuestionsStatus.textContent = "Generated";
-          trainingQuestionsStatus.className = "";
-        }
+      const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
+      if (trainingQuestionsStatus) {
+        trainingQuestionsStatus.textContent = "Generated";
+        trainingQuestionsStatus.className = "";
+      }
+
+      const trainingQuestionsStep = document.getElementById("processStepTrainingQuestions");
+      if (trainingQuestionsStep) {
+        trainingQuestionsStep.className = "process-step active";
+      }
 
         document.getElementById("lastOutput").textContent = "Training questions generated.";
       } catch (error) {
