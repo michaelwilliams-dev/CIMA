@@ -1497,134 +1497,40 @@ body {
         <div class="context-box">
           <h3>CIMA Context</h3>
 
-          <div class="field">
-            <label for="modeSelect">Mode</label>
-            <select id="modeSelect" onchange="updateContextFromControls()">
-              <option value="">N/A</option>
-              <option value="Ops / Live / Time-critical">Ops / Live / Time-critical</option>
-              <option value="Planning">Planning</option>
-              <option value="Training / Exercise">Training / Exercise</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="levelSelect">Command level</label>
-            <select id="levelSelect" onchange="updateContextFromControls()">
-              <option value="">N/A</option>
-              <option value="Gold / Strategic">Gold / Strategic</option>
-              <option value="Silver / Tactical">Silver / Tactical</option>
-              <option value="Bronze / Operational">Bronze / Operational</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="personaSelect">Persona</label>
-            <select id="personaSelect" onchange="updateContextFromControls()">
-              <option value="">N/A</option>
-              <option value="No persona requested">No persona requested</option>
-              <option value="Role view requested">Role view requested</option>
-              <option value="Persona view requested">Persona view requested</option>
-              <option value="Governance / Board view">Governance / Board view</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="outputSelect">Requested output</label>
-            <select id="outputSelect" onchange="updateContextFromControls()">
-              <option value="">N/A</option>
-              <option value="Decision support">Decision support</option>
-              <option value="Options / controls">Options / controls</option>
-              <option value="Risk and safety summary">Risk and safety summary</option>
-              <option value="Internal comms draft">Internal comms draft</option>
-              <option value="External / media line">External / media line</option>
-              <option value="Assurance / citation check">Assurance / citation check</option>
-              <option value="Versioned report">Versioned report</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="fromYear">Evidence from</label>
-            <select
-              id="fromYear"
-              onchange="
-                const from = document.getElementById('fromYear');
-                const to = document.getElementById('toYear');
-
-                if (Number(from.value) > Number(to.value)) {
-                  from.value = to.value;
-                }
-
-                document.getElementById('fromYearLabel').textContent = from.value;
-                document.getElementById('toYearLabel').textContent = to.value;
-                document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
-              "
-            >
-              <option value="2010">2010</option>
-              <option value="2011">2011</option>
-              <option value="2012">2012</option>
-              <option value="2013">2013</option>
-              <option value="2014">2014</option>
-              <option value="2015">2015</option>
-              <option value="2016">2016</option>
-              <option value="2017">2017</option>
-              <option value="2018">2018</option>
-              <option value="2019">2019</option>
-              <option value="2020">2020</option>
-              <option value="2021">2021</option>
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="toYear">Evidence to</label>
-            <select
-              id="toYear"
-              onchange="
-                const from = document.getElementById('fromYear');
-                const to = document.getElementById('toYear');
-
-                if (Number(to.value) < Number(from.value)) {
-                  to.value = from.value;
-                }
-
-                document.getElementById('fromYearLabel').textContent = from.value;
-                document.getElementById('toYearLabel').textContent = to.value;
-                document.getElementById('evidenceRangeText').textContent = from.value + ' to ' + to.value;
-              "
-            >
-              <option value="2010">2010</option>
-              <option value="2011">2011</option>
-              <option value="2012">2012</option>
-              <option value="2013">2013</option>
-              <option value="2014">2014</option>
-              <option value="2015">2015</option>
-              <option value="2016">2016</option>
-              <option value="2017">2017</option>
-              <option value="2018">2018</option>
-              <option value="2019">2019</option>
-              <option value="2020">2020</option>
-              <option value="2021">2021</option>
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026" selected>2026</option>
-            </select>
-          </div>
-
-          <p style="margin: 6px 0 0 0; color: var(--muted); font-size: 13px;">
-            Evidence search range: <strong id="evidenceRangeText">2010 to 2026</strong>
+          <p style="margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45;">
+            Context defaults are held in the background.
           </p>
 
-          <span id="fromYearLabel" style="display:none;">2010</span>
-          <span id="toYearLabel" style="display:none;">2026</span>
+          <div style="display:none;">
+            <select id="modeSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
 
+            <select id="levelSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
+
+            <select id="personaSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
+
+            <select id="outputSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
+
+            <select id="fromYear" onchange="updateContextFromControls()">
+              <option value="2010" selected>2010</option>
+            </select>
+
+            <select id="toYear" onchange="updateContextFromControls()">
+              <option value="2026" selected>2026</option>
+            </select>
+
+            <strong id="evidenceRangeText">2010 to 2026</strong>
+            <span id="fromYearLabel">2010</span>
+            <span id="toYearLabel">2026</span>
           </div>
-
+        </div>
 
           <div class="cima-process-card">
             <h3>Delivery Status</h3>
@@ -1734,7 +1640,7 @@ body {
       <div class="centre-workspace">
         <div class="ask-card">
           <h2>Ask CIMA</h2>
-          <p>Use the context selectors, then ask a clear operational, planning or assurance question.</p>
+          <p>Ask a clear operational, planning or assurance question.</p>
 
           <div class="clear-composer">
             <textarea id="questionInput" placeholder="Ask CIMA a question..."></textarea>
