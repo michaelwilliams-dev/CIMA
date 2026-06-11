@@ -1069,14 +1069,25 @@
       overflow: visible;
     }
 
-     .output-tabs .answer-tab {
-        width: 100%;
-        text-align: left;
-        white-space: normal;
-        padding: 5px 0;
-        font-size: 20px;
-        line-height: 1.2;
-        font-weight: 900;
+    .output-tabs .answer-tab {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: #c7b69f;
+      color: #ffffff;
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 4px;
+      text-align: center;
+      padding: 8px 10px;
+    }
+
+    .output-tabs .answer-tab.active {
+      background: var(--orange);
+      color: #17242d;
     }
     
 
