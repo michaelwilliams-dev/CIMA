@@ -1069,15 +1069,16 @@
       overflow: visible;
     }
 
-    .output-tabs .answer-tab {
-      width: 100%;
-      text-align: left;
-      white-space: normal;
-      padding: 5px 0;
-      font-size: 14px;
-      line-height: 1.25;
-      font-weight: 700;
+     .output-tabs .answer-tab {
+        width: 100%;
+        text-align: left;
+        white-space: normal;
+        padding: 5px 0;
+        font-size: 20px;
+        line-height: 1.2;
+        font-weight: 900;
     }
+    
 
     .source-search {
       margin: 0 42px 18px 42px;
@@ -1130,6 +1131,13 @@
       cursor: pointer;
       margin-top: 4px;
       text-align: center;
+    }
+
+    .source-view .output-tabs .answer-tab:disabled {
+      background: #c7b69f;
+      color: #ffffff;
+      cursor: not-allowed;
+      opacity: 0.7;
     }
 
     #emailCimaAnswerPanel > p:first-child strong,
@@ -3151,8 +3159,9 @@ body {
 
             <button
               id="emailCimaAnswerTab"
-              class="answer-tab active"
+              class="answer-tab ${transcriptEntries.length ? "active" : ""}"
               type="button"
+              ${transcriptEntries.length ? "" : "disabled"}
               onclick="
                 document.getElementById('emailCimaAnswerTab').classList.add('active');
                 document.getElementById('emailSynopsisTab').classList.remove('active');
@@ -3172,6 +3181,7 @@ body {
               id="emailSynopsisTab"
               class="answer-tab"
               type="button"
+              ${latestTrainingHtml ? "" : "disabled"}
               onclick="
                 document.getElementById('emailCimaAnswerTab').classList.remove('active');
                 document.getElementById('emailSynopsisTab').classList.add('active');
@@ -3191,6 +3201,7 @@ body {
               id="emailQuestionsTab"
               class="answer-tab"
               type="button"
+              ${latestTrainingQuestionsHtml ? "" : "disabled"}
               onclick="
                 document.getElementById('emailCimaAnswerTab').classList.remove('active');
                 document.getElementById('emailSynopsisTab').classList.remove('active');
@@ -3210,6 +3221,7 @@ body {
               id="emailCombinedTab"
               class="answer-tab"
               type="button"
+              ${latestTrainingQaHtml ? "" : "disabled"}
               onclick="
                 document.getElementById('emailCimaAnswerTab').classList.remove('active');
                 document.getElementById('emailSynopsisTab').classList.remove('active');
