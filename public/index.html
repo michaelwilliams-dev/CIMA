@@ -970,7 +970,9 @@
     }
 
     .right-header {
-      min-height: 62px;
+      height: 96px;
+      min-height: 96px;
+      flex: 0 0 96px;
       border-bottom: 1.5px solid var(--soft-border);
       display: flex;
       align-items: center;
@@ -978,6 +980,8 @@
       gap: 10px;
       padding: 0 28px;
       background: var(--panel-bg);
+      border-top-left-radius: var(--radius);
+      border-top-right-radius: var(--radius);
     }
 
     .right-header h2 {
@@ -1333,12 +1337,19 @@ body {
 
 /* Let the three columns grow naturally */
 .left-panel,
-.centre-panel,
-.right-panel {
+.centre-panel {
   height: auto !important;
   min-height: 0 !important;
   align-self: stretch !important;
   overflow: visible !important;
+}
+
+.right-panel {
+  height: auto !important;
+  min-height: 0 !important;
+  align-self: stretch !important;
+  overflow: hidden !important;
+  border-radius: var(--radius) !important;
 }
 
 /* Remove inner scroll traps */
