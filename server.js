@@ -87,9 +87,9 @@ import {
 } from "./source_index_agent.js";
 
 import {
-  getFaissKnowledgeAgentStatus
+  getFaissKnowledgeAgentStatus,
+  searchFaissKnowledgeByKeyword
 } from "./retrieval/faiss_knowledge_agent.js";
-
 dotenv.config();
 
 const app = express();
@@ -492,9 +492,16 @@ app.post("/cima-chat", async (req, res) => {
       user_agent: req.get("user-agent")
     });
 
+    
+    const knowledgeSearch = await searchFaissKnowledgeByKeyword(question, {
+      maxResults: 5,
+      maxLines: 5000
+    });
+
     const cimaResponse = buildCimaResponse({
       question,
-      context
+      context,
+      knowledgeSearch
     });
 
     await writeAuditEvent({
