@@ -1364,14 +1364,20 @@ body {
   border-radius: var(--radius) !important;
 }
 
-/* Remove inner scroll traps */
+/* Remove inner scroll traps but keep centre content contained */
 .left-scroll,
-.centre-workspace,
-.reply-card,
 .right-body,
 .status-area {
   overflow: visible !important;
   max-height: none !important;
+}
+
+.centre-workspace,
+.reply-card {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 
 
