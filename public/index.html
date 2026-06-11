@@ -2791,8 +2791,9 @@ body {
         if (trainingSynopsisStep) {
           trainingSynopsisStep.className = "process-step active";
         }
-
         document.getElementById("lastOutput").textContent = "Training synopsis generated.";
+        renderRightView();
+        
       } catch (error) {
         if (activeReplyView === "synopsis" && replyArea) {
           replyArea.innerHTML = `
@@ -2899,6 +2900,7 @@ body {
       }
 
         document.getElementById("lastOutput").textContent = "Training questions generated.";
+        renderRightView();
       } catch (error) {
         if (activeReplyView === "questions" && replyArea) {
           replyArea.innerHTML = `
@@ -3000,6 +3002,7 @@ body {
         }
 
         document.getElementById("lastOutput").textContent = "Training questions and answers generated.";
+        renderRightView();
       } catch (error) {
         if (activeReplyView === "combined" && replyArea) {
           replyArea.innerHTML = `
