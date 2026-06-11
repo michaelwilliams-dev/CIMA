@@ -1228,6 +1228,14 @@
       display: none !important;
     }
 
+    /* AIVS controlled UI simplification
+      Hide Sources and Audit tabs from the visible interface.
+      Do not delete IDs, JavaScript functions, backend routes, or data connections. */
+    #sourcesTab,
+    #auditTab {
+      display: none !important;
+    }
+
   /* AIVS title size alignment — CIMA Context, Process Status, Delivery Status */
     .context-box h3,
     .cima-process-card h3,
@@ -1808,11 +1816,8 @@ body {
       </div>
 
       <div class="right-body">
-        <div class="answer-tabs">
+      <div class="answer-tabs">
         <button id="threadTab" class="answer-tab active" type="button" onclick="setRightTab('thread')">Email</button>
-   
-        <button id="sourcesTab" class="answer-tab" type="button" onclick="setRightTab('sources')">Sources</button>
-        <button id="auditTab" class="answer-tab" type="button" onclick="setRightTab('audit')">Audit</button>
       </div>
 
         <div id="sourceSearchWrap" class="source-search hidden">
