@@ -974,18 +974,19 @@
       border-bottom: 1.5px solid var(--soft-border);
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 10px;
+      padding: 0 28px;
       background: var(--panel-bg);
     }
 
-      .right-header h2 {
-        margin: 0;
-        color: var(--ink);
-        font-size: 28px;
-        font-weight: 900;
-        line-height: 1;
-      }
+    .right-header h2 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1;
+    }
 
     .right-header span {
       color: var(--muted);
@@ -996,6 +997,7 @@
       flex: 1;
       overflow-y: auto;
       background: var(--panel-bg);
+      padding-top: 40px;
     }
 
     .source-tabs {
@@ -1111,10 +1113,18 @@
       font-weight: 900;
     }
 
-    .right-body > .answer-tabs .answer-tab {
+    .source-view .output-tabs .answer-tab {
       font-size: 20px;
       line-height: 1.2;
       font-weight: 900;
+    }
+
+    #emailCimaAnswerPanel > p:first-child strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 900;
+      color: var(--ink);
     }
 
     .source-view p {
