@@ -1505,7 +1505,7 @@ body {
             <button
               class="report-btn"
               type="button"
-              onclick="setReplyView('standard')"
+              onclick="setCimaMode()"
             >
               Advisor
             </button>
@@ -1513,7 +1513,7 @@ body {
             <button
               class="report-btn"
               type="button"
-              onclick="setReplyView('synopsis')"
+              onclick="setTrainingMode()"
             >
               Training
             </button>
@@ -1668,26 +1668,30 @@ body {
           <h2>Reply</h2>
 
           <div class="output-tabs">
-          <button id="replyStandardTab" class="answer-tab active" type="button" onclick="setReplyView('standard')">
-            CIMA Answer
-          </button>
+            <button id="replyStandardTab" class="answer-tab active cima-mode-tab" type="button" onclick="setReplyView('standard')">
+              CIMA Answer
+            </button>
 
-          <button id="replySynopsisTab" class="answer-tab" type="button" onclick="setReplyView('synopsis')">
-            Training Synopsis
-          </button>
+            <button id="replyReturnCimaTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setCimaMode()">
+              Return to CIMA
+            </button>
 
-          <button id="replyQuestionsTab" class="answer-tab" type="button" onclick="setReplyView('questions')">
-            Training Questions
-          </button>
+            <button id="replySynopsisTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('synopsis')">
+              Training Synopsis
+            </button>
 
-          <button id="replyCombinedTab" class="answer-tab" type="button" onclick="setReplyView('combined')">
-            Training Questions and Answers
-          </button>
+            <button id="replyQuestionsTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('questions')">
+              Training Questions
+            </button>
 
-          <button id="replyTrainerNotesTab" class="answer-tab" type="button" onclick="setReplyView('trainerNotes')">
-            Trainer Notes
-          </button>
-        </div>
+            <button id="replyCombinedTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('combined')">
+              Training Questions and Answers
+            </button>
+
+            <button id="replyTrainerNotesTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('trainerNotes')">
+              Trainer Notes
+            </button>
+          </div>
         
           <div id="responseDashboard" class="response-dashboard">
             <div class="dashboard-title">CIMA Response Dashboard</div>
@@ -2507,7 +2511,33 @@ body {
       }
     }
 
-   
+       function setCimaMode() {
+      document.querySelectorAll(".training-mode-tab").forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("active");
+      });
+
+      document.querySelectorAll(".cima-mode-tab").forEach((el) => {
+        el.classList.remove("hidden");
+      });
+
+      setReplyView("standard");
+      document.getElementById("lastOutput").textContent = "Advisor mode selected.";
+    }
+
+    function setTrainingMode() {
+      document.querySelectorAll(".cima-mode-tab").forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("active");
+      });
+
+      document.querySelectorAll(".training-mode-tab").forEach((el) => {
+        el.classList.remove("hidden");
+      });
+
+      setReplyView("synopsis");
+      document.getElementById("lastOutput").textContent = "Training mode selected.";
+    }
 
     function setRightTab(value) {
       rightTab = value;
