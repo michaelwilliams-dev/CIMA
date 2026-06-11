@@ -3247,37 +3247,45 @@ body {
             <p class="small-note">Full Q&amp;A included: ${includeTranscript ? "Yes" : "No"}</p>
           </div>
 
-          <div id="emailSynopsisPanel" class="hidden">
+                    <div id="emailSynopsisPanel" class="hidden">
             <p><strong>Training Synopsis</strong></p>
             <p>Send the generated training synopsis.</p>
 
-            <button class="report-btn" type="button" disabled>
-              Send Training Synopsis
-            </button>
-
-            <p class="small-note">Generate the training synopsis before sending.</p>
+            ${latestTrainingHtml ? `
+              <button class="report-btn" type="button" disabled>
+                Send Training Synopsis
+              </button>
+            ` : `
+              <p class="small-note">Generate the training synopsis before sending.</p>
+            `}
           </div>
 
           <div id="emailQuestionsPanel" class="hidden">
             <p><strong>Training Questions</strong></p>
             <p>Send the generated training questions.</p>
 
-            <button class="report-btn" type="button" disabled>
-              Send Training Questions
-            </button>
-
-            <p class="small-note">Generate the training questions before sending.</p>
+            ${latestTrainingQuestionsHtml ? `
+              <button class="report-btn" type="button" disabled>
+                Send Training Questions
+              </button>
+            ` : `
+              <p class="small-note">Generate the training questions before sending.</p>
+            `}
           </div>
+
+         
 
           <div id="emailCombinedPanel" class="hidden">
             <p><strong>Training Questions and Answers</strong></p>
             <p>Send the generated training questions and model answers.</p>
 
-            <button class="report-btn" type="button" disabled>
-              Send Training Questions and Answers
-            </button>
-
-            <p class="small-note">Generate the training questions and answers before sending.</p>
+            ${latestTrainingQaHtml ? `
+              <button class="report-btn" type="button" disabled>
+                Send Training Questions and Answers
+              </button>
+            ` : `
+              <p class="small-note">Generate the training questions and answers before sending.</p>
+            `}
           </div>
         `;
 
