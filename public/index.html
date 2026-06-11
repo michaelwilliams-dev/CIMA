@@ -1742,24 +1742,45 @@ body {
               Return to CIMA
             </button>
 
-            <button id="replySynopsisTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('synopsis')">
-              Training Synopsis
-            </button>
+            <button
+            id="replySynopsisTab"
+            class="answer-tab hidden training-mode-tab"
+            type="button"
+            onclick="setReplyView('synopsis'); if (!latestTrainingHtml) generateTrainingSynopsisOutput(this);"
+          >
+            Training Synopsis
+          </button>
 
-            <button id="replyQuestionsTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('questions')">
+            <button
+              id="replyQuestionsTab"
+              class="answer-tab hidden training-mode-tab"
+              type="button"
+              onclick="setReplyView('questions'); if (!latestTrainingQuestionsHtml) generateTrainingQuestionsOutput(this);"
+            >
               Training Questions
             </button>
 
-            <button id="replyCombinedTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('combined')">
-              Training Questions and Answers
-            </button>
+            <button
+            id="replyCombinedTab"
+            class="answer-tab hidden training-mode-tab"
+            type="button"
+            onclick="setReplyView('combined'); if (!latestTrainingQaHtml) generateTrainingQaOutput(this);"
+          >
+            Training Questions and Answers
+          </button>
 
-            <button id="replyTrainerNotesTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setReplyView('trainerNotes')">
-              Trainer Notes
-            </button>
+          <button
+            id="replyTrainerNotesTab"
+            class="answer-tab hidden training-mode-tab"
+            type="button"
+            onclick="setReplyView('trainerNotes'); if (!latestTrainerNotesHtml) generateTrainerNotesOutput(this);"
+          >
+            Trainer Notes
+          </button>
           </div>
-        
+
           <div id="responseDashboard" class="response-dashboard">
+            
             <div class="dashboard-title">CIMA Response Dashboard</div>
             <div class="dashboard-grid">
               <div class="dash-card">
@@ -2410,88 +2431,69 @@ body {
       }
 
        if (activeReplyView === "synopsis") {
-        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+  const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
 
-        if (latestTrainingHtml) {
-          replyArea.innerHTML = `
-            <div class="message agent">
-              <strong>Training Synopsis</strong>
-              ${latestTrainingHtml}
-              <button class="report-btn" type="button" onclick="generateTrainingSynopsisOutput(this)">
-                Regenerate Training Synopsis
-              </button>
-            </div>
-          `;
+  if (latestTrainingHtml) {
+    replyArea.innerHTML = `
+      <div class="message agent">
+        <strong>Training Synopsis</strong>
+        ${latestTrainingHtml}
+      </div>
+    `;
 
-          document.getElementById("lastOutput").textContent = "Showing training synopsis.";
-          return;
-        }
+    document.getElementById("lastOutput").textContent = "Showing training synopsis.";
+    return;
+  }
 
-        replyArea.innerHTML = `
-          <div class="message agent">
-            <strong>Training Synopsis</strong>
-            <p>No training synopsis has been generated yet.</p>
-            <p>This tab will generate and display a short training synopsis based on the latest CIMA answer.</p>
-            <button
-              class="report-btn"
-              type="button"
-              onclick="generateTrainingSynopsisOutput(this)"
-            >
-              Generate Training Synopsis
-            </button>
-            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
-          </div>
-        `;
+  replyArea.innerHTML = `
+    <div class="message agent">
+      <strong>Training Synopsis</strong>
+      <p>No training synopsis has been generated yet.</p>
+      <p>Click the Training Synopsis button above to generate it from the latest CIMA answer.</p>
+      <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+    </div>
+  `;
 
-        document.getElementById("lastOutput").textContent = hasTrainingSource
-          ? "Training synopsis is ready to generate."
-          : "Ask a CIMA question before generating a training synopsis.";
+  document.getElementById("lastOutput").textContent = hasTrainingSource
+    ? "Training synopsis is ready to generate."
+    : "Ask a CIMA question before generating a training synopsis.";
 
-        return;
-      }
+  return;
+}
 
-      if (activeReplyView === "questions") {
-        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
 
-        if (latestTrainingQuestionsHtml) {
-          replyArea.innerHTML = `
-            <div class="message agent">
-              <strong>Training Questions</strong>
-              ${latestTrainingQuestionsHtml}
-              <button class="report-btn" type="button" onclick="generateTrainingQuestionsOutput(this)">
-                Regenerate Training Questions
-              </button>
-            </div>
-          `;
+    if (activeReplyView === "questions") {
+      const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
 
-          document.getElementById("lastOutput").textContent = "Showing training questions.";
-          return;
-        }
-
+      if (latestTrainingQuestionsHtml) {
         replyArea.innerHTML = `
           <div class="message agent">
             <strong>Training Questions</strong>
-            <p>No training questions have been generated yet.</p>
-            <p>This tab will generate training questions around the latest CIMA answer.</p>
-            <button
-              class="report-btn"
-              type="button"
-              onclick="generateTrainingQuestionsOutput(this)"
-            >
-              Generate Training Questions
-            </button>
-            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+            ${latestTrainingQuestionsHtml}
           </div>
         `;
 
-        document.getElementById("lastOutput").textContent = hasTrainingSource
-          ? "Training questions are ready to generate."
-          : "Ask a CIMA question before generating training questions.";
-
+        document.getElementById("lastOutput").textContent = "Showing training questions.";
         return;
       }
 
-           if (activeReplyView === "combined") {
+      replyArea.innerHTML = `
+        <div class="message agent">
+          <strong>Training Questions</strong>
+          <p>No training questions have been generated yet.</p>
+          <p>Click the Training Questions button above to generate them from the latest CIMA answer.</p>
+          <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+        </div>
+      `;
+
+      document.getElementById("lastOutput").textContent = hasTrainingSource
+        ? "Training questions are ready to generate."
+        : "Ask a CIMA question before generating training questions.";
+
+      return;
+    }
+
+      if (activeReplyView === "combined") {
         const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
 
         if (latestTrainingQaHtml) {
@@ -2499,9 +2501,6 @@ body {
             <div class="message agent">
               <strong>Training Questions and Answers</strong>
               ${latestTrainingQaHtml}
-              <button class="report-btn" type="button" onclick="generateTrainingQaOutput(this)">
-                Regenerate Training Questions and Answers
-              </button>
             </div>
           `;
 
@@ -2513,14 +2512,7 @@ body {
           <div class="message agent">
             <strong>Training Questions and Answers</strong>
             <p>No training question and answer set has been generated yet.</p>
-            <p>This tab will generate training questions together with model answers from the latest CIMA answer.</p>
-            <button
-              class="report-btn"
-              type="button"
-              onclick="generateTrainingQaOutput(this)"
-            >
-              Generate Training Questions and Answers
-            </button>
+            <p>Click the Training Questions and Answers button above to generate it from the latest CIMA answer.</p>
             <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
           </div>
         `;
@@ -2532,46 +2524,38 @@ body {
         return;
       }
 
-      if (activeReplyView === "trainerNotes") {
-        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+    if (activeReplyView === "trainerNotes") {
+      const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
 
-        if (latestTrainerNotesHtml) {
-          replyArea.innerHTML = `
-            <div class="message agent">
-              <strong>Trainer Notes</strong>
-              ${latestTrainerNotesHtml}
-              <button class="report-btn" type="button" onclick="generateTrainerNotesOutput(this)">
-                Regenerate Trainer Notes
-              </button>
-            </div>
-          `;
-
-          document.getElementById("lastOutput").textContent = "Showing trainer notes.";
-          return;
-        }
-
+      if (latestTrainerNotesHtml) {
         replyArea.innerHTML = `
           <div class="message agent">
             <strong>Trainer Notes</strong>
-            <p>No trainer notes have been generated yet.</p>
-            <p>This tab will generate facilitator notes from the latest CIMA answer.</p>
-            <button
-              class="report-btn"
-              type="button"
-              onclick="generateTrainerNotesOutput(this)"
-            >
-              Generate Trainer Notes
-            </button>
-            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+            ${latestTrainerNotesHtml}
           </div>
         `;
 
-        document.getElementById("lastOutput").textContent = hasTrainingSource
-          ? "Trainer notes are ready to generate."
-          : "Ask a CIMA question before generating trainer notes.";
-
+        document.getElementById("lastOutput").textContent = "Showing trainer notes.";
         return;
       }
+
+      replyArea.innerHTML = `
+        <div class="message agent">
+          <strong>Trainer Notes</strong>
+          <p>No trainer notes have been generated yet.</p>
+          <p>Click the Trainer Notes button above to generate them from the latest CIMA answer.</p>
+          <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+        </div>
+      `;
+
+      document.getElementById("lastOutput").textContent = hasTrainingSource
+        ? "Trainer notes are ready to generate."
+        : "Ask a CIMA question before generating trainer notes.";
+
+      return;
+    }
+
+
     }
 
        function setCimaMode() {
