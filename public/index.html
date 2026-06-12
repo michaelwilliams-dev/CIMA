@@ -1652,11 +1652,12 @@ body {
                 </div>
               </div>
 
-              <div id="processStepContext" class="process-step active">
+              <div id="processStepContext" class="process-step muted">
                 <div class="process-marker">02</div>
                 <div class="process-copy">
-                  <strong>Context setup</strong>
-                  <span id="deliveryContextStatus" class="pending">Pending</span>
+                  <strong>Persona</strong>
+                  <span id="deliveryPersonaStatus" class="not-started">Not connected</span>
+                  <span id="deliveryContextStatus" class="pending" style="display:none;">Pending</span>
                 </div>
               </div>
 
@@ -1708,8 +1709,16 @@ body {
                 </div>
               </div>
 
-              <div id="processStepReview" class="process-step muted">
+              <div id="processStepTrainerNotes" class="process-step muted">
                 <div class="process-marker">09</div>
+                <div class="process-copy">
+                  <strong>Trainer Notes</strong>
+                  <span id="deliveryTrainerNotesStatus" class="not-started">Not generated</span>
+                </div>
+              </div>
+
+              <div id="processStepReview" class="process-step muted">
+                <div class="process-marker">10</div>
                 <div class="process-copy">
                   <strong>Human review</strong>
                   <span id="deliveryReviewStatus" class="pending">Required</span>
