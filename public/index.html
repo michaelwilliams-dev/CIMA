@@ -2258,15 +2258,24 @@ body {
         context.persona !== "N/A" ||
         context.output !== "N/A";
 
-      const deliveryContextStatus = document.getElementById("deliveryContextStatus");
+      const deliveryPersonaStatus = document.getElementById("deliveryPersonaStatus");
+      const personaStep = document.getElementById("processStepContext");
 
-      if (deliveryContextStatus) {
-        if (hasContext) {
-          deliveryContextStatus.textContent = "Confirmed";
-          deliveryContextStatus.className = "";
+      if (deliveryPersonaStatus) {
+        if (context.persona && context.persona !== "N/A") {
+          deliveryPersonaStatus.textContent = "Connected";
+          deliveryPersonaStatus.className = "";
+
+          if (personaStep) {
+            personaStep.className = "process-step active";
+          }
         } else {
-          deliveryContextStatus.textContent = "Pending";
-          deliveryContextStatus.className = "pending";
+          deliveryPersonaStatus.textContent = "Not connected";
+          deliveryPersonaStatus.className = "not-started";
+
+          if (personaStep) {
+            personaStep.className = "process-step muted";
+          }
         }
       }
 
@@ -3551,8 +3560,9 @@ body {
       document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
       document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
 
-      document.getElementById("processStepAccess").className = "process-step muted";
-      document.getElementById("processStepContext").className = "process-step muted";
+      document.getElementById("processStepAccess").className = "process-step active";
+      document.getElementById("processStepContext").className = "process-step active";
+      document.getElementById("processStepQuestion").className = "process-step active";
       document.getElementById("processStepResponse").className = "process-step active";
       document.getElementById("processStepDelivery").className = "process-step muted";
 
