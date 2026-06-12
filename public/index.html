@@ -3719,11 +3719,11 @@ body {
           headers: {
             "Content-Type": "application/json"
           },
+
           body: JSON.stringify({
             emails,
             subject: "PGB CIMA transcript",
             generated_at: new Date().toISOString(),
-            context: getContext(),
             include_transcript_in_email: includeTranscript,
             questions: includeTranscript ? transcriptEntries : transcriptEntries.map((entry) => ({
               at: entry.at,
