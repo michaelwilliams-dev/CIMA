@@ -1584,12 +1584,16 @@ body {
             </button>
 
             <button
-              class="report-btn"
-              type="button"
-              onclick="setTrainingMode()"
-            >
+            id="trainingModeBtn"
+            class="report-btn"
+            type="button"
+            onclick="setTrainingMode()"
+            disabled
+          >
+            
               Training
             </button>
+            
 
             <button
               class="report-btn"
@@ -3530,6 +3534,18 @@ body {
 
       addMessage("user", "You", `<p>${escapeHtml(question)}</p>`);
 
+      const replyArea = document.getElementById("replyArea");
+      const searchNotice = document.createElement("div");
+      searchNotice.id = "cimaSearchNotice";
+      searchNotice.className = "message agent";
+      searchNotice.innerHTML = `
+        <strong>CIMA Search</strong>
+        <p>Searching the CIMA database and preparing the response...</p>
+      `;
+
+      replyArea.appendChild(searchNotice);
+      replyArea.scrollTop = replyArea.scrollHeight;
+
       let answer = "";
       let finalPath = predictedPath;
       let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
@@ -3589,6 +3605,11 @@ body {
 
       latestAnswer = answer;
 
+      const trainingModeBtn = document.getElementById("trainingModeBtn");
+      if (trainingModeBtn) {
+        trainingModeBtn.disabled = false;
+      }
+
       document.getElementById("pathStatus").textContent = finalPath;
       document.getElementById("hitlStatus").textContent = hitl;
       document.getElementById("confidenceStatus").textContent = confidence;
@@ -3605,6 +3626,8 @@ body {
         <p><strong>Path:</strong> ${escapeHtml(finalPath)}</p>
         ${markdownToHtml(answer)}
       `;
+
+      document.getElementById("cimaSearchNotice")?.remove();
 
       addMessage(
         "agent",
@@ -3750,12 +3773,20 @@ body {
     function clearSession() {
       questions = [];
       transcriptEntries = [];
+
       latestAnswer = "";
       latestStandardHtml = "";
       latestTrainingHtml = "";
       activeReplyView = "standard";
+
+      const trainingModeBtn = document.getElementById("trainingModeBtn");
+      if (trainingModeBtn) {
+        trainingModeBtn.disabled = true;
+      }
+
       latestSources = [];
       latestDashboard = null;
+
       document.getElementById("questionInput").value = "";
       document.getElementById("questionCount").textContent = "0";
       document.getElementById("pathStatus").textContent = "FAST PATH";
