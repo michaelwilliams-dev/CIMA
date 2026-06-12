@@ -225,23 +225,102 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     return answer;
   }
 
+  function extractUrl(text = "") {
+    const match = String(text || "").match(/SOURCE_URL:\s*(https?:\/\/\S+)/i);
+    return match ? match[1].trim() : "";
+  }
+
+  function cleanSourceTitle(source = {}, url = "") {
+    const rawFile = String(source.source_file || source.title || "").trim();
+
+    if (url.includes("gov.uk")) {
+      return "GOV.UK emergency planning guidance";
+    }
+
+    if (url.includes("npsa.gov.uk")) {
+      return "NPSA incident response guidance";
+    }
+
+    if (url.includes("ukresilienceacademy.org")) {
+      return "UK Resilience Academy material";
+    }
+
+    if (!rawFile) {
+      return "Retrieved CIMA source";
+    }
+
+    const fileName = rawFile.split("/").pop() || rawFile;
+    return fileName
+      .replace(/_/g, " ")
+      .replace(/\.txt$/i, "")
+      .trim();
+  }
+
+  function cleanSnippet(text = "") {
+    let cleaned = String(text || "");
+
+    cleaned = cleaned.replace(/^SOURCE_TITLE:[\s\S]*?CHUNK_INDEX:\s*\d+/i, "");
+    cleaned = cleaned.replace(/Cookies on GOV\.UK[\s\S]*?services\./i, "");
+    cleaned = cleaned.replace(/You have accepted additional cookies\.[\s\S]*?cookies\./i, "");
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+    if (cleaned.length > 650) {
+      cleaned = `${cleaned.slice(0, 650).trim()}...`;
+    }
+
+    return cleaned || "Relevant source material was retrieved, but no clean excerpt was available.";
+  }
+
+  const seen = new Set();
+  const cleanSources = [];
+
+  for (const source of sources) {
+    const url = extractUrl(source.snippet || "");
+    const key = url || source.source_file || source.chunk_id || "";
+
+    if (key && seen.has(key)) {
+      continue;
+    }
+
+    if (key) {
+      seen.add(key);
+    }
+
+    cleanSources.push({
+      title: cleanSourceTitle(source, url),
+      url,
+      snippet: cleanSnippet(source.snippet || "")
+    });
+
+    if (cleanSources.length >= 3) {
+      break;
+    }
+  }
+
+  if (cleanSources.length === 0) {
+    return answer;
+  }
+
   const sourceSections = [];
 
   sourceSections.push("");
-  sourceSections.push("## Retrieved Source Evidence");
+  sourceSections.push("## Sources Used");
   sourceSections.push(
-    "The following source material was retrieved from the CIMA knowledge index for this demo response."
+    "CIMA retrieved the following supporting material from the indexed knowledge base. These sources are for human review and should not be treated as a substitute for operational judgement."
   );
 
-  sources.slice(0, 5).forEach((source, index) => {
+  cleanSources.forEach((source, index) => {
     sourceSections.push("");
-    sourceSections.push(`### Source ${index + 1}`);
-    sourceSections.push(`- Chunk ID: ${source.chunk_id || "Not supplied"}`);
-    sourceSections.push(`- Source file: ${source.source_file || "Not supplied"}`);
-    sourceSections.push(`- Match score: ${source.score}`);
-    sourceSections.push("");
+    sourceSections.push(`### Source ${index + 1}: ${source.title}`);
 
-    sourceSections.push(source.snippet || "No snippet available.");
+    if (source.url) {
+      sourceSections.push(`- Public source: ${source.url}`);
+    }
+
+    sourceSections.push("- Relevance: Retrieved as supporting material for the incident response question.");
+    sourceSections.push("");
+    sourceSections.push("Extract:");
+    sourceSections.push(source.snippet);
   });
 
   return `${answer}\n${sourceSections.join("\n")}`;
