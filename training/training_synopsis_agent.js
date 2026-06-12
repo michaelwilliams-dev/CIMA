@@ -73,34 +73,63 @@ export function buildTrainingSynopsis({
   answer = "",
   context = {}
 } = {}) {
-  const cleanQuestion = trimText(question, 600);
-  const cleanAnswer = trimText(answer, 1600);
+  const cleanQuestion = trimText(question, 700);
 
   const lines = [];
 
-  lines.push("## Training Synopsis");
-  lines.push("This synopsis converts the latest CIMA response into a short training note for review, briefing or exercise preparation.");
-
-
-  lines.push("");
-  lines.push("## Training Focus");
-  lines.push("- Clarify the facts before moving to action.");
-  lines.push("- Separate known information from assumptions.");
-  lines.push("- Identify risk, ownership and next review point.");
-  lines.push("- Keep a clear audit trail of decisions.");
-  lines.push("- Escalate where life safety, safeguarding or public confidence may be affected.");
+  lines.push("## Exercise Purpose");
+  lines.push(
+    "This training synopsis turns the latest CIMA scenario into a structured learning note for briefing, rehearsal and review. It is designed to help trainees practise command judgement, fact-checking, risk assessment, partner coordination and decision logging."
+  );
 
   lines.push("");
-  lines.push("## Source Question");
-  lines.push(cleanQuestion || "No question supplied.");
+  lines.push("## Scenario Summary");
+  lines.push(
+    cleanQuestion || "No scenario question was supplied."
+  );
 
   lines.push("");
-  lines.push("## Source CIMA Answer Summary");
-  lines.push(cleanAnswer || "No CIMA answer supplied.");
+  lines.push("## Learning Focus");
+  lines.push("- Establish a single working picture before moving to action.");
+  lines.push("- Separate confirmed facts from assumptions, rumours and incomplete reports.");
+  lines.push("- Identify immediate risks to life safety, welfare, safeguarding and public confidence.");
+  lines.push("- Confirm who has command responsibility and who owns each next action.");
+  lines.push("- Coordinate with relevant partners, including emergency services where required.");
+  lines.push("- Maintain a clear decision log that records what was decided, by whom, when and why.");
 
   lines.push("");
-  lines.push("## Human Review");
-  lines.push("This is a draft training synopsis. It must be reviewed by a responsible human before use in training, assurance or operational briefings.");
+  lines.push("## Expected Trainee Response");
+  lines.push(
+    "A good trainee response should begin by slowing the situation down enough to establish control. The trainee should identify what is known, what is uncertain, who is at risk, who is leading the response and what decisions must be made in the first operating period."
+  );
+  lines.push("- Confirm the incident location, timing, current status and people affected.");
+  lines.push("- Establish whether Gold, Silver or Bronze command arrangements are required.");
+  lines.push("- Allocate owners for safety, welfare, communications, evidence capture and partner liaison.");
+  lines.push("- Set a short review cycle so that new information can be assessed quickly.");
+  lines.push("- Avoid issuing speculative messages before facts are confirmed.");
+
+  lines.push("");
+  lines.push("## Key Risks to Explore");
+  lines.push("- Conflicting reports may cause the wrong priority to be chosen.");
+  lines.push("- Injured, vulnerable or missing people may not be identified quickly enough.");
+  lines.push("- Staff, security and emergency services may work from different versions of events.");
+  lines.push("- Public messages may create confusion if they go beyond confirmed facts.");
+  lines.push("- Poor records may make later review, assurance or investigation difficult.");
+
+  lines.push("");
+  lines.push("## Facilitator Questions");
+  lines.push("- What is the first fact the strategic lead must confirm?");
+  lines.push("- Who owns the first 30-minute operating picture?");
+  lines.push("- What information is confirmed, and what is still only an assumption?");
+  lines.push("- What would trigger escalation to emergency services or a higher command level?");
+  lines.push("- What should be recorded in the decision log before the next briefing?");
+  lines.push("- What should not be communicated externally until verified?");
+
+  lines.push("");
+  lines.push("## Governance and Human Review");
+  lines.push(
+    "This is a draft training synopsis. It is for learning, rehearsal and assurance preparation only. It must be reviewed by a responsible human before use in training, operational briefings or formal assurance work."
+  );
 
   const plainText = lines.join("\n");
 
