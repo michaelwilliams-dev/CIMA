@@ -1571,8 +1571,22 @@ body {
           <h3>Mode</h3>
 
           <p style="margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45;">
-            Context defaults are held in the background.
+            Select the user persona for the CIMA output.
           </p>
+
+          <div class="field" style="margin-top:12px;">
+            <label for="personaSelect">Persona</label>
+            <select id="personaSelect" onchange="updateContextFromControls()">
+              <option value="N/A" selected>N/A</option>
+              <option value="Gold / Strategic Lead">Gold / Strategic Lead</option>
+              <option value="Silver / Tactical Lead">Silver / Tactical Lead</option>
+              <option value="Bronze / Operational Lead">Bronze / Operational Lead</option>
+              <option value="Trainer / Facilitator">Trainer / Facilitator</option>
+              <option value="Communications Lead">Communications Lead</option>
+              <option value="Safeguarding Lead">Safeguarding Lead</option>
+              <option value="Loggist / Decision Recorder">Loggist / Decision Recorder</option>
+            </select>
+          </div>
 
           <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;">
             <button
@@ -1613,9 +1627,6 @@ body {
               <option value="" selected>N/A</option>
             </select>
 
-            <select id="personaSelect" onchange="updateContextFromControls()">
-              <option value="" selected>N/A</option>
-            </select>
 
             <select id="outputSelect" onchange="updateContextFromControls()">
               <option value="" selected>N/A</option>
@@ -2550,7 +2561,6 @@ body {
       if (latestTrainerNotesHtml) {
         replyArea.innerHTML = `
           <div class="message agent">
-            <strong>Trainer Notes</strong>
             ${latestTrainerNotesHtml}
           </div>
         `;
@@ -2558,7 +2568,6 @@ body {
         document.getElementById("lastOutput").textContent = "Showing trainer notes.";
         return;
       }
-
       replyArea.innerHTML = `
         <div class="message agent">
           <strong>Trainer Notes</strong>
@@ -3111,7 +3120,6 @@ body {
           replyArea.className = "";
           replyArea.innerHTML = `
             <div class="message agent">
-              <strong>Trainer Notes</strong>
               ${latestTrainerNotesHtml}
             </div>
           `;
