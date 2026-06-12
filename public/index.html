@@ -3532,19 +3532,10 @@ body {
       document.getElementById("deliveryResponseStatus").textContent = "Preparing";
       document.getElementById("deliveryResponseStatus").className = "pending";
 
-      addMessage("user", "You", `<p>${escapeHtml(question)}</p>`);
+     addMessage("user", "You", `<p>${escapeHtml(question)}</p>`);
 
-      const replyArea = document.getElementById("replyArea");
-      const searchNotice = document.createElement("div");
-      searchNotice.id = "cimaSearchNotice";
-      searchNotice.className = "message agent";
-      searchNotice.innerHTML = `
-        <strong>CIMA Search</strong>
-        <p>Searching the CIMA database and preparing the response...</p>
-      `;
-
-      replyArea.appendChild(searchNotice);
-      replyArea.scrollTop = replyArea.scrollHeight;
+    input.value = "Searching the CIMA database and preparing the response...";
+    document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
 
       let answer = "";
       let finalPath = predictedPath;
