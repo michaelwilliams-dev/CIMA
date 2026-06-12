@@ -2263,14 +2263,14 @@ body {
 
       if (deliveryPersonaStatus) {
         if (context.persona && context.persona !== "N/A") {
-          deliveryPersonaStatus.textContent = "Connected";
+          deliveryPersonaStatus.textContent = "Confirmed";
           deliveryPersonaStatus.className = "";
 
           if (personaStep) {
             personaStep.className = "process-step active";
           }
         } else {
-          deliveryPersonaStatus.textContent = "Not connected";
+          deliveryPersonaStatus.textContent = "N/A";
           deliveryPersonaStatus.className = "not-started";
 
           if (personaStep) {
@@ -3656,7 +3656,7 @@ body {
       });
 
       latestStandardHtml = `
-        <p><strong>Path:</strong> ${escapeHtml(finalPath)}</p>
+        <p><strong>Persona:</strong> ${escapeHtml(context.persona || "N/A")}</p>
         ${markdownToHtml(answer)}
       `;
 
