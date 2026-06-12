@@ -3117,6 +3117,17 @@ body {
           `;
         }
 
+        const trainerNotesStatus = document.getElementById("deliveryTrainerNotesStatus");
+        if (trainerNotesStatus) {
+          trainerNotesStatus.textContent = "Generated";
+          trainerNotesStatus.className = "";
+        }
+
+        const trainerNotesStep = document.getElementById("processStepTrainerNotes");
+        if (trainerNotesStep) {
+          trainerNotesStep.className = "process-step active";
+        }
+
         document.getElementById("lastOutput").textContent = "Trainer notes generated.";
       } catch (error) {
         if (activeReplyView === "trainerNotes" && replyArea) {
