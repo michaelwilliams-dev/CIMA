@@ -87,9 +87,13 @@ export function buildTrainingQuestions({
   );
 
   lines.push("");
+  lines.push("## Persona");
+  lines.push(safeString(context.persona));
+
+  lines.push("");
   lines.push("## Scenario Brief");
   lines.push(cleanQuestion || "No scenario question was supplied.");
-
+  
   lines.push("");
   lines.push("## Opening Understanding");
   lines.push("- What is the incident as currently understood?");
