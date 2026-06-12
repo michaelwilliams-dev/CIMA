@@ -150,54 +150,100 @@ function buildDemoCimaAnswer({ question = "", context = {}, path = "FAST PATH" }
 
   if (path === "ASSURANCE PATH") {
     sections.push(
-      "This has been treated as an assurance-led operational request. The immediate priority is to separate confirmed facts from assumptions, identify risk to people or public confidence, and preserve a clear decision record."
+      "This has been treated as an assurance-led operational request. The response should be handled carefully because the question may involve public safety, governance, legal exposure, regulatory assurance, reputational risk or post-incident accountability. The first task is to separate confirmed facts from assumptions, identify immediate risk, preserve evidence and make sure that any formal position is checked before it is relied upon."
     );
   } else {
     sections.push(
-      "This has been treated as a fast operational request. The immediate priority is to clarify the facts, identify people at risk, stabilise the situation and set a clear next action owner."
+      "This has been treated as a fast operational request. The priority is to build an immediate working picture, protect people, stabilise the situation and give the responsible lead a clear structure for action. The answer is intended to support early decision making, not replace the judgement of the Gold, Silver, Bronze, venue, security, safeguarding or emergency-service lead."
     );
   }
 
   sections.push("");
-
+  sections.push("## Situation Framing");
+  sections.push(
+    "The incident should first be framed around what is known, what is believed, what is uncertain and what could change quickly. In the opening period of any serious incident, the greatest risk is often confusion: different teams may hold different facts, witnesses may provide incomplete accounts, and early reports may overstate or understate the seriousness of the event."
+  );
+  sections.push(
+    "The lead should therefore establish a single current operating picture, identify the most reliable sources of information, and avoid allowing unconfirmed information to drive irreversible decisions."
+  );
 
   sections.push("");
   sections.push("## Immediate Actions");
-  sections.push("- Confirm what is known, what is assumed and what is still unknown.");
-  sections.push("- Identify whether anyone is at immediate risk.");
-  sections.push("- Set an owner for the next action.");
-  sections.push("- Agree the next update time.");
-  sections.push("- Record the decision and the reason for it.");
+  sections.push("- Confirm the exact location, time, nature and current status of the incident.");
+  sections.push("- Identify whether anyone is injured, missing, trapped, vulnerable, exposed to danger or otherwise at immediate risk.");
+  sections.push("- Establish who currently has command responsibility and who is authorised to make decisions.");
+  sections.push("- Separate confirmed facts from assumptions, rumours and unverified reports.");
+  sections.push("- Set an immediate action owner for each priority task.");
+  sections.push("- Agree the next update time so that the situation is reviewed on a controlled cycle.");
+  sections.push("- Start a decision log recording what was decided, by whom, when and on what information.");
 
   if (path === "ASSURANCE PATH") {
-    sections.push("- Check the relevant source material before issuing a formal position.");
-    sections.push("- Preserve the source trail used to support the answer.");
+    sections.push("- Check relevant policy, statutory, safety or source material before issuing any formal position.");
+    sections.push("- Preserve the source trail used to support the response.");
+    sections.push("- Avoid public, legal, regulatory or board-level statements until the evidence base has been checked.");
   }
 
   sections.push("");
+  sections.push("## Command and Coordination");
+  sections.push(
+    "The responsible lead should establish a simple command structure immediately. This does not need to be complicated, but it must be clear. People involved in the incident should know who is coordinating the response, who is gathering information, who is managing communications, who is liaising with emergency services and who is keeping the formal record."
+  );
+  sections.push("- Confirm whether Gold, Silver and Bronze command arrangements are required.");
+  sections.push("- Identify the lead for operational control, communications, welfare, security, safeguarding and evidence capture.");
+  sections.push("- Confirm whether police, ambulance, fire, local authority or other partners have been notified or need to be notified.");
+  sections.push("- Make sure internal teams do not issue conflicting instructions.");
+
+  sections.push("");
   sections.push("## Risk and Safety");
+  sections.push(
+    "Risk should be assessed in practical terms. The question is not only what has happened, but what could happen next if the situation deteriorates, if crowds move unexpectedly, if communications fail, or if vulnerable people are not identified quickly."
+  );
   sections.push("- Do not present uncertain information as confirmed.");
-  sections.push("- Separate operational facts from assumptions.");
-  sections.push("- Escalate immediately if life safety, safeguarding or public confidence is affected.");
-  sections.push("- Keep a clear decision log.");
+  sections.push("- Escalate immediately if life safety, safeguarding, public disorder, terrorism, evacuation, medical risk or serious welfare concerns are present.");
+  sections.push("- Consider whether vulnerable people, children, older people, disabled people or isolated individuals may need specific support.");
+  sections.push("- Keep access routes, emergency routes and communication routes clear.");
+  sections.push("- Reassess the risk after each new confirmed fact.");
+
+  sections.push("");
+  sections.push("## Communications");
+  sections.push(
+    "Communication should be controlled, factual and timed. Early communication should focus on safety instructions, reassurance where appropriate, and internal alignment. Public or external statements should not go beyond what is confirmed."
+  );
+  sections.push("- Nominate one communications lead.");
+  sections.push("- Use short factual updates rather than speculative explanations.");
+  sections.push("- Tell staff what they can say, what they must not say, and where to refer questions.");
+  sections.push("- Record any external messages issued.");
+  sections.push("- Prepare a holding statement if public, media or stakeholder interest is likely.");
 
   sections.push("");
   sections.push("## Information Gaps");
   sections.push("- Exact location and time of incident.");
   sections.push("- Number and status of people affected.");
   sections.push("- Current command owner.");
-  sections.push("- Any external authority involvement.");
+  sections.push("- Whether emergency services are involved.");
+  sections.push("- Whether there are vulnerable people requiring support.");
+  sections.push("- Whether there is an ongoing threat.");
+  sections.push("- Whether evacuation, lockdown, shelter, dispersal or medical support is required.");
   sections.push("- Whether a formal assurance or source-cited answer is required.");
+
+  sections.push("");
+  sections.push("## Decision Log");
+  sections.push(
+    "A clear decision log should be started as soon as possible. It should record the time of each decision, the person making it, the information available at the time, the action chosen, alternatives considered where relevant, and the next review point."
+  );
+  sections.push("- Record decisions in plain language.");
+  sections.push("- Record uncertainty rather than hiding it.");
+  sections.push("- Record who owns each follow-up action.");
+  sections.push("- Preserve the audit trail for later review.");
 
   sections.push("");
   sections.push("## Human Review");
   sections.push(
-    "This is a CIMA demo response. A responsible human lead must review and approve operational decisions before action."
+    "This is a CIMA demo response. It is operational support only. A responsible human lead must review the facts, local procedures, live risks and source material before relying on the answer or taking operational action."
   );
 
   return sections.join("\n");
 }
-
 function buildSourcesFromKnowledgeSearch(knowledgeSearch = null) {
   const retrievedResults = knowledgeSearch &&
     knowledgeSearch.ok &&
@@ -230,15 +276,23 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     return match ? match[1].trim() : "";
   }
 
+  function normaliseUrl(url = "") {
+    return String(url || "")
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .replace(/\/$/, "")
+      .trim();
+  }
+
   function cleanSourceTitle(source = {}, url = "") {
     const rawFile = String(source.source_file || source.title || "").trim();
 
-    if (url.includes("gov.uk")) {
-      return "GOV.UK emergency planning guidance";
+    if (url.includes("npsa.gov.uk")) {
+      return "NPSA terrorist incident response guidance";
     }
 
-    if (url.includes("npsa.gov.uk")) {
-      return "NPSA incident response guidance";
+    if (url.includes("gov.uk")) {
+      return "GOV.UK vulnerable people in emergencies guidance";
     }
 
     if (url.includes("ukresilienceacademy.org")) {
@@ -246,7 +300,7 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     }
 
     if (!rawFile) {
-      return "Retrieved CIMA source";
+      return "Retrieved CIMA document";
     }
 
     const fileName = rawFile.split("/").pop() || rawFile;
@@ -256,27 +310,12 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       .trim();
   }
 
-  function cleanSnippet(text = "") {
-    let cleaned = String(text || "");
-
-    cleaned = cleaned.replace(/^SOURCE_TITLE:[\s\S]*?CHUNK_INDEX:\s*\d+/i, "");
-    cleaned = cleaned.replace(/Cookies on GOV\.UK[\s\S]*?services\./i, "");
-    cleaned = cleaned.replace(/You have accepted additional cookies\.[\s\S]*?cookies\./i, "");
-    cleaned = cleaned.replace(/\s+/g, " ").trim();
-
-    if (cleaned.length > 650) {
-      cleaned = `${cleaned.slice(0, 650).trim()}...`;
-    }
-
-    return cleaned || "Relevant source material was retrieved, but no clean excerpt was available.";
-  }
-
   const seen = new Set();
   const cleanSources = [];
 
   for (const source of sources) {
     const url = extractUrl(source.snippet || "");
-    const key = url || source.source_file || source.chunk_id || "";
+    const key = normaliseUrl(url) || source.source_file || source.chunk_id || "";
 
     if (key && seen.has(key)) {
       continue;
@@ -288,11 +327,10 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
 
     cleanSources.push({
       title: cleanSourceTitle(source, url),
-      url,
-      snippet: cleanSnippet(source.snippet || "")
+      url
     });
 
-    if (cleanSources.length >= 3) {
+    if (cleanSources.length >= 5) {
       break;
     }
   }
@@ -304,23 +342,18 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
   const sourceSections = [];
 
   sourceSections.push("");
-  sourceSections.push("## Sources Used");
+  sourceSections.push("## Documents Referenced");
   sourceSections.push(
-    "CIMA retrieved the following supporting material from the indexed knowledge base. These sources are for human review and should not be treated as a substitute for operational judgement."
+    "CIMA identified the following documents as supporting material from the indexed knowledge base. These references are provided for human review."
   );
 
   cleanSources.forEach((source, index) => {
     sourceSections.push("");
-    sourceSections.push(`### Source ${index + 1}: ${source.title}`);
+    sourceSections.push(`- ${index + 1}. ${source.title}`);
 
     if (source.url) {
-      sourceSections.push(`- Public source: ${source.url}`);
+      sourceSections.push(`  Public source: ${source.url}`);
     }
-
-    sourceSections.push("- Relevance: Retrieved as supporting material for the incident response question.");
-    sourceSections.push("");
-    sourceSections.push("Extract:");
-    sourceSections.push(source.snippet);
   });
 
   return `${answer}\n${sourceSections.join("\n")}`;
