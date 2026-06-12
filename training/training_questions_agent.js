@@ -77,47 +77,72 @@ export function buildTrainingQuestions({
   answer = "",
   context = {}
 } = {}) {
-  const cleanQuestion = trimText(question, 600);
-  const cleanAnswer = trimText(answer, 1200);
+  const cleanQuestion = trimText(question, 700);
 
   const lines = [];
 
   lines.push("## Training Questions");
-  lines.push("These questions are designed for discussion, briefing or exercise use after reviewing the latest CIMA response.");
+  lines.push(
+    "These questions are designed for facilitated discussion, tabletop exercise preparation, briefing review and assurance learning. They are not operational instructions."
+  );
 
   lines.push("");
-  lines.push("## Scenario Context");
-  lines.push(`- Mode: ${safeString(context.mode)}`);
-  lines.push(`- Command level: ${safeString(context.level)}`);
-  lines.push(`- Persona: ${safeString(context.persona)}`);
-  lines.push(`- Requested output: ${safeString(context.output)}`);
-  lines.push(`- Evidence from: ${safeString(context.evidence_from_year)}`);
-  lines.push(`- Evidence to: ${safeString(context.evidence_to_year)}`);
+  lines.push("## Scenario Brief");
+  lines.push(cleanQuestion || "No scenario question was supplied.");
 
   lines.push("");
-  lines.push("## Source Scenario");
-  lines.push(cleanQuestion || "No question supplied.");
+  lines.push("## Opening Understanding");
+  lines.push("- What is the incident as currently understood?");
+  lines.push("- What facts are confirmed, and what information is still uncertain?");
+  lines.push("- Which reports may be incomplete, duplicated or unreliable?");
+  lines.push("- What is the first fact the strategic lead must confirm?");
+  lines.push("- What assumption would be most dangerous if treated as fact?");
 
   lines.push("");
-  lines.push("## Source CIMA Answer Summary");
-  lines.push(cleanAnswer || "No CIMA answer supplied.");
+  lines.push("## Command and Control");
+  lines.push("- Who should own the first 30-minute operating picture?");
+  lines.push("- Is a Gold, Silver or Bronze command structure required?");
+  lines.push("- Who is responsible for safety, welfare, communications, security and partner liaison?");
+  lines.push("- What decision needs to be made now, and what can wait until the next update?");
+  lines.push("- How should conflicting instructions from different teams be prevented?");
 
   lines.push("");
-  lines.push("## Questions for Training Discussion");
-  lines.push("- What facts would you confirm before taking action?");
-  lines.push("- What assumptions might be unsafe if treated as confirmed?");
-  lines.push("- Who should own the next decision or update?");
-  lines.push("- What immediate risks to people, operations or reputation should be checked?");
+  lines.push("## Risk and Safety");
+  lines.push("- Who may be injured, missing, vulnerable, trapped or exposed to further risk?");
+  lines.push("- What would make this incident escalate from serious to critical?");
+  lines.push("- What is the risk of under-reacting?");
+  lines.push("- What is the risk of over-reacting?");
+  lines.push("- What safeguarding, medical, crowd movement or public order concerns need checking?");
+
+  lines.push("");
+  lines.push("## Coordination with Partners");
+  lines.push("- Which external partners may need to be involved?");
+  lines.push("- What information should be shared with emergency services, and by whom?");
+  lines.push("- What information should be held back until verified?");
+  lines.push("- How should the organisation maintain one version of the truth?");
+  lines.push("- What should be prepared for the next multi-agency briefing?");
+
+  lines.push("");
+  lines.push("## Communications");
+  lines.push("- What should staff be told immediately?");
+  lines.push("- What should not be said externally until confirmed?");
+  lines.push("- Who is authorised to issue a public, client-facing or media statement?");
+  lines.push("- What holding statement might be needed if there is public concern?");
+  lines.push("- How should uncertainty be communicated without creating alarm?");
+
+  lines.push("");
+  lines.push("## Decision Log and Assurance");
   lines.push("- What should be recorded in the decision log?");
-  lines.push("- What information would trigger escalation to a higher command level?");
-  lines.push("- What would be the risk of over-reacting?");
-  lines.push("- What would be the risk of under-reacting?");
-  lines.push("- What source material, policy or local procedure should be checked before reliance?");
-  lines.push("- What should be reviewed at the next update point?");
+  lines.push("- Who made each decision, and what information was available at the time?");
+  lines.push("- What options were considered and rejected?");
+  lines.push("- What is the next review point?");
+  lines.push("- What local procedure, source material or policy should be checked before reliance?");
 
   lines.push("");
   lines.push("## Human Review");
-  lines.push("These are draft training questions. They must be reviewed by a responsible human before use in training, assurance or operational briefings.");
+  lines.push(
+    "These are draft training questions. They must be reviewed by a responsible human before use in training, assurance or operational briefings."
+  );
 
   const plainText = lines.join("\n");
 
