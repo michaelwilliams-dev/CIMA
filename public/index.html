@@ -3007,6 +3007,11 @@ body {
           trainingQaStatus.className = "";
         }
 
+        const trainingQaStep = document.getElementById("processStepTrainingQa");
+        if (trainingQaStep) {
+          trainingQaStep.className = "process-step active";
+        }
+
         document.getElementById("lastOutput").textContent = "Training questions and answers generated.";
         renderRightView();
       } catch (error) {
