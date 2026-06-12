@@ -81,14 +81,6 @@ export function buildTrainingSynopsis({
   lines.push("## Training Synopsis");
   lines.push("This synopsis converts the latest CIMA response into a short training note for review, briefing or exercise preparation.");
 
-  lines.push("");
-  lines.push("## Scenario Context");
-  lines.push(`- Mode: ${safeString(context.mode)}`);
-  lines.push(`- Command level: ${safeString(context.level)}`);
-  lines.push(`- Persona: ${safeString(context.persona)}`);
-  lines.push(`- Requested output: ${safeString(context.output)}`);
-  lines.push(`- Evidence from: ${safeString(context.evidence_from_year)}`);
-  lines.push(`- Evidence to: ${safeString(context.evidence_to_year)}`);
 
   lines.push("");
   lines.push("## Training Focus");
