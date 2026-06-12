@@ -83,6 +83,10 @@ export function buildTrainingSynopsis({
   );
 
   lines.push("");
+  lines.push("## Persona");
+  lines.push(safeString(context.persona));
+
+  lines.push("");
   lines.push("## Scenario Summary");
   lines.push(
     cleanQuestion || "No scenario question was supplied."
