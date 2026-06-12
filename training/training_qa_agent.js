@@ -77,7 +77,12 @@ export function buildTrainingQa({
   );
 
   lines.push("");
+  lines.push("## Persona");
+  lines.push(String(context.persona || "N/A"));
+
+  lines.push("");
   lines.push("## Scenario Brief");
+  
   lines.push(cleanQuestion || "No scenario question was supplied.");
 
   lines.push("");
