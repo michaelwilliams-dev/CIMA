@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1727,13 +1728,23 @@ body {
                 </div>
               </div>
 
-              <div id="processStepReview" class="process-step muted">
-                <div class="process-marker">10</div>
-                <div class="process-copy">
-                  <strong>Human review</strong>
+            <div id="processStepReview" class="process-step muted">
+              <div class="process-marker">10</div>
+              <div class="process-copy">
+                <strong>Human review</strong>
+                <label style="display:grid; grid-template-columns:18px 1fr; gap:7px; align-items:center; margin-top:4px; font-size:12px; line-height:1.35; color:#5f6b72; font-weight:700;">
+                  <input
+                    id="humanReviewCheck"
+                    type="checkbox"
+                    disabled
+                    onchange="updateHumanReviewStatus()"
+                    style="width:16px; height:16px; accent-color:var(--orange);"
+                  />
                   <span id="deliveryReviewStatus" class="pending">Required</span>
-                </div>
+                </label>
               </div>
+            </div>
+
 
             </div>
           </div>
@@ -2232,6 +2243,21 @@ body {
 
       document.getElementById("gateEmailOne").value = gateEmailOne;
       document.getElementById("gateEmailTwo").value = gateEmailTwo;
+    }
+
+    function updateHumanReviewStatus() {
+      const checked = document.getElementById("humanReviewCheck")?.checked === true;
+      const reviewStatus = document.getElementById("deliveryReviewStatus");
+      const reviewStep = document.getElementById("processStepReview");
+
+      if (reviewStatus) {
+        reviewStatus.textContent = checked ? "Confirmed" : "Required";
+        reviewStatus.className = checked ? "" : "pending";
+      }
+
+      if (reviewStep) {
+        reviewStep.className = checked ? "process-step active" : "process-step muted";
+      }
     }
 
     function getContext() {
@@ -3682,6 +3708,11 @@ body {
       document.getElementById("deliveryResponseStatus").textContent = "Complete";
       document.getElementById("deliveryResponseStatus").className = "";
 
+      const humanReviewCheck = document.getElementById("humanReviewCheck");
+      if (humanReviewCheck) {
+        humanReviewCheck.disabled = false;
+      }
+
       input.value = "";
 
       renderSessionQa();
@@ -3854,9 +3885,17 @@ body {
 
       document.getElementById("deliveryTrainingQaStatus").textContent = "Not generated";
       document.getElementById("deliveryTrainingQaStatus").className = "not-started";
-
+      
       document.getElementById("deliveryReviewStatus").textContent = "Required";
       document.getElementById("deliveryReviewStatus").className = "pending";
+
+      const humanReviewCheck = document.getElementById("humanReviewCheck");
+      if (humanReviewCheck) {
+        humanReviewCheck.checked = false;
+        humanReviewCheck.disabled = true;
+      }
+
+      document.getElementById("processStepReview").className = "process-step muted";
 
       const replyArea = document.getElementById("replyArea");
       replyArea.className = "reply-placeholder";
