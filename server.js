@@ -705,6 +705,7 @@ async function handleTranscriptEmail(req, res) {
 
   let emails = [];
   let context = {};
+  let humanReview = {};
   let questions = [];
   let subject = "PGB CIMA transcript";
 
@@ -736,6 +737,10 @@ async function handleTranscriptEmail(req, res) {
 
     context = req.body.context && typeof req.body.context === "object"
       ? req.body.context
+      : {};
+
+    humanReview = req.body.human_review && typeof req.body.human_review === "object"
+      ? req.body.human_review
       : {};
 
     questions = Array.isArray(req.body.questions)
@@ -802,6 +807,8 @@ async function handleTranscriptEmail(req, res) {
       command_level: context.level || "",
       persona: context.persona || "",
       requested_output: context.output || "",
+      human_review_confirmed: humanReview.confirmed === true,
+      human_review_confirmed_at: humanReview.confirmed_at || "",
       ip_address: req.ip,
       user_agent: req.get("user-agent")
     });
@@ -835,6 +842,8 @@ async function handleTranscriptEmail(req, res) {
       command_level: context.level || "",
       persona: context.persona || "",
       requested_output: context.output || "",
+      human_review_confirmed: humanReview.confirmed === true,
+      human_review_confirmed_at: humanReview.confirmed_at || "",
       ip_address: req.ip,
       user_agent: req.get("user-agent")
     });
