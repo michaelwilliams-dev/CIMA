@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Transcript Agent
  * File: transcript_agent.js
- * ISO Timestamp: 2026-06-04T17:05:00Z
+ * ISO Timestamp: 2026-06-13T11:20:00Z
  *
  * Purpose:
  * - Builds CIMA session transcript content outside server.js.
@@ -11,6 +11,7 @@
  * Change Log:
  * - v0.1.0: created blank controlled agent file for transcript handling.
  * - v0.2.0: added controlled transcript text, PDF and DOCX generation logic.
+ * - v0.3.0: removed metadata table, preserved persona/timestamp as plain text, and made PDF/DOCX numbering consistent by section.
  *
  * ISO Control Notes:
  * - This agent must preserve question, answer, timestamp and persona in transcript outputs.
@@ -25,15 +26,16 @@ import {
   Packer,
   Paragraph,
   TextRun,
-  HeadingLevel,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  BorderStyle
+  HeadingLevel
 } from "docx";
 
-const TRANSCRIPT_AGENT_BUILD_ISO = "2026-06-04T17:05:00Z";
+const TRANSCRIPT_AGENT_BUILD_ISO = "2026-06-13T11:20:00Z";
+
+const SECTION_HEADINGS = new Set([
+  "Immediate Actions",
+  "Command and Coordination",
+  "Risk and Safety"
+]);
 
 function safeString(value = "") {
   if (value === null || value === undefined || value === "") {
@@ -43,22 +45,13 @@ function safeString(value = "") {
   return String(value);
 }
 
-function isMeaningful(value = "") {
-  const clean = String(value || "").trim();
-
-  return Boolean(
-    clean &&
-    clean !== "Not supplied" &&
-    clean !== "N/A"
-  );
-}
-
 function cleanText(value = "") {
   return String(value || "")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFE\uFFFF]/g, "")
     .replace(/\u00AD/g, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -68,6 +61,28 @@ function safeFilenamePart(value = "") {
     .replace(/[^\w.\-]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 80) || "CIMA";
+}
+
+function isListLine(value = "") {
+  return /^(?:-\s*)?\d+\.\s+/.test(value) || /^(?:-\s*|\u2022\s*|\u25CF\s*)/.test(value);
+}
+
+function stripListPrefix(value = "") {
+  return String(value || "")
+    .replace(/^(?:-\s*)?\d+\.\s+/, "")
+    .replace(/^(?:-\s*|\u2022\s*|\u25CF\s*)/, "")
+    .trim();
+}
+
+function isTranscriptHeading(value = "") {
+  return (
+    value === "Transcript" ||
+    value === "Persona" ||
+    value === "Question" ||
+    value === "Answer" ||
+    value.startsWith("Question ") ||
+    value.startsWith("Answer ")
+  );
 }
 
 function buildTranscriptText({
@@ -102,7 +117,8 @@ function buildTranscriptText({
           "",
           safeString(item.question),
           "",
-          `Answer: ${safeString(item.answer)}`
+          "Answer",
+          safeString(item.answer)
         ].join("\n");
       }).join("\n\n")
     : "No questions recorded.";
@@ -190,6 +206,8 @@ function buildTranscriptPdfBuffer({
       }
 
       if (cleanLine.startsWith("Answer: ## ")) {
+        numberedListCounter = 0;
+
         doc
           .font("Helvetica-Bold")
           .fontSize(11)
@@ -203,11 +221,14 @@ function buildTranscriptPdfBuffer({
           .fontSize(11)
           .fillColor("#14232B")
           .text(cleanLine.replace(/^Answer:\s*##\s*/, ""), { align: "left" });
+
         doc.moveDown(0.35);
         continue;
       }
 
       if (cleanLine.startsWith("## ")) {
+        numberedListCounter = 0;
+
         doc
           .font("Helvetica-Bold")
           .fontSize(11)
@@ -218,28 +239,27 @@ function buildTranscriptPdfBuffer({
         continue;
       }
 
-      if (/^-\s*\d+\.\s+/.test(cleanLine)) {
+      if (SECTION_HEADINGS.has(cleanLine)) {
+        numberedListCounter = 0;
+
         doc
           .font("Helvetica-Bold")
-          .fontSize(9)
-          .fillColor("#111827")
-          .text(cleanLine.replace(/^-\s*/, ""), {
-            align: "left",
-            lineGap: 2
-          });
+          .fontSize(11)
+          .fillColor("#14232B")
+          .text(cleanLine, { align: "left" });
 
-        doc.moveDown(0.2);
+        doc.moveDown(0.25);
         continue;
       }
 
-      if (cleanLine.startsWith("- ")) {
+      if (isListLine(cleanLine)) {
         numberedListCounter += 1;
 
         doc
           .font("Helvetica")
           .fontSize(9)
           .fillColor("#111827")
-          .text(`${numberedListCounter}. ` + cleanLine.replace(/^-+\s*/, ""), {
+          .text(`${numberedListCounter}. ${stripListPrefix(cleanLine)}`, {
             align: "left",
             indent: 12,
             lineGap: 2
@@ -249,15 +269,9 @@ function buildTranscriptPdfBuffer({
         continue;
       }
 
-       const isHeading =
-          cleanLine === "Transcript" ||
-          cleanLine === "Persona" ||
-          cleanLine === "Question" ||
-          cleanLine === "Answer" ||
-          cleanLine.startsWith("Question ") ||
-          cleanLine.startsWith("Answer ");
+      if (isTranscriptHeading(cleanLine)) {
+        numberedListCounter = 0;
 
-      if (isHeading) {
         doc
           .font("Helvetica-Bold")
           .fontSize(11)
@@ -308,7 +322,6 @@ function buildTranscriptPdfBuffer({
 function docxParagraph(text = "", options = {}) {
   return new Paragraph({
     heading: options.heading,
-    bullet: options.bullet === true ? { level: 0 } : undefined,
     spacing: {
       before: options.before ?? 80,
       after: options.after ?? 80
@@ -321,67 +334,6 @@ function docxParagraph(text = "", options = {}) {
         color: options.color || "243744",
         size: options.size || 20,
         font: "Arial"
-      })
-    ]
-  });
-}
-
-function docxCell(label = "", value = "") {
-  return new TableRow({
-    children: [
-      new TableCell({
-        width: {
-          size: 34,
-          type: WidthType.PERCENTAGE
-        },
-        shading: {
-          fill: "EDE8DF"
-        },
-        margins: {
-          top: 120,
-          bottom: 120,
-          left: 140,
-          right: 140
-        },
-        borders: {
-          top: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
-          bottom: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
-          left: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
-          right: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" }
-        },
-        children: [
-          docxParagraph(label, {
-            bold: true,
-            size: 19,
-            before: 0,
-            after: 0
-          })
-        ]
-      }),
-      new TableCell({
-        width: {
-          size: 66,
-          type: WidthType.PERCENTAGE
-        },
-        margins: {
-          top: 120,
-          bottom: 120,
-          left: 140,
-          right: 140
-        },
-        borders: {
-          top: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
-          bottom: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
-          left: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" },
-          right: { style: BorderStyle.SINGLE, size: 1, color: "DDD6C9" }
-        },
-        children: [
-          docxParagraph(value, {
-            size: 19,
-            before: 0,
-            after: 0
-          })
-        ]
       })
     ]
   });
@@ -450,6 +402,7 @@ async function buildTranscriptDocxBuffer({
   const lines = cleanText(transcriptText).split("\n");
 
   let inFrontMatter = true;
+  let numberedListCounter = 0;
 
   for (const line of lines) {
     const cleanLine = String(line || "").trim();
@@ -468,6 +421,8 @@ async function buildTranscriptDocxBuffer({
     }
 
     if (cleanLine.startsWith("Answer: ## ")) {
+      numberedListCounter = 0;
+
       children.push(
         docxParagraph("Answer", {
           heading: HeadingLevel.HEADING_2,
@@ -494,6 +449,8 @@ async function buildTranscriptDocxBuffer({
     }
 
     if (cleanLine.startsWith("## ")) {
+      numberedListCounter = 0;
+
       children.push(
         docxParagraph(cleanLine.replace(/^##\s*/, ""), {
           heading: HeadingLevel.HEADING_2,
@@ -508,24 +465,28 @@ async function buildTranscriptDocxBuffer({
       continue;
     }
 
-    if (/^-\s*\d+\.\s+/.test(cleanLine)) {
+    if (SECTION_HEADINGS.has(cleanLine)) {
+      numberedListCounter = 0;
+
       children.push(
-        docxParagraph(cleanLine.replace(/^-\s*/, ""), {
+        docxParagraph(cleanLine, {
+          heading: HeadingLevel.HEADING_2,
           bold: true,
-          color: "243744",
-          size: 20,
-          before: 80,
-          after: 40
+          color: "14232B",
+          size: 24,
+          before: 180,
+          after: 80
         })
       );
 
       continue;
     }
 
-    if (cleanLine.startsWith("- ")) {
+    if (isListLine(cleanLine)) {
+      numberedListCounter += 1;
+
       children.push(
-        docxParagraph(cleanLine.replace(/^-+\s*/, ""), {
-          bullet: true,
+        docxParagraph(`${numberedListCounter}. ${stripListPrefix(cleanLine)}`, {
           color: "243744",
           size: 20,
           before: 40,
@@ -536,24 +497,30 @@ async function buildTranscriptDocxBuffer({
       continue;
     }
 
-     const isHeading =
-      cleanLine === "Transcript" ||
-      cleanLine === "Persona" ||
-      cleanLine === "Question" ||
-      cleanLine === "Answer" ||
-      cleanLine.startsWith("Question ") ||
-      cleanLine.startsWith("Answer ");
+    if (isTranscriptHeading(cleanLine)) {
+      numberedListCounter = 0;
+
+      children.push(
+        docxParagraph(cleanLine, {
+          bold: true,
+          color: "14232B",
+          size: 22,
+          before: 160,
+          after: 60
+        })
+      );
+
+      continue;
+    }
 
     children.push(
       docxParagraph(cleanLine, {
-        bold: isHeading,
-        color: isHeading ? "14232B" : "243744",
-        size: isHeading ? 22 : 20,
-        before: isHeading ? 160 : 40,
+        color: "243744",
+        size: 20,
+        before: 40,
         after: 60
       })
     );
-   
   }
 
   children.push(
