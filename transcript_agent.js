@@ -13,7 +13,7 @@
  * - v0.2.0: added controlled transcript text, PDF and DOCX generation logic.
  *
  * ISO Control Notes:
- * - This agent must preserve question, answer, timestamp, path, RAG, HITL and confidence records.
+ * - This agent must preserve question, answer, timestamp and persona in transcript outputs.
  * - This agent must not send email directly.
  * - This agent must not write audit records directly.
  * - All transcript outputs are subject to human review.
@@ -43,6 +43,16 @@ function safeString(value = "") {
   return String(value);
 }
 
+function isMeaningful(value = "") {
+  const clean = String(value || "").trim();
+
+  return Boolean(
+    clean &&
+    clean !== "Not supplied" &&
+    clean !== "N/A"
+  );
+}
+
 function cleanText(value = "") {
   return String(value || "")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFE\uFFFF]/g, "")
@@ -69,33 +79,34 @@ function buildTranscriptText({
 }) {
   const cleanTranscript = cleanText(transcript);
 
-  if (cleanTranscript) {
+  if (cleanTranscript && (!Array.isArray(questions) || questions.length === 0)) {
     return cleanTranscript;
   }
 
   const questionLines = Array.isArray(questions) && questions.length
-    ? questions.map((item) => {
+    ? questions.map((item, index) => {
         if (typeof item === "string") {
           return [
-            "Persona",
-            safeString(context.persona),
+            `Question ${index + 1}`,
+            `Persona: ${safeString(context.persona)}`,
+            `Timestamp: ${safeString(generatedAt)}`,
             "",
-            "Question",
             safeString(item)
           ].join("\n");
         }
 
         return [
-          "Persona",
-          safeString(context.persona),
+          `Question ${index + 1}`,
+          `Persona: ${safeString(item.persona || context.persona)}`,
+          `Timestamp: ${safeString(item.timestamp || item.created_at || item.generated_at || generatedAt)}`,
           "",
-          "Question",
           safeString(item.question),
           "",
           `Answer: ${safeString(item.answer)}`
         ].join("\n");
       }).join("\n\n")
     : "No questions recorded.";
+
   return [
     "PGB CIMA Transcript",
     "",
@@ -156,6 +167,7 @@ function buildTranscriptPdfBuffer({
     const lines = cleanText(transcriptText).split("\n");
 
     let inFrontMatter = true;
+    let numberedListCounter = 0;
 
     for (const line of lines) {
       const cleanLine = String(line || "").trim();
@@ -206,12 +218,28 @@ function buildTranscriptPdfBuffer({
         continue;
       }
 
+      if (/^-\s*\d+\.\s+/.test(cleanLine)) {
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor("#111827")
+          .text(cleanLine.replace(/^-\s*/, ""), {
+            align: "left",
+            lineGap: 2
+          });
+
+        doc.moveDown(0.2);
+        continue;
+      }
+
       if (cleanLine.startsWith("- ")) {
+        numberedListCounter += 1;
+
         doc
           .font("Helvetica")
           .fontSize(9)
           .fillColor("#111827")
-          .text("- " + cleanLine.replace(/^-+\s*/, ""), {
+          .text(`${numberedListCounter}. ` + cleanLine.replace(/^-+\s*/, ""), {
             align: "left",
             indent: 12,
             lineGap: 2
@@ -390,22 +418,45 @@ async function buildTranscriptDocxBuffer({
     })
   );
 
+  const metadataRows = [
+    docxCell("Generated at", generatedAt)
+  ];
+
+  if (isMeaningful(context.thread)) {
+    metadataRows.push(docxCell("Thread", safeString(context.thread)));
+  }
+
+  if (isMeaningful(context.mode)) {
+    metadataRows.push(docxCell("Mode", safeString(context.mode)));
+  }
+
+  if (isMeaningful(context.level)) {
+    metadataRows.push(docxCell("Command level", safeString(context.level)));
+  }
+
+  if (isMeaningful(context.persona)) {
+    metadataRows.push(docxCell("Persona", safeString(context.persona)));
+  }
+
+  if (isMeaningful(context.output)) {
+    metadataRows.push(docxCell("Requested output", safeString(context.output)));
+  }
+
+  metadataRows.push(
+    docxCell("Human review confirmed", humanReview.confirmed === true ? "Yes" : "No")
+  );
+
+  if (isMeaningful(humanReview.confirmed_at)) {
+    metadataRows.push(docxCell("Human review confirmed at", safeString(humanReview.confirmed_at)));
+  }
+
   children.push(
     new Table({
       width: {
         size: 100,
         type: WidthType.PERCENTAGE
       },
-      rows: [
-        docxCell("Generated at", generatedAt),
-        docxCell("Thread", safeString(context.thread)),
-        docxCell("Mode", safeString(context.mode)),
-        docxCell("Command level", safeString(context.level)),
-        docxCell("Persona", safeString(context.persona)),
-        docxCell("Requested output", safeString(context.output)),
-        docxCell("Human review confirmed", humanReview.confirmed === true ? "Yes" : "No"),
-        docxCell("Human review confirmed at", safeString(humanReview.confirmed_at))
-      ]
+      rows: metadataRows
     })
   );
 
@@ -475,6 +526,20 @@ async function buildTranscriptDocxBuffer({
           size: 24,
           before: 180,
           after: 80
+        })
+      );
+
+      continue;
+    }
+
+    if (/^-\s*\d+\.\s+/.test(cleanLine)) {
+      children.push(
+        docxParagraph(cleanLine.replace(/^-\s*/, ""), {
+          bold: true,
+          color: "243744",
+          size: 20,
+          before: 80,
+          after: 40
         })
       );
 
