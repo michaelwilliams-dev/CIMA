@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3352,7 +3353,7 @@ body {
             <p>Send the generated training questions.</p>
 
             ${latestTrainingQuestionsHtml ? `
-              <button class="report-btn" type="button" disabled>
+              <button id="sendTrainingQuestionsEmailBtn" class="report-btn" type="button" onclick="sendTrainingQuestionsEmail()">
                 Send Training Questions
               </button>
             ` : `
@@ -3360,14 +3361,12 @@ body {
             `}
           </div>
 
-         
-
           <div id="emailCombinedPanel" class="hidden">
             <p><strong>Training Questions and Answers</strong></p>
             <p>Send the generated training questions and model answers.</p>
 
             ${latestTrainingQaHtml ? `
-              <button class="report-btn" type="button" disabled>
+              <button id="sendTrainingQaEmailBtn" class="report-btn" type="button" onclick="sendTrainingQaEmail()">
                 Send Training Questions and Answers
               </button>
             ` : `
@@ -3916,6 +3915,151 @@ async function sendTrainingSynopsisEmail() {
   }
 }
 
+async function sendTrainingQuestionsEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the training questions.";
+    return;
+  }
+
+  if (!latestTrainingQuestionsHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the training questions before sending them.";
+    return;
+  }
+
+  const button = document.getElementById("sendTrainingQuestionsEmailBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainingQuestionsHtml);
+
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Training Questions",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        transcript: outputText || "No training questions text returned.",
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Training Questions",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No training questions text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Training questions email failed.");
+    }
+
+    document.getElementById("lastOutput").textContent = `Training questions sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Training questions email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Training Questions";
+    }
+  }
+}
+
+async function sendTrainingQaEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the training questions and answers.";
+    return;
+  }
+
+  if (!latestTrainingQaHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the training questions and answers before sending them.";
+    return;
+  }
+
+  const button = document.getElementById("sendTrainingQaEmailBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainingQaHtml);
+
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Training Questions and Answers",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        transcript: outputText || "No training questions and answers text returned.",
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Training Questions and Answers",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No training questions and answers text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Training questions and answers email failed.");
+    }
+
+    document.getElementById("lastOutput").textContent = `Training questions and answers sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Training questions and answers email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Training Questions and Answers";
+    }
+  }
+}
     function clearSession() {
       questions = [];
       transcriptEntries = [];
