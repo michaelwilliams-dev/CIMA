@@ -418,45 +418,21 @@ async function buildTranscriptDocxBuffer({
     })
   );
 
-  const metadataRows = [
-    docxCell("Generated at", generatedAt)
-  ];
-
-  if (isMeaningful(context.thread)) {
-    metadataRows.push(docxCell("Thread", safeString(context.thread)));
-  }
-
-  if (isMeaningful(context.mode)) {
-    metadataRows.push(docxCell("Mode", safeString(context.mode)));
-  }
-
-  if (isMeaningful(context.level)) {
-    metadataRows.push(docxCell("Command level", safeString(context.level)));
-  }
-
-  if (isMeaningful(context.persona)) {
-    metadataRows.push(docxCell("Persona", safeString(context.persona)));
-  }
-
-  if (isMeaningful(context.output)) {
-    metadataRows.push(docxCell("Requested output", safeString(context.output)));
-  }
-
-  metadataRows.push(
-    docxCell("Human review confirmed", humanReview.confirmed === true ? "Yes" : "No")
+  children.push(
+    docxParagraph(`Persona: ${safeString(context.persona)}`, {
+      color: "243744",
+      size: 20,
+      before: 0,
+      after: 40
+    })
   );
 
-  if (isMeaningful(humanReview.confirmed_at)) {
-    metadataRows.push(docxCell("Human review confirmed at", safeString(humanReview.confirmed_at)));
-  }
-
   children.push(
-    new Table({
-      width: {
-        size: 100,
-        type: WidthType.PERCENTAGE
-      },
-      rows: metadataRows
+    docxParagraph(`Timestamp: ${safeString(generatedAt)}`, {
+      color: "243744",
+      size: 20,
+      before: 0,
+      after: 120
     })
   );
 
