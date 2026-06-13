@@ -375,10 +375,49 @@ async function buildTranscriptDocxBuffer({
       continue;
     }
 
+    if (cleanLine.startsWith("Answer: ## ")) {
+      children.push(
+        docxParagraph("Answer", {
+          heading: HeadingLevel.HEADING_2,
+          bold: true,
+          color: "14232B",
+          size: 24,
+          before: 180,
+          after: 80
+        })
+      );
+
+      children.push(
+        docxParagraph(cleanLine.replace(/^Answer:\s*##\s*/, ""), {
+          heading: HeadingLevel.HEADING_2,
+          bold: true,
+          color: "14232B",
+          size: 24,
+          before: 120,
+          after: 80
+        })
+      );
+
+      continue;
+    }
+
+    if (cleanLine.startsWith("## ")) {
+      children.push(
+        docxParagraph(cleanLine.replace(/^##\s*/, ""), {
+          heading: HeadingLevel.HEADING_2,
+          bold: true,
+          color: "14232B",
+          size: 24,
+          before: 180,
+          after: 80
+        })
+      );
+
+      continue;
+    }
+
     const isHeading =
-      cleanLine === "Context" ||
       cleanLine === "Transcript" ||
-      cleanLine === "PGB CIMA Transcript" ||
       cleanLine.startsWith("Question ") ||
       cleanLine.startsWith("Answer ");
 
@@ -391,6 +430,7 @@ async function buildTranscriptDocxBuffer({
         after: 60
       })
     );
+   
   }
 
   children.push(
