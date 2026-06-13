@@ -2004,7 +2004,7 @@ body {
             html += "<ul>";
             inList = true;
           }
-          html += `<li>${escapeHtml(line.replace(/^-+\s*/, ""))}</li>`;
+          html += `<li>${escapeHtml(line.replace(/^-+\s*/, "").replace(/^\d+\.\s+/, ""))}</li>`;
           continue;
         }
 
