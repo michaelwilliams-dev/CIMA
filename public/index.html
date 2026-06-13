@@ -1589,13 +1589,7 @@ body {
           </div>
 
           <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;">
-            <button
-              class="report-btn"
-              type="button"
-              onclick="setCimaMode()"
-            >
-              Advisor
-            </button>
+          
 
             <button
             id="trainingModeBtn"
@@ -2621,7 +2615,7 @@ body {
 
     }
 
-       function setCimaMode() {
+    function setCimaMode() {
       document.querySelectorAll(".training-mode-tab").forEach((el) => {
         el.classList.add("hidden");
         el.classList.remove("active");
@@ -2632,10 +2626,11 @@ body {
       });
 
       setReplyView("standard");
-      document.getElementById("lastOutput").textContent = "Advisor mode selected.";
+      document.getElementById("lastOutput").textContent = "CIMA mode selected.";
     }
 
     function setTrainingMode() {
+    
       document.querySelectorAll(".cima-mode-tab").forEach((el) => {
         el.classList.add("hidden");
         el.classList.remove("active");
