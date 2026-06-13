@@ -45,7 +45,8 @@ function safeString(value = "") {
 
 function cleanText(value = "") {
   return String(value || "")
-    .replace(/\u0000/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFE\uFFFF]/g, "")
+    .replace(/\u00AD/g, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -148,8 +149,18 @@ function buildTranscriptPdfBuffer({
 
     const lines = cleanText(transcriptText).split("\n");
 
+    let inFrontMatter = true;
+
     for (const line of lines) {
       const cleanLine = String(line || "").trim();
+
+      if (inFrontMatter) {
+        if (cleanLine === "Transcript") {
+          inFrontMatter = false;
+        }
+
+        continue;
+      }
 
       if (doc.y > 760) {
         doc.addPage();
@@ -160,10 +171,49 @@ function buildTranscriptPdfBuffer({
         continue;
       }
 
+      if (cleanLine.startsWith("Answer: ## ")) {
+        doc
+          .fontSize(11)
+          .fillColor("#14232B")
+          .text("Answer", { align: "left" });
+
+        doc.moveDown(0.25);
+
+        doc
+          .fontSize(11)
+          .fillColor("#14232B")
+          .text(cleanLine.replace(/^Answer:\s*##\s*/, ""), { align: "left" });
+
+        doc.moveDown(0.35);
+        continue;
+      }
+
+      if (cleanLine.startsWith("## ")) {
+        doc
+          .fontSize(11)
+          .fillColor("#14232B")
+          .text(cleanLine.replace(/^##\s*/, ""), { align: "left" });
+
+        doc.moveDown(0.35);
+        continue;
+      }
+
+      if (cleanLine.startsWith("- ")) {
+        doc
+          .fontSize(9)
+          .fillColor("#111827")
+          .text("- " + cleanLine.replace(/^-+\s*/, ""), {
+            align: "left",
+            indent: 12,
+            lineGap: 2
+          });
+
+        doc.moveDown(0.2);
+        continue;
+      }
+
       const isHeading =
-        cleanLine === "Context" ||
         cleanLine === "Transcript" ||
-        cleanLine === "PGB CIMA Transcript" ||
         cleanLine.startsWith("Question ") ||
         cleanLine.startsWith("Answer ");
 
