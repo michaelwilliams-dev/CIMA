@@ -753,6 +753,7 @@ async function handleTranscriptEmail(req, res) {
       transcript: req.body.transcript,
       generatedAt,
       context,
+      humanReview,
       questions,
       subject
     });
