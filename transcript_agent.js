@@ -63,6 +63,7 @@ function buildTranscriptText({
   transcript = "",
   generatedAt = new Date().toISOString(),
   context = {},
+  humanReview = {},
   questions = []
 }) {
   const cleanTranscript = cleanText(transcript);
@@ -99,6 +100,8 @@ function buildTranscriptText({
     `Command level: ${safeString(context.level)}`,
     `Persona: ${safeString(context.persona)}`,
     `Requested output: ${safeString(context.output)}`,
+    `Human review confirmed: ${humanReview.confirmed === true ? "Yes" : "No"}`,
+    `Human review confirmed at: ${safeString(humanReview.confirmed_at)}`,
     "",
     "Transcript",
     questionLines
@@ -295,7 +298,8 @@ async function buildTranscriptDocxBuffer({
   transcriptText,
   generatedAt,
   subject = "PGB CIMA Transcript",
-  context = {}
+  context = {},
+  humanReview = {}
 }) {
   const children = [];
 
@@ -333,7 +337,9 @@ async function buildTranscriptDocxBuffer({
         docxCell("Mode", safeString(context.mode)),
         docxCell("Command level", safeString(context.level)),
         docxCell("Persona", safeString(context.persona)),
-        docxCell("Requested output", safeString(context.output))
+        docxCell("Requested output", safeString(context.output)),
+        docxCell("Human review confirmed", humanReview.confirmed === true ? "Yes" : "No"),
+        docxCell("Human review confirmed at", safeString(humanReview.confirmed_at))
       ]
     })
   );
@@ -418,6 +424,7 @@ export async function buildTranscriptPackage({
   transcript = "",
   generatedAt = new Date().toISOString(),
   context = {},
+  humanReview = {},
   questions = [],
   subject = "PGB CIMA transcript"
 } = {}) {
@@ -425,6 +432,7 @@ export async function buildTranscriptPackage({
     transcript,
     generatedAt,
     context,
+    humanReview,
     questions
   });
 
@@ -443,7 +451,8 @@ export async function buildTranscriptPackage({
     transcriptText,
     generatedAt,
     subject,
-    context
+    context,
+    humanReview
   });
 
   return {
