@@ -216,6 +216,7 @@ function buildTranscriptPdfBuffer({
 function docxParagraph(text = "", options = {}) {
   return new Paragraph({
     heading: options.heading,
+    bullet: options.bullet === true ? { level: 0 } : undefined,
     spacing: {
       before: options.before ?? 80,
       after: options.after ?? 80
@@ -410,6 +411,20 @@ async function buildTranscriptDocxBuffer({
           size: 24,
           before: 180,
           after: 80
+        })
+      );
+
+      continue;
+    }
+
+    if (cleanLine.startsWith("- ")) {
+      children.push(
+        docxParagraph(cleanLine.replace(/^-+\s*/, ""), {
+          bullet: true,
+          color: "243744",
+          size: 20,
+          before: 40,
+          after: 40
         })
       );
 
