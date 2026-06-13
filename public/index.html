@@ -3595,7 +3595,15 @@ body {
       document.getElementById("deliveryResponseStatus").textContent = "Preparing";
       document.getElementById("deliveryResponseStatus").className = "pending";
 
-    addMessage("user", `Question ${questions.length}`, `<p>${escapeHtml(question)}</p>`);
+    addMessage(
+  "user",
+  `Question ${questions.length}`,
+  `
+    <p><strong>Persona:</strong> ${escapeHtml(context.persona || "N/A")}</p>
+    <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+    <p>${escapeHtml(question)}</p>
+  `
+);
     input.value = "Searching the CIMA database and preparing the response...";
     document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
 
