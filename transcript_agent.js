@@ -222,7 +222,7 @@ function docxParagraph(text = "", options = {}) {
     },
     children: [
       new TextRun({
-        text: safeString(text),
+        text: text === null || text === undefined ? "" : String(text),
         bold: options.bold === true,
         italics: options.italics === true,
         color: options.color || "243744",
@@ -357,8 +357,18 @@ async function buildTranscriptDocxBuffer({
 
   const lines = cleanText(transcriptText).split("\n");
 
+  let inFrontMatter = true;
+
   for (const line of lines) {
     const cleanLine = String(line || "").trim();
+
+    if (inFrontMatter) {
+      if (cleanLine === "Transcript") {
+        inFrontMatter = false;
+      }
+
+      continue;
+    }
 
     if (!cleanLine) {
       children.push(docxParagraph("", { after: 40 }));
