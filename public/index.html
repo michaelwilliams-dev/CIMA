@@ -3815,10 +3815,12 @@ body {
         document.getElementById("deliveryEmailStatus").textContent = "Sent";
         document.getElementById("deliveryEmailStatus").className = "";
 
-        document.getElementById("processStepAccess").className = "process-step muted";
-        document.getElementById("processStepContext").className = "process-step muted";
-        document.getElementById("processStepResponse").className = "process-step muted";
+        document.getElementById("processStepAccess").className = "process-step active";
+        document.getElementById("processStepContext").className = "process-step active";
+        document.getElementById("processStepQuestion").className = "process-step active";
+        document.getElementById("processStepResponse").className = "process-step active";
         document.getElementById("processStepDelivery").className = "process-step active";
+      
       } catch (error) {
         document.getElementById("lastOutput").textContent = `Transcript email failed: ${error.message}`;
       } finally {
