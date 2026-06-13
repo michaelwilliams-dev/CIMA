@@ -3792,6 +3792,8 @@ body {
             subject: "PGB CIMA transcript",
             generated_at: new Date().toISOString(),
             include_transcript_in_email: includeTranscript,
+            context: getContext(),
+            persona: getContext().persona || "N/A",
             questions: includeTranscript ? transcriptEntries : transcriptEntries.map((entry) => ({
               at: entry.at,
               question: entry.question,
