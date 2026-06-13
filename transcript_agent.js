@@ -74,22 +74,28 @@ function buildTranscriptText({
   }
 
   const questionLines = Array.isArray(questions) && questions.length
-    ? questions.map((item, index) => {
+    ? questions.map((item) => {
         if (typeof item === "string") {
-          return `${index + 1}. ${item}`;
+          return [
+            "Persona",
+            safeString(context.persona),
+            "",
+            "Question",
+            safeString(item)
+          ].join("\n");
         }
 
         return [
-          `${index + 1}. ${safeString(item.question)}`,
-          `   Path: ${safeString(item.path)}`,
-          `   RAG: ${safeString(item.rag)}`,
-          `   HITL: ${safeString(item.hitl)}`,
-          `   Confidence: ${safeString(item.confidence)}`,
-          `   Answer: ${safeString(item.answer)}`
+          "Persona",
+          safeString(context.persona),
+          "",
+          "Question",
+          safeString(item.question),
+          "",
+          `Answer: ${safeString(item.answer)}`
         ].join("\n");
       }).join("\n\n")
     : "No questions recorded.";
-
   return [
     "PGB CIMA Transcript",
     "",
@@ -173,6 +179,7 @@ function buildTranscriptPdfBuffer({
 
       if (cleanLine.startsWith("Answer: ## ")) {
         doc
+          .font("Helvetica-Bold")
           .fontSize(11)
           .fillColor("#14232B")
           .text("Answer", { align: "left" });
@@ -180,16 +187,17 @@ function buildTranscriptPdfBuffer({
         doc.moveDown(0.25);
 
         doc
+          .font("Helvetica-Bold")
           .fontSize(11)
           .fillColor("#14232B")
           .text(cleanLine.replace(/^Answer:\s*##\s*/, ""), { align: "left" });
-
         doc.moveDown(0.35);
         continue;
       }
 
       if (cleanLine.startsWith("## ")) {
         doc
+          .font("Helvetica-Bold")
           .fontSize(11)
           .fillColor("#14232B")
           .text(cleanLine.replace(/^##\s*/, ""), { align: "left" });
@@ -200,6 +208,7 @@ function buildTranscriptPdfBuffer({
 
       if (cleanLine.startsWith("- ")) {
         doc
+          .font("Helvetica")
           .fontSize(9)
           .fillColor("#111827")
           .text("- " + cleanLine.replace(/^-+\s*/, ""), {
@@ -212,13 +221,17 @@ function buildTranscriptPdfBuffer({
         continue;
       }
 
-      const isHeading =
-        cleanLine === "Transcript" ||
-        cleanLine.startsWith("Question ") ||
-        cleanLine.startsWith("Answer ");
+       const isHeading =
+          cleanLine === "Transcript" ||
+          cleanLine === "Persona" ||
+          cleanLine === "Question" ||
+          cleanLine === "Answer" ||
+          cleanLine.startsWith("Question ") ||
+          cleanLine.startsWith("Answer ");
 
       if (isHeading) {
         doc
+          .font("Helvetica-Bold")
           .fontSize(11)
           .fillColor("#14232B")
           .text(cleanLine, { align: "left" });
@@ -228,6 +241,7 @@ function buildTranscriptPdfBuffer({
       }
 
       doc
+        .font("Helvetica")
         .fontSize(9)
         .fillColor("#111827")
         .text(cleanLine, {
@@ -481,8 +495,11 @@ async function buildTranscriptDocxBuffer({
       continue;
     }
 
-    const isHeading =
+     const isHeading =
       cleanLine === "Transcript" ||
+      cleanLine === "Persona" ||
+      cleanLine === "Question" ||
+      cleanLine === "Answer" ||
       cleanLine.startsWith("Question ") ||
       cleanLine.startsWith("Answer ");
 
