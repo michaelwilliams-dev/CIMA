@@ -166,6 +166,58 @@ function buildDroneResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
+  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
+    ? knowledgeSearch.results
+    : [];
+
+  const approvedSourceCount = approvedSourceResults.length;
+  const firstApprovedSource = approvedSourceResults[0] || null;
+
+  function extractSourceUrl(item = {}) {
+    const directUrl = safeString(item.source_url || item.url || "").trim();
+
+    if (directUrl) {
+      return directUrl;
+    }
+
+    const text = safeString(item.text || item.snippet || "");
+    const match = text.match(/SOURCE_URL:\s*([^\s]+)/i);
+
+    return match && match[1] ? match[1].trim() : "";
+  }
+
+  function extractSourceLabel(item = {}) {
+    const title = safeString(item.source_title || item.title || "").trim();
+
+    if (title) {
+      return title;
+    }
+
+    const sourceUrl = extractSourceUrl(item);
+
+    if (sourceUrl) {
+      return sourceUrl;
+    }
+
+    const sourceFile = safeString(item.source_file || "").trim();
+
+    if (sourceFile) {
+      return sourceFile.split("/").pop();
+    }
+
+    return "Not supplied";
+  }
+
+  const primarySource = firstApprovedSource
+    ? extractSourceLabel(firstApprovedSource)
+    : "None retained after specialist filtering";
+
+  const sourceSupportStatus = !knowledgeSearch
+    ? "No approved CIMA source search was supplied to this agent."
+    : approvedSourceCount > 0
+      ? "Source-supported for defensive drone-related incident management or training context only. Human review remains required."
+      : "No relevant approved drone source was retained after specialist filtering. The answer remains provisional and should not be treated as source-supported.";
+
   const hasDroneTerm = hasAnyTerm(question, DRONE_TRIGGER_TERMS);
 
   const clarificationQuestions = buildDroneClarificationQuestions({
@@ -205,6 +257,13 @@ function buildDroneResponse(input = {}) {
     hasDroneTerm
       ? "A drone or UAV-related term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
       : "No drone term was detected in the supplied question. Review whether this agent has been called correctly.",
+    "",
+    "## Approved Source Review",
+    "",
+    `Approved sources reviewed: ${approvedSourceCount}`,
+    `Primary source: ${primarySource}`,
+    `Source support status: ${sourceSupportStatus}`,
+    "External search used: No",
     "",
     "## Known Evidence",
     "",
@@ -276,9 +335,7 @@ function buildDroneResponse(input = {}) {
     clarification_questions: clarificationQuestions,
     search_plan: searchPlan,
     answer,
-    sources: knowledgeSearch && Array.isArray(knowledgeSearch.results)
-      ? knowledgeSearch.results
-      : []
+    sources: approvedSourceResults
   };
 }
 
