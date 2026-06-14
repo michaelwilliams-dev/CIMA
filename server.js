@@ -578,6 +578,82 @@ app.post("/cima-chat", async (req, res) => {
       });
     }
 
+    if (intakeResult.specialist_trigger?.detected === true) {
+      let specialistResponse = null;
+
+      if (intakeResult.specialist_trigger.agent === "drone_agent") {
+        const {
+          buildDroneResponse
+        } = await import("./operational/drone_agent.js");
+
+        specialistResponse = buildDroneResponse({
+          question,
+          context,
+          intake: intakeResult
+        });
+      }
+
+      if (intakeResult.specialist_trigger.agent === "terrorist_threat_agent") {
+        const {
+          buildTerroristThreatResponse
+        } = await import("./operational/terrorist_threat_agent.js");
+
+        specialistResponse = buildTerroristThreatResponse({
+          question,
+          context,
+          intake: intakeResult
+        });
+      }
+
+      if (specialistResponse) {
+        await writeAuditEvent({
+          event_type: "cima_specialist_answer_generated",
+          route: "/cima-chat",
+          success: true,
+          user_email: userEmail,
+          access_mode: access.mode || "",
+          terms_accepted: true,
+          question,
+          context_mode: context.mode || "",
+          command_level: context.level || "",
+          persona: context.persona || "",
+          requested_output: context.output || "",
+          intake_agent: intakeResult.agent,
+          specialist_trigger_type: intakeResult.specialist_trigger?.type || "",
+          specialist_agent: specialistResponse.agent || "",
+          response_path: specialistResponse.response_path || "",
+          rag_status: specialistResponse.rag_status || "",
+          hitl_status: specialistResponse.hitl || "",
+          confidence: specialistResponse.confidence || "",
+          ip_address: req.ip,
+          user_agent: req.get("user-agent")
+        });
+
+        return res.json({
+          ok: true,
+          build_iso: BUILD_ISO,
+          answered_at: new Date().toISOString(),
+          response_agent_build_iso: specialistResponse.build_iso,
+          response_path: specialistResponse.response_path,
+          path: specialistResponse.path,
+          rag: specialistResponse.rag,
+          rag_status: specialistResponse.rag_status,
+          hitl: specialistResponse.hitl,
+          confidence: specialistResponse.confidence,
+          source_mode: specialistResponse.source_mode,
+          answer: specialistResponse.answer,
+          sources: specialistResponse.sources || [],
+          intake: intakeResult,
+          specialist: {
+            agent: specialistResponse.agent,
+            safety_notice: specialistResponse.safety_notice,
+            clarification_questions: specialistResponse.clarification_questions,
+            search_plan: specialistResponse.search_plan
+          }
+        });
+      }
+    }
+
     await writeAuditEvent({
       event_type: "cima_question_submitted",
       route: "/cima-chat",
