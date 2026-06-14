@@ -69,7 +69,22 @@ function buildDroneThreatResponse(input = {}) {
   const question = normaliseText(input.question || input.message || input.text || "");
   const context = input.context || {};
   const triggerDecision = input.triggerDecision || input.trigger_decision || {};
-  const isLiveIncident = Boolean(input.isLiveIncident || input.live || context.live_incident);
+    const questionLower = question.toLowerCase();
+
+  const isLiveIncident = Boolean(
+    input.isLiveIncident ||
+    input.live ||
+    context.live_incident ||
+    questionLower.includes("live") ||
+    questionLower.includes("confirmed") ||
+    questionLower.includes("current") ||
+    questionLower.includes("active") ||
+    questionLower.includes("immediate") ||
+    questionLower.includes("emergency") ||
+    questionLower.includes("ongoing") ||
+    questionLower.includes("now")
+  );
+  
   const selectedMode = normaliseText(context.mode || input.mode || "Not supplied");
   const selectedPersona = normaliseText(context.persona || input.persona || "Not supplied");
   const selectedCommandLevel = normaliseText(context.command_level || context.commandLevel || input.command_level || "Not supplied");
