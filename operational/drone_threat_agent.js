@@ -166,19 +166,38 @@ function buildDroneThreatResponse(input = {}) {
     SAFETY_NOTICE
   ]);
 
-  return {
+ return {
     ok: true,
     agent: "drone_threat_agent",
     build_iso: DRONE_THREAT_AGENT_BUILD_ISO,
     response_path: "SPECIALIST_DRONE_THREAT",
+    path: "SPECIALIST_DRONE_THREAT",
     rag: isLiveIncident ? "RED" : "AMBER",
+    rag_status: isLiveIncident ? "RED" : "AMBER",
+    hitl: "Required before operational reliance",
+    confidence: "Provisional",
+    source_mode: "Approved CIMA source search has not yet been supplied to this agent.",
     requires_human_review: true,
     requires_escalation_check: true,
     safety_notice: SAFETY_NOTICE,
     clarity_questions: clarityQuestions,
-    answer: responseText
+    clarification_questions: clarityQuestions,
+    search_plan: {
+      approved_sources_first: true,
+      external_search_allowed: false,
+      external_search_note: "External search must not be used unless the user gives explicit permission after approved CIMA sources have been checked.",
+      suggested_internal_search_terms: [
+        "drone incident management",
+        "hostile drone public safety",
+        "drone threat command response",
+        "counter drone safety procedures",
+        "Silver command drone incident",
+        "critical infrastructure drone observation"
+      ]
+    },
+    answer: responseText,
+    sources: []
   };
-}
 
 function getDroneThreatAgentStatus() {
   return {
