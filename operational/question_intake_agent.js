@@ -270,11 +270,18 @@ function assessCimaQuestion(input = {}) {
   const tooShort = wordCount < MIN_WORDS_FOR_CLEAR_QUESTION;
   const vague = vagueMatches.length > 0 && (!hasLocation || !hasStatus || !hasRole);
 
+  const specialistQuestionHasMinimumDetail =
+    specialistTrigger.detected &&
+    !tooShort &&
+    hasLocation &&
+    hasStatus &&
+    hasRole;
+
   const needsClarification =
     !cleanQuestion ||
     tooShort ||
     vague ||
-    specialistTrigger.detected;
+    (specialistTrigger.detected && !specialistQuestionHasMinimumDetail);
 
   const clarificationQuestions = needsClarification
     ? buildClarificationQuestions({
