@@ -580,6 +580,20 @@ app.post("/cima-chat", async (req, res) => {
 
     if (intakeResult.specialist_trigger?.detected === true) {
       let specialistResponse = null;
+      let specialistKnowledgeSearch = null;
+
+      try {
+        specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(question, {
+          maxResults: 3,
+          maxLines: 1000
+        });
+      } catch (searchErr) {
+        specialistKnowledgeSearch = {
+          ok: false,
+          error: searchErr.message,
+          results: []
+        };
+      }
 
       if (intakeResult.specialist_trigger.agent === "drone_agent") {
         const {
@@ -589,7 +603,8 @@ app.post("/cima-chat", async (req, res) => {
         specialistResponse = buildDroneResponse({
           question,
           context,
-          intake: intakeResult
+          intake: intakeResult,
+          knowledgeSearch: specialistKnowledgeSearch
         });
       }
 
@@ -601,7 +616,8 @@ app.post("/cima-chat", async (req, res) => {
         specialistResponse = buildTerroristThreatResponse({
           question,
           context,
-          intake: intakeResult
+          intake: intakeResult,
+          knowledgeSearch: specialistKnowledgeSearch
         });
       }
 
@@ -625,6 +641,10 @@ app.post("/cima-chat", async (req, res) => {
           rag_status: specialistResponse.rag_status || "",
           hitl_status: specialistResponse.hitl || "",
           confidence: specialistResponse.confidence || "",
+          source_search_performed: true,
+          source_result_count: Array.isArray(specialistKnowledgeSearch?.results)
+            ? specialistKnowledgeSearch.results.length
+            : 0,
           ip_address: req.ip,
           user_agent: req.get("user-agent")
         });
