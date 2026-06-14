@@ -3405,7 +3405,13 @@ body {
             <p><strong>Trainer Notes</strong></p>
             <p>Send the generated trainer notes.</p>
 
-            <p class="small-note">Generate the trainer notes before sending.</p>
+            ${latestTrainerNotesHtml ? `
+              <button id="sendTrainerNotesEmailBtn" class="report-btn" type="button" onclick="sendTrainerNotesEmail()">
+                Send Trainer Notes
+              </button>
+            ` : `
+              <p class="small-note">Generate the trainer notes before sending.</p>
+            `}
           </div>
         `;
 
@@ -4094,6 +4100,80 @@ async function sendTrainingQaEmail() {
     }
   }
 }
+
+async function sendTrainerNotesEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the trainer notes.";
+    return;
+  }
+
+  if (!latestTrainerNotesHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the trainer notes before sending them.";
+    return;
+  }
+
+  const button = document.getElementById("sendTrainerNotesEmailBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainerNotesHtml);
+
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Trainer Notes",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        transcript: outputText || "No trainer notes text returned.",
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Trainer Notes",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No trainer notes text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Trainer notes email failed.");
+    }
+
+    document.getElementById("lastOutput").textContent = `Trainer notes sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Trainer notes email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Trainer Notes";
+    }
+  }
+}
+
     function clearSession() {
       questions = [];
       transcriptEntries = [];
