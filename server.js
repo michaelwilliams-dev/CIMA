@@ -620,6 +620,46 @@ app.post("/cima-chat", async (req, res) => {
         };
       }
 
+      const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_agent"
+        ? [
+            "drone",
+            "uav",
+            "unmanned",
+            "uas",
+            "remotely piloted",
+            "hostile reconnaissance"
+          ]
+        : intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
+          ? [
+              "terror",
+              "terrorist",
+              "hostile activity",
+              "marauding",
+              "attack",
+              "protective security",
+              "security control room"
+            ]
+          : [];
+
+      if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
+        specialistKnowledgeSearch = {
+          ...specialistKnowledgeSearch,
+          results: specialistKnowledgeSearch.results.filter((item) => {
+            const searchableText = [
+              item.text,
+              item.snippet,
+              item.source_file,
+              item.source_type,
+              item.source_collection,
+              item.source_title,
+              item.title
+            ].join(" ").toLowerCase();
+
+            return specialistFilterTerms.some((term) => searchableText.includes(term));
+          })
+        };
+      }
+
       if (intakeResult.specialist_trigger.agent === "drone_agent") {
         const {
           buildDroneResponse
