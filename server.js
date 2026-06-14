@@ -407,6 +407,36 @@ app.post("/check-access", async (req, res) => {
   });
 });
 
+app.post("/question-intake-test", async (req, res) => {
+  const question = String(req.body.question || "").trim();
+
+  try {
+    const {
+      assessCimaQuestion
+    } = await import("./operational/question_intake_agent.js");
+
+    const intakeResult = assessCimaQuestion({
+      question
+    });
+
+    return res.json({
+      ok: true,
+      build_iso: BUILD_ISO,
+      tested_at: new Date().toISOString(),
+      intake: intakeResult
+    });
+  } catch (err) {
+    console.error("ERROR /question-intake-test failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Question intake test route failed.",
+      detail: err.message,
+      build_iso: BUILD_ISO
+    });
+  }
+});
+
 app.post("/cima-chat", async (req, res) => {
   const question = String(req.body.question || "").trim();
 
