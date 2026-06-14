@@ -258,7 +258,7 @@ function buildTerroristThreatResponse(input = {}) {
     `Question: ${valueOrDefault(question)}`,
     `Persona: ${valueOrDefault(context.persona)}`,
     `Mode: ${valueOrDefault(context.mode)}`,
-    `Command level: ${valueOrDefault(context.level)}`,
+    `Command level: ${valueOrDefault(context.command_level || context.commandLevel || context.level)}`,
     "",
     "## Initial Assessment",
     "",
