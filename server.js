@@ -662,17 +662,16 @@ app.post("/cima-chat", async (req, res) => {
 
       if (intakeResult.specialist_trigger.agent === "drone_agent") {
         const {
-          buildDroneResponse
-        } = await import("./operational/drone_agent.js");
+          buildDroneThreatResponse
+        } = await import("./operational/drone_threat_agent.js");
 
-        specialistResponse = buildDroneResponse({
+        specialistResponse = buildDroneThreatResponse({
           question,
           context,
           intake: intakeResult,
           knowledgeSearch: specialistKnowledgeSearch
         });
       }
-
       if (intakeResult.specialist_trigger.agent === "terrorist_threat_agent") {
         const {
           buildTerroristThreatResponse
