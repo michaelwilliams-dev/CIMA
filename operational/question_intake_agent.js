@@ -155,19 +155,7 @@ const SPECIALIST_TRIGGER_GROUPS = [
       "faiss outage"
     ]
   },
-  {
-    type: "Stadium / public venue",
-    agent: "stadium_agent",
-    words: [
-      "stadium",
-      "arena",
-      "crowd",
-      "crowd crush",
-      "crowd surge",
-      "public venue",
-      "large event"
-    ]
-  }
+  
 ];
 
 function safeString(value = "") {
