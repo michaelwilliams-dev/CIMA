@@ -582,8 +582,33 @@ app.post("/cima-chat", async (req, res) => {
       let specialistResponse = null;
       let specialistKnowledgeSearch = null;
 
+      const specialistSearchQuestion = [
+        question,
+        ...(intakeResult.specialist_trigger.agent === "drone_agent"
+          ? [
+              "drone sighting venue response",
+              "unmanned aircraft public venue",
+              "hostile reconnaissance drone",
+              "Silver command drone incident",
+              "event control drone report",
+              "public safety drone incident"
+            ]
+          : []),
+        ...(intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
+          ? [
+              "terrorism public venue incident management",
+              "hostile activity command response",
+              "marauding terrorist attack protective security",
+              "hostile reconnaissance public venue",
+              "Silver command terrorism incident",
+              "public safety hostile activity",
+              "security control room terrorist incident"
+            ]
+          : [])
+      ].join(" ");
+
       try {
-        specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(question, {
+        specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(specialistSearchQuestion, {
           maxResults: 3,
           maxLines: 1000
         });
