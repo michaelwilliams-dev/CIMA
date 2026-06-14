@@ -1156,14 +1156,14 @@
     #emailCimaAnswerPanel > p:first-child strong,
     #emailSynopsisPanel > p:first-child strong,
     #emailQuestionsPanel > p:first-child strong,
-    #emailCombinedPanel > p:first-child strong {
+    #emailCombinedPanel > p:first-child strong,
+    #emailTrainerNotesPanel > p:first-child strong {
       display: block;
       font-size: 20px;
       line-height: 1.2;
       font-weight: 900;
       color: var(--ink);
     }
-
     .source-view p {
       margin: 7px 0;
     }
@@ -3165,6 +3165,7 @@ body {
         }
 
         document.getElementById("lastOutput").textContent = "Trainer notes generated.";
+        renderRightView();
       } catch (error) {
         if (activeReplyView === "trainerNotes" && replyArea) {
           replyArea.innerHTML = `
@@ -3242,7 +3243,8 @@ body {
                 document.getElementById('emailSynopsisPanel').classList.add('hidden');
                 document.getElementById('emailQuestionsPanel').classList.add('hidden');
                 document.getElementById('emailCombinedPanel').classList.add('hidden');
-              "
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
+                "
             >
               CIMA Answer
             </button>
@@ -3262,7 +3264,8 @@ body {
                 document.getElementById('emailSynopsisPanel').classList.remove('hidden');
                 document.getElementById('emailQuestionsPanel').classList.add('hidden');
                 document.getElementById('emailCombinedPanel').classList.add('hidden');
-              "
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
+                "
             >
               Training Synopsis
             </button>
@@ -3282,6 +3285,7 @@ body {
                 document.getElementById('emailSynopsisPanel').classList.add('hidden');
                 document.getElementById('emailQuestionsPanel').classList.remove('hidden');
                 document.getElementById('emailCombinedPanel').classList.add('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
               "
             >
               Training Questions
@@ -3302,6 +3306,7 @@ body {
                 document.getElementById('emailSynopsisPanel').classList.add('hidden');
                 document.getElementById('emailQuestionsPanel').classList.add('hidden');
                 document.getElementById('emailCombinedPanel').classList.remove('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
               "
             >
               Training Questions and Answers
@@ -3311,7 +3316,20 @@ body {
               id="emailTrainerNotesTab"
               class="answer-tab"
               type="button"
-              disabled
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+                document.getElementById('emailTrainerNotesTab').classList.add('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.remove('hidden');
+                
+                "
             >
               Trainer Notes
             </button>
@@ -3381,6 +3399,13 @@ body {
             ` : `
               <p class="small-note">Generate the training questions and answers before sending.</p>
             `}
+          </div>
+
+          <div id="emailTrainerNotesPanel" class="hidden">
+            <p><strong>Trainer Notes</strong></p>
+            <p>Send the generated trainer notes.</p>
+
+            <p class="small-note">Generate the trainer notes before sending.</p>
           </div>
         `;
 
