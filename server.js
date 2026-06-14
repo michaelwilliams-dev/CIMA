@@ -510,6 +510,74 @@ app.post("/cima-chat", async (req, res) => {
       });
     }
 
+    const {
+      assessCimaQuestion
+    } = await import("./operational/question_intake_agent.js");
+
+    const intakeResult = assessCimaQuestion({
+      question
+    });
+
+    if (intakeResult.needs_clarification) {
+      await writeAuditEvent({
+        event_type: "cima_question_needs_clarification",
+        route: "/cima-chat",
+        success: true,
+        user_email: userEmail,
+        access_mode: access.mode || "",
+        terms_accepted: true,
+        question,
+        context_mode: context.mode || "",
+        command_level: context.level || "",
+        persona: context.persona || "",
+        requested_output: context.output || "",
+        intake_agent: intakeResult.agent,
+        intake_word_count: intakeResult.word_count,
+        specialist_trigger_detected: intakeResult.specialist_trigger?.detected === true,
+        specialist_trigger_type: intakeResult.specialist_trigger?.type || "",
+        specialist_trigger_agent: intakeResult.specialist_trigger?.agent || "",
+        ip_address: req.ip,
+        user_agent: req.get("user-agent")
+      });
+
+      const clarificationAnswer = [
+        "## Clarification Required",
+        "",
+        intakeResult.reason,
+        "",
+        "## Safety and Use Limitation",
+        "",
+        intakeResult.safety_notice,
+        "",
+        "## Information Needed Before CIMA Answers",
+        "",
+        ...intakeResult.clarification_questions.map((item) => `- ${item}`),
+        "",
+        "## Source Status",
+        "",
+        "The controlled CIMA database has not yet been searched because the question requires clarification first.",
+        "",
+        "Once the missing details are supplied, CIMA should search approved internal sources before considering any external search."
+      ].join("\n");
+
+      return res.json({
+        ok: true,
+        build_iso: BUILD_ISO,
+        answered_at: new Date().toISOString(),
+        response_agent_build_iso: intakeResult.build_iso,
+        response_path: "QUESTION INTAKE",
+        path: "QUESTION INTAKE",
+        rag: intakeResult.specialist_trigger?.detected ? "AMBER" : "GREEN",
+        rag_status: intakeResult.specialist_trigger?.detected ? "AMBER" : "GREEN",
+        hitl: intakeResult.specialist_trigger?.detected ? "Required before advice" : "Clarification required",
+        confidence: "Needs clarification",
+        source_mode: "No database search before clarification",
+        answer: clarificationAnswer,
+        sources: [],
+        intake: intakeResult
+      });
+    }
+
     await writeAuditEvent({
       event_type: "cima_question_submitted",
       route: "/cima-chat",
