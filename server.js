@@ -90,6 +90,11 @@ import {
   getFaissKnowledgeAgentStatus,
   searchFaissKnowledgeByKeyword
 } from "./retrieval/faiss_knowledge_agent.js";
+
+import {
+  getQuestionIntakeAgentStatus
+} from "./operational/question_intake_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -239,6 +244,7 @@ app.get("/meta", (req, res) => {
     training_synopsis_agent: getTrainingSynopsisAgentStatus(),
     source_index_agent: getSourceIndexAgentStatus(),
     faiss_knowledge_agent: getFaissKnowledgeAgentStatus(),
+    question_intake_agent: getQuestionIntakeAgentStatus(),
     data_review_email: DATA_REVIEW_EMAIL,
     pdf_index_ready: false,
     html_index_ready: false,
