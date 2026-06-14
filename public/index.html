@@ -3316,6 +3316,7 @@ body {
               id="emailTrainerNotesTab"
               class="answer-tab"
               type="button"
+              ${latestTrainerNotesHtml ? "" : "disabled"}
               onclick="
                 document.getElementById('emailCimaAnswerTab').classList.remove('active');
                 document.getElementById('emailSynopsisTab').classList.remove('active');
@@ -3328,8 +3329,7 @@ body {
                 document.getElementById('emailQuestionsPanel').classList.add('hidden');
                 document.getElementById('emailCombinedPanel').classList.add('hidden');
                 document.getElementById('emailTrainerNotesPanel').classList.remove('hidden');
-                
-                "
+              "
             >
               Trainer Notes
             </button>
