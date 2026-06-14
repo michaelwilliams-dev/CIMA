@@ -197,9 +197,10 @@ function buildDroneThreatResponse(input = {}) {
     },
     answer: responseText,
     sources: []
-  };
+      };
+    }
 
-function getDroneThreatAgentStatus() {
+    function getDroneThreatAgentStatus() {
   return {
     ok: true,
     agent: "drone_threat_agent",
