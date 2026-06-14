@@ -3144,6 +3144,28 @@ body {
 
         latestTrainerNotesHtml = data.trainer_notes?.html || `<pre>${escapeHtml(data.trainer_notes?.plain_text || "No trainer notes returned.")}</pre>`;
 
+        const trainerNoteHeadings = [
+          "Training Scenario",
+          "Trainer Aim",
+          "Key Teaching Points"
+        ];
+
+        for (const heading of trainerNoteHeadings) {
+          const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+          const paragraphPattern = new RegExp(`<p>\\s*(?:<strong>)?${escapedHeading}(?:</strong>)?\\s*</p>`, "gi");
+          latestTrainerNotesHtml = latestTrainerNotesHtml.replace(
+            paragraphPattern,
+            `<h3>${heading}</h3>`
+          );
+
+          const headingPattern = new RegExp(`<h([1-6])>\\s*(?:<strong>)?${escapedHeading}(?:</strong>)?\\s*</h\\1>`, "gi");
+          latestTrainerNotesHtml = latestTrainerNotesHtml.replace(
+            headingPattern,
+            `<h3>${heading}</h3>`
+          );
+        }
+
         if (activeReplyView === "trainerNotes" && replyArea) {
           replyArea.className = "";
           replyArea.innerHTML = `
