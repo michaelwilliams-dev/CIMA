@@ -3951,6 +3951,17 @@ addMessage(
         hitl = data.hitl || data.human_in_the_loop || hitl;
         confidence = data.confidence || confidence;
         rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
+
+        const answerForRagCheck = String(answer || "").toUpperCase();
+        const questionForRagCheck = String(question || "").toUpperCase();
+
+        if (
+          answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
+          questionForRagCheck.includes("UNCONFIRMED")
+        ) {
+          rag = "AMBER";
+        }
+
         latestSources = data.sources || [];
       } catch (error) {
         answer = fallbackAnswer(question, predictedPath);
