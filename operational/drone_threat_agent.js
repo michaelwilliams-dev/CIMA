@@ -85,6 +85,18 @@ function buildDroneThreatResponse(input = {}) {
     questionLower.includes("now")
   );
   
+  const isClearTrainingExercise =
+    !isLiveIncident &&
+    (
+      questionLower.includes("classroom") ||
+      questionLower.includes("tabletop") ||
+      questionLower.includes("exercise") ||
+      questionLower.includes("training note") ||
+      questionLower.includes("scenario") ||
+      questionLower.includes("simulation") ||
+      questionLower.includes("simulated")
+    );
+
   const selectedMode = normaliseText(context.mode || input.mode || "Not supplied");
   const selectedPersona = normaliseText(context.persona || input.persona || "Not supplied");
   const selectedCommandLevel = normaliseText(context.command_level || context.commandLevel || input.command_level || "Not supplied");
@@ -93,6 +105,15 @@ function buildDroneThreatResponse(input = {}) {
     Array.isArray(triggerDecision.clarity_questions) && triggerDecision.clarity_questions.length > 0
       ? triggerDecision.clarity_questions
       : DEFAULT_CLARITY_QUESTIONS;
+
+  const exerciseSetupChecks = [
+    "Confirm the exercise is classroom, tabletop or training-only before delivery.",
+    "Confirm the audience, role level and learning objective.",
+    "Confirm that the scenario is defensive and does not include interference with, jamming, capture or damage to any drone or aircraft.",
+    "Confirm the training focus: observation reporting, escalation, logging, communications and human review.",
+    "Confirm how participant decisions, assumptions and learning points will be recorded.",
+    "Confirm who will review the training output before reuse or wider circulation."
+  ];
 
   const immediatePriorities = [
     "Protect life and safety first.",
@@ -171,8 +192,8 @@ function buildDroneThreatResponse(input = {}) {
     "Communications guidance",
     buildNumberedList(communicationsGuidance),
     "",
-    "Clarifying questions",
-    buildNumberedList(clarityQuestions),
+    isClearTrainingExercise ? "Exercise setup checks" : "Clarifying questions",
+    buildNumberedList(isClearTrainingExercise ? exerciseSetupChecks : clarityQuestions),
     "",
     "Human review and escalation flags",
     buildNumberedList(humanReviewFlags),
