@@ -669,6 +669,7 @@ app.post("/cima-chat", async (req, res) => {
 
     const intakeResult = assessCimaQuestion({
       question
+      context
     });
 
     if (intakeResult.needs_clarification) {
