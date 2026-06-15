@@ -511,6 +511,53 @@ app.post("/cima-chat", async (req, res) => {
     }
 
     const {
+      buildClarificationRequiredResponse
+    } = await import("./operational/clarification_gate_agent.js");
+
+    const clarificationGateResponse = buildClarificationRequiredResponse({
+      question,
+      context,
+      terms,
+      access
+    });
+
+    if (clarificationGateResponse.response_path === "CLARIFICATION_REQUIRED") {
+      await writeAuditEvent({
+        event_type: "cima_clarification_gate_triggered",
+        route: "/cima-chat",
+        success: true,
+        user_email: userEmail,
+        access_mode: access.mode || "",
+        terms_accepted: true,
+        question,
+        context_mode: context.mode || "",
+        command_level: context.level || "",
+        persona: context.persona || "",
+        requested_output: context.output || "",
+        response_path: clarificationGateResponse.response_path || "",
+        rag_status: clarificationGateResponse.rag_status || "",
+        hitl_status: clarificationGateResponse.hitl || "",
+        confidence: clarificationGateResponse.confidence || "",
+        clarification_reason_count: Array.isArray(clarificationGateResponse.clarification_reasons)
+          ? clarificationGateResponse.clarification_reasons.length
+          : 0,
+        clarification_question_count: Array.isArray(clarificationGateResponse.clarification_questions)
+          ? clarificationGateResponse.clarification_questions.length
+          : 0,
+        source_search_performed: false,
+        ip_address: req.ip,
+        user_agent: req.get("user-agent")
+      });
+
+      return res.json({
+        ...clarificationGateResponse,
+        build_iso: BUILD_ISO,
+        answered_at: new Date().toISOString(),
+        response_agent_build_iso: clarificationGateResponse.response_agent_build_iso || clarificationGateResponse.build_iso
+      });
+    }
+
+    const {
       assessCimaQuestion
     } = await import("./operational/question_intake_agent.js");
 
