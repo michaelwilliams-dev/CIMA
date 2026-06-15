@@ -524,12 +524,21 @@ app.post("/cima-chat", async (req, res) => {
       ? specialistClarificationContext.unsafeWording
       : [];
 
+    const questionForSpecialistGate = String(question || "").toLowerCase();
+
+    const isClearExerciseOrTrainingScenario =
+      questionForSpecialistGate.includes("classroom") ||
+      questionForSpecialistGate.includes("tabletop") ||
+      questionForSpecialistGate.includes("exercise") ||
+      questionForSpecialistGate.includes("training note");
+
     const shouldReturnDynamicSpecialistClarification =
       specialistDecision.triggered === true &&
       (
         specialistUnsafeWording.length > 0 ||
         (
           specialistClarificationContext.isTrainingRequest === true &&
+          !isClearExerciseOrTrainingScenario &&
           !specialistClarificationContext.isLive &&
           !specialistClarificationContext.isConfirmed &&
           !specialistClarificationContext.isSuspected
