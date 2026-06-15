@@ -204,6 +204,156 @@ function getMatchedTerms(text = "", terms = []) {
   return terms.filter((term) => termIsMatched(text, term));
 }
 
+function detectQuestionContext(input = {}) {
+  const rawQuestion = safeString(input.question || input.message || input.text || "");
+  const question = normaliseText(rawQuestion);
+  const context = input.context || {};
+
+  const persona = safeString(context.persona || input.persona || "");
+  const commandLevel = safeString(
+    context.command_level ||
+    context.commandLevel ||
+    context.level ||
+    input.command_level ||
+    input.commandLevel ||
+    input.level ||
+    ""
+  );
+
+  const isTrainingRequest =
+    question.includes("training") ||
+    question.includes("trainer") ||
+    question.includes("classroom") ||
+    question.includes("exercise") ||
+    question.includes("tabletop") ||
+    question.includes("scenario");
+
+  const isLive =
+    question.includes("live") ||
+    question.includes("now") ||
+    question.includes("immediate") ||
+    question.includes("current") ||
+    question.includes("ongoing");
+
+  const isConfirmed =
+    question.includes("confirmed") ||
+    question.includes("verified") ||
+    question.includes("known");
+
+  const isSuspected =
+    question.includes("suspected") ||
+    question.includes("unconfirmed") ||
+    question.includes("possible") ||
+    question.includes("reported");
+
+  const requestedOutput =
+    question.includes("checklist") ? "checklist" :
+    question.includes("briefing") ? "briefing note" :
+    question.includes("training note") ? "training note" :
+    question.includes("trainer notes") ? "trainer notes" :
+    question.includes("questions and answers") || question.includes("q&a") ? "questions and answers" :
+    question.includes("decision log") || question.includes("log") ? "decision log" :
+    question.includes("holding statement") || question.includes("statement") ? "communications statement" :
+    question.includes("report") ? "report" :
+    "";
+
+  const unsafeWording = [
+    "attack",
+    "tactical",
+    "tactics",
+    "counter drone",
+    "counter-drone",
+    "disable",
+    "interfere",
+    "jam",
+    "jamming",
+    "evade",
+    "evasion",
+    "target",
+    "weapon",
+    "weaponise",
+    "weaponize"
+  ].filter((term) => question.includes(term));
+
+  return {
+    rawQuestion,
+    question,
+    persona,
+    commandLevel,
+    isTrainingRequest,
+    isLive,
+    isConfirmed,
+    isSuspected,
+    requestedOutput,
+    unsafeWording
+  };
+}
+
+function buildDynamicClarityQuestions(input = {}, primaryMatch = {}) {
+  const detected = detectQuestionContext(input);
+  const category = safeString(primaryMatch.category || "");
+  const matchedTerms = Array.isArray(primaryMatch.matched_terms) ? primaryMatch.matched_terms : [];
+
+  const incidentLabel =
+    category === "DRONE_THREAT" ? "drone-related incident" :
+    category === "TERRORIST_THREAT" ? "terrorist or hostile-threat concern" :
+    category === "CYBER_ATTACK" ? "cyber incident" :
+    category === "EVACUATION_OR_LOCKDOWN" ? "evacuation, lockdown or site safety issue" :
+    category === "MAJOR_INCIDENT" ? "major incident" :
+    category === "CHEMICAL_OR_HAZMAT" ? "chemical or hazardous-material incident" :
+    "incident";
+
+  const questions = [];
+
+  if (matchedTerms.length > 0) {
+    questions.push(
+      `You mentioned ${matchedTerms.join(", ")}. Is this best treated as a ${incidentLabel}, or is a different incident type intended?`
+    );
+  } else {
+    questions.push(
+      `What incident is this about? For example: drone sighting, terrorist threat, evacuation, cyber disruption, safeguarding concern, protest, fire, medical incident or major incident.`
+    );
+  }
+
+  if (!detected.persona || detected.persona === "N/A") {
+    questions.push(
+      "Who is the audience for the response: Gold, Silver, Bronze, trainer, communications lead, safeguarding lead, loggist, site staff or another role?"
+    );
+  }
+
+  if (!detected.isLive && !detected.isConfirmed && !detected.isSuspected) {
+    questions.push(
+      "Is this for a live incident, a confirmed incident, a suspected or unconfirmed incident, or a classroom/tabletop exercise?"
+    );
+  }
+
+  if (!detected.requestedOutput) {
+    questions.push(
+      "What type of output do you want: training note, checklist, briefing note, trainer notes, decision log, communications statement, questions and answers, or post-incident review note?"
+    );
+  }
+
+  if (detected.unsafeWording.length > 0) {
+    questions.push(
+      `Your wording includes ${detected.unsafeWording.join(", ")}. Should CIMA reframe this as defensive incident-management, escalation, communications, logging, audit and training support only?`
+    );
+  }
+
+  if (category === "DRONE_THREAT") {
+    questions.push(
+      "For a drone-related scenario, should the focus be on observation reporting, confirmation checks, safety cordons, escalation, police liaison, communications, logging and human review?"
+    );
+  }
+
+  if (category === "TERRORIST_THREAT") {
+    questions.push(
+      "For a terrorist or hostile-threat scenario, should the focus be on defensive command support, escalation, communications, welfare, logging, police liaison and human review?"
+    );
+  }
+
+  return questions;
+}
+
 function buildSpecialistTriggerDecision(input = {}) {
   const question = normaliseText(input.question || input.message || input.text || "");
   const matches = [];
@@ -217,7 +367,7 @@ function buildSpecialistTriggerDecision(input = {}) {
         agent: triggerCategory.agent,
         confidence: triggerCategory.confidence,
         matched_terms: matchedTerms,
-        clarity_questions: triggerCategory.clarity_questions
+        default_clarity_questions: triggerCategory.clarity_questions
       });
     }
   }
@@ -229,6 +379,8 @@ function buildSpecialistTriggerDecision(input = {}) {
       primary_agent: "NONE",
       confidence: "none",
       matches: [],
+      clarification_required: false,
+      clarification_context: detectQuestionContext(input),
       clarity_questions: [],
       safety_notice: SAFETY_NOTICE,
       trigger_agent_build_iso: SPECIALIST_TRIGGER_AGENT_BUILD_ISO
@@ -236,6 +388,7 @@ function buildSpecialistTriggerDecision(input = {}) {
   }
 
   const primaryMatch = matches[0];
+  const dynamicClarityQuestions = buildDynamicClarityQuestions(input, primaryMatch);
 
   return {
     triggered: true,
@@ -243,7 +396,9 @@ function buildSpecialistTriggerDecision(input = {}) {
     primary_agent: primaryMatch.agent,
     confidence: primaryMatch.confidence,
     matches,
-    clarity_questions: primaryMatch.clarity_questions,
+    clarification_required: true,
+    clarification_context: detectQuestionContext(input),
+    clarity_questions: dynamicClarityQuestions,
     safety_notice: SAFETY_NOTICE,
     trigger_agent_build_iso: SPECIALIST_TRIGGER_AGENT_BUILD_ISO
   };
