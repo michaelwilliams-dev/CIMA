@@ -2458,12 +2458,51 @@ body {
       }
     }
 
+    function commandLevelFromPersona(persona = "") {
+      const clean = String(persona || "").toUpperCase();
+
+      if (clean.includes("GOLD")) {
+        return "Gold";
+      }
+
+      if (clean.includes("SILVER")) {
+        return "Silver";
+      }
+
+      if (clean.includes("BRONZE")) {
+        return "Bronze";
+      }
+
+      if (clean.includes("TRAINER")) {
+        return "Training";
+      }
+
+      if (clean.includes("COMMUNICATIONS")) {
+        return "Communications";
+      }
+
+      if (clean.includes("SAFEGUARDING")) {
+        return "Safeguarding";
+      }
+
+      if (clean.includes("LOGGIST")) {
+        return "Logging";
+      }
+
+      return "N/A";
+    }
+
     function getContext() {
+      const persona = document.getElementById("personaSelect").value || "N/A";
+      const commandLevel = commandLevelFromPersona(persona);
+
       return {
         thread: document.getElementById("threadTitle").textContent || "CIMA Incident Thread",
         mode: document.getElementById("modeSelect").value || "N/A",
-        level: document.getElementById("levelSelect").value || "N/A",
-        persona: document.getElementById("personaSelect").value || "N/A",
+        level: commandLevel,
+        command_level: commandLevel,
+        commandLevel: commandLevel,
+        persona: persona,
         output: document.getElementById("outputSelect").value || "N/A",
         evidence_from_year: document.getElementById("fromYear")?.value || "2010",
         evidence_to_year: document.getElementById("toYear")?.value || "2026"
