@@ -206,7 +206,26 @@ function assessClarificationNeed(input = {}) {
     clarificationQuestions.push("Please state the incident, issue, or decision you want CIMA to support.");
   }
 
-  if (question && words < MIN_CLEAR_OPERATIONAL_WORDS && (isHighRisk || isVagueRequest)) {
+  const isClearShortTrainingRequest =
+    hasNonLiveMode &&
+    hasCommandContext &&
+    containsAny(combinedText, [
+      "training",
+      "training note",
+      "classroom",
+      "exercise",
+      "tabletop",
+      "incident logging",
+      "logging",
+      "command team"
+    ]);
+
+  if (
+    question &&
+    words < MIN_CLEAR_OPERATIONAL_WORDS &&
+    (isHighRisk || isVagueRequest) &&
+    !isClearShortTrainingRequest
+  ) {
     reasons.push("The question is under the minimum clarity threshold for operational or high-risk CIMA guidance.");
     clarificationQuestions.push("Please provide more detail before CIMA gives operational guidance. Include what has happened, whether it is live or training, who is asking, the site or location involved, and what decision support is required.");
   }
