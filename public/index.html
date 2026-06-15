@@ -3955,7 +3955,21 @@ addMessage(
         const answerForRagCheck = String(answer || "").toUpperCase();
         const questionForRagCheck = String(question || "").toUpperCase();
 
-        if (
+        const isLiveConfirmedRisk =
+          (
+            questionForRagCheck.includes("LIVE") ||
+            questionForRagCheck.includes("CONFIRMED") ||
+            questionForRagCheck.includes("NOW")
+          ) &&
+          (
+            questionForRagCheck.includes("DRONE") ||
+            questionForRagCheck.includes("TERRORIST") ||
+            questionForRagCheck.includes("THREAT")
+          );
+
+        if (isLiveConfirmedRisk) {
+          rag = "RED";
+        } else if (
           answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
           questionForRagCheck.includes("UNCONFIRMED")
         ) {
