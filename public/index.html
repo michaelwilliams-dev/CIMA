@@ -1408,6 +1408,121 @@ body {
   min-width: 0 !important;
 }
 
+.centre-workspace,
+.reply-card {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* AIVS CIMA RAG Dial Box
+   ISO Timestamp: 2026-06-15T06:00:00+01:00
+   Change: Adds visual RAG dial box only. No backend wiring.
+*/
+
+.cima-rag-dial-box {
+  margin: 0 18px 18px 18px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-left: 5px solid var(--orange);
+  border-radius: 16px;
+  background: #fffdfa;
+  box-shadow: 0 8px 18px rgba(40, 35, 25, 0.10);
+}
+
+.cima-rag-dial-title {
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 900;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.cima-rag-dial-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cima-rag-dial {
+  position: relative;
+  width: 128px;
+  height: 78px;
+  overflow: hidden;
+}
+
+.cima-rag-dial-face {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 225deg,
+      var(--green) 0deg 90deg,
+      var(--amber) 90deg 180deg,
+      var(--red) 180deg 270deg,
+      transparent 270deg 360deg
+    );
+}
+
+.cima-rag-dial-inner {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #fffdfa;
+}
+
+.cima-rag-dial-needle {
+  position: absolute;
+  left: 62px;
+  top: 58px;
+  width: 4px;
+  height: 48px;
+  background: var(--ink);
+  border-radius: 4px;
+  transform-origin: 50% 100%;
+  transform: rotate(0deg);
+}
+
+.cima-rag-dial-centre {
+  position: absolute;
+  left: 54px;
+  top: 51px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid #fffdfa;
+}
+
+.cima-rag-dial-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.cima-rag-dial-status {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #5e6970;
+  line-height: 1.4;
+}
+
+.cima-rag-dial-status strong {
+  color: var(--ink);
+  font-weight: 900;
+}
 
 
   </style>
@@ -1869,6 +1984,33 @@ body {
 
 
         <div class="source-view" id="rightView"></div>
+
+        <!-- AIVS CIMA RAG Dial Box
+             ISO Timestamp: 2026-06-15T06:00:00+01:00
+             Change: Visual dial placeholder only. No backend wiring.
+        -->
+        <div class="cima-rag-dial-box" id="cimaRagDialBox">
+          <div class="cima-rag-dial-title">Response Risk Dial</div>
+
+          <div class="cima-rag-dial-wrap">
+            <div class="cima-rag-dial" aria-label="CIMA response risk dial">
+              <div class="cima-rag-dial-face"></div>
+              <div class="cima-rag-dial-inner"></div>
+              <div class="cima-rag-dial-needle" id="cimaRagDialNeedle"></div>
+              <div class="cima-rag-dial-centre"></div>
+            </div>
+          </div>
+
+          <div class="cima-rag-dial-labels">
+            <span>Green</span>
+            <span>Amber</span>
+            <span>Red</span>
+          </div>
+
+          <div class="cima-rag-dial-status">
+            Current position: <strong id="cimaRagDialStatus">Amber / Review</strong>
+          </div>
+        </div>
 
         <div class="status-area">
           <div class="status-card">
