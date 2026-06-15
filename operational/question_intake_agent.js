@@ -262,12 +262,30 @@ function assessCimaQuestion(input = {}) {
   const cleanQuestion = normaliseText(question);
   const wordCount = countWords(question);
 
+  const context = input.context && typeof input.context === "object"
+    ? input.context
+    : {};
+
+  const contextRoleText = [
+    context.persona,
+    context.role,
+    context.command_level,
+    context.commandLevel,
+    context.level
+  ].join(" ").toLowerCase();
+
   const specialistTrigger = detectSpecialistTrigger(question);
 
   const vagueMatches = findMatchedTerms(cleanQuestion, VAGUE_PHRASES);
   const locationMatches = findMatchedTerms(cleanQuestion, LOCATION_WORDS);
   const statusMatches = findMatchedTerms(cleanQuestion, STATUS_WORDS);
-  const roleMatches = findMatchedTerms(cleanQuestion, ROLE_WORDS);
+
+  const roleMatches = [
+    ...new Set([
+      ...findMatchedTerms(cleanQuestion, ROLE_WORDS),
+      ...findMatchedTerms(contextRoleText, ROLE_WORDS)
+    ])
+  ];
 
   const hasLocation = locationMatches.length > 0;
   const hasStatus = statusMatches.length > 0;
