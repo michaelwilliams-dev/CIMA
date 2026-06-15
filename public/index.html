@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3906,11 +3905,21 @@ body {
         return;
       }
 
-      const input = document.getElementById("questionInput");
+       const input = document.getElementById("questionInput");
       const sendButton = document.getElementById("sendButton");
       const question = input.value.trim();
 
-      if (!question) return;
+      if (!question) {
+        return;
+      }
+
+      activeReplyView = "standard";
+
+      const replyArea = document.getElementById("replyArea");
+      if (replyArea) {
+        replyArea.className = "";
+        replyArea.innerHTML = "";
+      }
 
       questions.push(question);
 
@@ -3985,7 +3994,14 @@ addMessage(
           throw new Error(data.error || "Backend response failed.");
         }
 
-        answer = data.answer || fallbackAnswer(question, predictedPath);
+                if (!data.answer) {
+          throw new Error(
+            "Backend returned ok:true but no answer field. Response keys: " +
+            Object.keys(data || {}).join(", ")
+          );
+        }
+
+        answer = data.answer;
         finalPath = data.response_path || data.path || predictedPath;
         hitl = data.hitl || data.human_in_the_loop || hitl;
         confidence = data.confidence || confidence;
@@ -4017,11 +4033,32 @@ addMessage(
 
         latestSources = data.sources || [];
       } catch (error) {
-        answer = fallbackAnswer(question, predictedPath);
-        rag = inferRagFromText(answer, predictedPath);
+        answer = [
+          "## Backend Connection Error",
+          "",
+          "CIMA did not receive a usable response from /cima-chat.",
+          "",
+          "## Error Detail",
+          "",
+          `- ${error.message}`,
+          "",
+          "## What This Means",
+          "",
+          "The browser is using the frontend error path. The backend may not have redeployed, the browser may be hitting an old service, or the frontend may not be calling the same /cima-chat route tested successfully in Render Shell.",
+          "",
+          "## Safety Note",
+          "",
+          "CIMA has not generated an operational response for this question."
+        ].join("\n");
+
+        finalPath = "BACKEND CONNECTION ERROR";
+        rag = "AMBER";
+        hitl = "Required";
+        confidence = "Backend response not received";
+
         latestSources = [
           {
-            title: "Local fallback",
+            title: "Frontend error",
             note: error.message
           }
         ];
