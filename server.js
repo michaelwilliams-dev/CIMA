@@ -668,7 +668,7 @@ app.post("/cima-chat", async (req, res) => {
     } = await import("./operational/question_intake_agent.js");
 
     const intakeResult = assessCimaQuestion({
-      question
+      question,
       context
     });
 
