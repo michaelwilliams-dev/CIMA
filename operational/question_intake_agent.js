@@ -267,13 +267,34 @@ function assessCimaQuestion(input = {}) {
   const hasStatus = statusMatches.length > 0;
   const hasRole = roleMatches.length > 0;
 
+  const isClearNonLiveTrainingScenario =
+    hasStatus &&
+    (
+      cleanQuestion.includes("classroom") ||
+      cleanQuestion.includes("tabletop") ||
+      cleanQuestion.includes("exercise") ||
+      cleanQuestion.includes("training note") ||
+      cleanQuestion.includes("scenario") ||
+      cleanQuestion.includes("simulation") ||
+      cleanQuestion.includes("simulated")
+    ) &&
+    (
+      cleanQuestion.includes("defensive") ||
+      cleanQuestion.includes("observation reporting") ||
+      cleanQuestion.includes("logging") ||
+      cleanQuestion.includes("communications") ||
+      cleanQuestion.includes("escalation")
+    );
+
+  const effectiveHasLocation = hasLocation || isClearNonLiveTrainingScenario;
+
   const tooShort = wordCount < MIN_WORDS_FOR_CLEAR_QUESTION;
-  const vague = vagueMatches.length > 0 && (!hasLocation || !hasStatus || !hasRole);
+  const vague = vagueMatches.length > 0 && (!effectiveHasLocation || !hasStatus || !hasRole);
 
   const specialistQuestionHasMinimumDetail =
     specialistTrigger.detected &&
     !tooShort &&
-    hasLocation &&
+    effectiveHasLocation &&
     hasStatus &&
     hasRole;
 
@@ -282,12 +303,11 @@ function assessCimaQuestion(input = {}) {
     tooShort ||
     vague ||
     (specialistTrigger.detected && !specialistQuestionHasMinimumDetail);
-
   const clarificationQuestions = needsClarification
     ? buildClarificationQuestions({
         wordCount,
         specialistTrigger,
-        hasLocation,
+        hasLocation: effectiveHasLocation,
         hasStatus,
         hasRole
       })
@@ -308,7 +328,7 @@ function assessCimaQuestion(input = {}) {
     clarity_checks: {
       too_short: tooShort,
       vague,
-      has_location: hasLocation,
+      has_location: effectiveHasLocation,
       has_status: hasStatus,
       has_role: hasRole,
       vague_matches: vagueMatches,
