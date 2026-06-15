@@ -293,7 +293,9 @@ function buildTerroristThreatResponse(input = {}) {
     "## Initial Assessment",
     "",
     hasThreatTerm
-      ? "A terrorism, hostile-activity or high-consequence threat term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
+      ? isClearTrainingExercise
+        ? "A terrorism, hostile-activity or high-consequence threat term has been detected. CIMA should treat this as a specialist defensive-support training question subject to human review."
+        : "A terrorism, hostile-activity or high-consequence threat term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
       : "No terrorism or hostile-activity term was detected in the supplied question. Review whether this agent has been called correctly.",
     "",
     "## Approved Source Review",
