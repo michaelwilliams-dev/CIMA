@@ -6,7 +6,7 @@
   <!--
     AIVS / PGB CIMA Front End
     File: index.html
-    ISO Timestamp: 2026-06-06T11:15:00Z
+    ISO Timestamp: 2026-06-15T06:30:00+01:00
 
     Change Log:
     - v1.1.0: added front access gate using email access code and T&C acceptance
@@ -25,6 +25,7 @@
     - v1.1.1: removed temporary bottom label-patching script
     - v1.1.2: NOT VERIFIED evidence date range sliders now set their maximum year from the live ISO timestamp so the range rolls forward automatically each year
     - v1.1.3: expanded terms and conditions text, enlarged terms box, enlarged terms checkbox and increased desktop scrollbar width
+    - v1.1.4: added frontend RAG response risk dial with information button and movement from CIMA rag/rag_status
     -->
 
   <meta charset="UTF-8" />
@@ -1408,13 +1409,6 @@ body {
   min-width: 0 !important;
 }
 
-.centre-workspace,
-.reply-card {
-  overflow-x: hidden !important;
-  overflow-y: visible !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-}
 
 /* AIVS CIMA RAG Dial Box
    ISO Timestamp: 2026-06-15T06:00:00+01:00
@@ -1462,9 +1456,9 @@ body {
   background:
     conic-gradient(
       from 225deg,
-      var(--green) 0deg 90deg,
-      var(--amber) 90deg 180deg,
-      var(--red) 180deg 270deg,
+      #18b35b 0deg 90deg,
+      #ffb321 90deg 180deg,
+      #e23b2f 180deg 270deg,
       transparent 270deg 360deg
     );
 }
@@ -1524,6 +1518,55 @@ body {
   font-weight: 900;
 }
 
+.cima-rag-dial-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cima-rag-dial-title-row .cima-rag-dial-title {
+  margin-bottom: 0;
+}
+
+.cima-rag-info-btn {
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  background: #fffdfa;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cima-rag-info-btn:hover {
+  border-color: var(--orange);
+  background: #fff7ea;
+}
+
+.cima-rag-dial-info {
+  display: none;
+  margin: 0 0 10px 0;
+  padding: 8px 9px;
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+  background: #fbfaf5;
+  color: #5e6970;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cima-rag-dial-info.open {
+  display: block;
+}
+
+.cima-rag-dial-info p {
+  margin: 4px 0;
+}
 
   </style>
 </head>
@@ -1986,11 +2029,27 @@ body {
         <div class="source-view" id="rightView"></div>
 
         <!-- AIVS CIMA RAG Dial Box
-             ISO Timestamp: 2026-06-15T06:00:00+01:00
-             Change: Visual dial placeholder only. No backend wiring.
+             ISO Timestamp: 2026-06-15T06:30:00+01:00
+             Change: RAG dial with frontend movement from CIMA rag/rag_status. No backend change.
         -->
         <div class="cima-rag-dial-box" id="cimaRagDialBox">
-          <div class="cima-rag-dial-title">Response Risk Dial</div>
+          <div class="cima-rag-dial-title-row">
+            <div class="cima-rag-dial-title">Response Risk Dial</div>
+            <button
+              class="cima-rag-info-btn"
+              type="button"
+              onclick="toggleRagDialInfo()"
+              aria-label="Explain response risk dial"
+            >
+              i
+            </button>
+          </div>
+
+          <div class="cima-rag-dial-info" id="cimaRagDialInfo">
+            <p><strong>Green</strong> means routine support.</p>
+            <p><strong>Amber</strong> means review before reliance.</p>
+            <p><strong>Red</strong> means high-risk output requiring human review before operational use.</p>
+          </div>
 
           <div class="cima-rag-dial-wrap">
             <div class="cima-rag-dial" aria-label="CIMA response risk dial">
@@ -2061,7 +2120,7 @@ body {
   </main>
 
   <script>
-    const BUILD_ISO = "2026-06-06T11:15:00Z";
+    const BUILD_ISO = "2026-06-15T06:30:00+01:00";
 
     let accessConfirmed = false;
     let accessMode = "locked";
@@ -2506,6 +2565,42 @@ body {
       return "rag-grey";
     }
 
+    function updateRagDial(rag = "AMBER") {
+      const clean = String(rag || "").toUpperCase();
+
+      const needle = document.getElementById("cimaRagDialNeedle");
+      const status = document.getElementById("cimaRagDialStatus");
+
+      if (!needle || !status) {
+        return;
+      }
+
+      if (clean.includes("RED")) {
+        needle.style.transform = "rotate(52deg)";
+        status.textContent = "Red / High Risk";
+        return;
+      }
+
+      if (clean.includes("GREEN")) {
+        needle.style.transform = "rotate(-52deg)";
+        status.textContent = "Green / Routine";
+        return;
+      }
+
+      needle.style.transform = "rotate(0deg)";
+      status.textContent = "Amber / Review";
+    }
+
+    function toggleRagDialInfo() {
+      const panel = document.getElementById("cimaRagDialInfo");
+
+      if (!panel) {
+        return;
+      }
+
+      panel.classList.toggle("open");
+    }
+
     function extractTopActions(answer = "") {
       const lines = String(answer || "")
         .split("\n")
@@ -2552,6 +2647,8 @@ body {
       const ragEl = document.getElementById("dashRag");
       ragEl.textContent = rag || "AMBER";
       ragEl.className = `dash-value ${ragClass(rag)}`;
+
+      updateRagDial(rag || "AMBER");
 
       document.getElementById("dashHitl").textContent = hitl || "Not triggered";
       document.getElementById("dashConfidence").textContent = confidence || "Provisional";
@@ -4410,6 +4507,9 @@ async function sendTrainerNotesEmail() {
       document.getElementById("dashPath").textContent = "FAST PATH";
       document.getElementById("dashRag").textContent = "Not set";
       document.getElementById("dashRag").className = "dash-value rag-grey";
+
+      updateRagDial("AMBER");
+
       document.getElementById("dashHitl").textContent = "Not triggered";
       document.getElementById("dashConfidence").textContent = "Provisional";
       document.getElementById("dashReview").textContent = "Human review";
@@ -4455,6 +4555,7 @@ async function sendTrainerNotesEmail() {
         updateContextFromControls();
         setRightTab("thread");
         renderSessionQa();
+        updateRagDial("AMBER");
       });
   </script>
 </body>
