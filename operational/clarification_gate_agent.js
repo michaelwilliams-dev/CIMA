@@ -224,7 +224,18 @@ function assessClarificationNeed(input = {}) {
     clarificationQuestions.push("What type of incident or risk are you referring to?");
   }
 
-  if (isHighRisk && !containsAny(combinedText, ["site", "location", "venue", "building", "event", "area", "near", "outside", "inside"])) {
+    const isClearNonLiveTrainingScenario =
+    hasNonLiveMode &&
+    (
+      containsAny(combinedText, ["classroom", "tabletop", "exercise", "training", "training note", "scenario", "simulation", "simulated"]) ||
+      containsAny(combinedText, ["observation reporting", "logging", "communications", "escalation"])
+    );
+
+  if (
+    isHighRisk &&
+    !isClearNonLiveTrainingScenario &&
+    !containsAny(combinedText, ["site", "location", "venue", "building", "event", "area", "near", "outside", "inside"])
+  ) {
     reasons.push("The operating context or location is unclear.");
     clarificationQuestions.push("What site, venue, building, event, or operating area is involved?");
   }
