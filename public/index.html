@@ -3897,11 +3897,10 @@ body {
       document.getElementById("deliveryResponseStatus").textContent = "Preparing";
       document.getElementById("deliveryResponseStatus").className = "pending";
 
-    addMessage(
+addMessage(
   "user",
   `Question ${questions.length}`,
   `
-    <p><strong>Persona:</strong> ${escapeHtml(context.persona || "N/A")}</p>
     <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
     <p>${escapeHtml(question)}</p>
   `
@@ -3986,7 +3985,6 @@ body {
       });
 
       latestStandardHtml = `
-        <p><strong>Persona:</strong> ${escapeHtml(context.persona || "N/A")}</p>
         ${markdownToHtml(answer)}
       `;
 
