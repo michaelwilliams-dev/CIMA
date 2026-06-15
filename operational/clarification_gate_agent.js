@@ -147,6 +147,8 @@ const VAGUE_REQUEST_TERMS = [
   "situation"
 ];
 
+const MIN_CLEAR_OPERATIONAL_WORDS = 20;
+
 function getContextValue(context = {}, keys = []) {
   if (!context || typeof context !== "object") {
     return "";
@@ -192,9 +194,14 @@ function assessClarificationNeed(input = {}) {
   const isVagueRequest = containsAny(question, VAGUE_REQUEST_TERMS);
   const hasSpecificIncidentType = isHighRisk || words >= 8;
 
-  if (!question || words < 4) {
+   if (!question || words < 4) {
     reasons.push("The question is too short or lacks a clear request.");
     clarificationQuestions.push("Please state the incident, issue, or decision you want CIMA to support.");
+  }
+
+  if (question && words < MIN_CLEAR_OPERATIONAL_WORDS && (isHighRisk || isVagueRequest)) {
+    reasons.push("The question is under the minimum clarity threshold for operational or high-risk CIMA guidance.");
+    clarificationQuestions.push("Please provide more detail before CIMA gives operational guidance. Include what has happened, whether it is live or training, who is asking, the site or location involved, and what decision support is required.");
   }
 
   if (isHighRisk && !hasAnyMode) {
