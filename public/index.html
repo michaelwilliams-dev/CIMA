@@ -1475,25 +1475,28 @@ body {
 
 .cima-rag-dial-needle {
   position: absolute;
-  left: 62px;
-  top: 58px;
-  width: 4px;
-  height: 48px;
+  left: 61px;
+  top: 16px;
+  width: 6px;
+  height: 50px;
   background: var(--ink);
-  border-radius: 4px;
+  border-radius: 6px;
   transform-origin: 50% 100%;
   transform: rotate(0deg);
+  transition: transform 0.35s ease;
+  z-index: 4;
 }
 
 .cima-rag-dial-centre {
   position: absolute;
-  left: 54px;
-  top: 51px;
-  width: 20px;
-  height: 20px;
+  left: 53px;
+  top: 53px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--ink);
   border: 3px solid #fffdfa;
+  z-index: 5;
 }
 
 .cima-rag-dial-labels {
@@ -1533,7 +1536,7 @@ body {
 .cima-rag-info-btn {
   width: 24px;
   height: 24px;
-  border: 1.5px solid var(--border);
+  border: 2px solid var(--orange);
   border-radius: 50%;
   background: #fffdfa;
   color: var(--ink);
@@ -1541,6 +1544,7 @@ body {
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
+  box-shadow: 0 0 0 3px rgba(220, 147, 37, 0.14);
 }
 
 .cima-rag-info-btn:hover {
