@@ -235,6 +235,29 @@ function buildTerroristThreatResponse(input = {}) {
 
   const hasThreatTerm = hasAnyTerm(question, TERRORIST_TRIGGER_TERMS);
 
+  const exerciseSetupChecks = [
+    "Confirm the exercise is classroom, tabletop or training-only before delivery.",
+    "Confirm the audience, role level and learning objective.",
+    "Confirm that the scenario is defensive and does not include attack methods, evasion advice, weaponisation advice or targeting detail.",
+    "Confirm the training focus: observation reporting, escalation, logging, communications and human review.",
+    "Confirm how participant decisions, assumptions and learning points will be recorded.",
+    "Confirm who will review the training output before reuse or wider circulation."
+  ];
+
+  const questionLower = normaliseText(question);
+
+  const isClearTrainingExercise =
+    !questionLower.includes("live") &&
+    (
+      questionLower.includes("classroom") ||
+      questionLower.includes("tabletop") ||
+      questionLower.includes("exercise") ||
+      questionLower.includes("training note") ||
+      questionLower.includes("scenario") ||
+      questionLower.includes("simulation") ||
+      questionLower.includes("simulated")
+    );
+
   const clarificationQuestions = buildTerroristThreatClarificationQuestions({
     question,
     context,
@@ -286,9 +309,9 @@ function buildTerroristThreatResponse(input = {}) {
     "- The available facts must be separated from assumptions, reports and unknowns.",
     "- Any operational use of this output requires human review, local procedures and command judgement.",
     "",
-    "## Information Gaps",
+    isClearTrainingExercise ? "## Exercise Setup Checks" : "## Information Gaps",
     "",
-    ...clarificationQuestions.map((item) => `- ${item}`),
+    ...(isClearTrainingExercise ? exerciseSetupChecks : clarificationQuestions).map((item) => `- ${item}`),
     "",
     "## Defensive Recommended Actions",
     "",
