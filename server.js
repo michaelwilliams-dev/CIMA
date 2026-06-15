@@ -91,7 +91,9 @@ import {
   searchFaissKnowledgeByKeyword
 } from "./retrieval/faiss_knowledge_agent.js";
 
-
+import {
+  buildSpecialistTriggerDecision
+} from "./specialist_trigger_agent.js";
 
 dotenv.config();
 
@@ -507,6 +509,92 @@ app.post("/cima-chat", async (req, res) => {
         ok: false,
         error: "Question required.",
         build_iso: BUILD_ISO
+      });
+    }
+
+    const specialistDecision = buildSpecialistTriggerDecision({
+      question,
+      context,
+      terms,
+      access
+    });
+
+    const specialistClarificationContext = specialistDecision.clarification_context || {};
+    const specialistUnsafeWording = Array.isArray(specialistClarificationContext.unsafeWording)
+      ? specialistClarificationContext.unsafeWording
+      : [];
+
+    const shouldReturnDynamicSpecialistClarification =
+      specialistDecision.triggered === true &&
+      (
+        specialistUnsafeWording.length > 0 ||
+        (
+          specialistClarificationContext.isTrainingRequest === true &&
+          !specialistClarificationContext.isLive &&
+          !specialistClarificationContext.isConfirmed &&
+          !specialistClarificationContext.isSuspected
+        )
+      );
+
+    if (shouldReturnDynamicSpecialistClarification) {
+      const clarityQuestions = Array.isArray(specialistDecision.clarity_questions)
+        ? specialistDecision.clarity_questions
+        : [];
+
+      const clarificationAnswer = [
+        "## Clarification Required",
+        "",
+        `You asked: "${question}"`,
+        "",
+        "CIMA needs to clarify the request before giving a safe response. The question appears to involve a high-consequence topic and may need to be reframed as defensive incident-management, training, command, escalation, communications, logging, audit and human-review support only.",
+        "",
+        "## Information Needed Before CIMA Answers",
+        "",
+        ...clarityQuestions.map((item) => `- ${item}`),
+        "",
+        "## Safety Boundary",
+        "",
+        specialistDecision.safety_notice || "CIMA can provide defensive incident-management support only and must not provide unsafe operational detail.",
+        "",
+        "## Source Status",
+        "",
+        "The controlled CIMA database has not yet been searched because the request requires clarification first."
+      ].join("\n");
+
+      await writeAuditEvent({
+        event_type: "cima_dynamic_specialist_clarification",
+        route: "/cima-chat",
+        success: true,
+        user_email: userEmail,
+        access_mode: access.mode || "",
+        terms_accepted: true,
+        question,
+        context_mode: context.mode || "",
+        command_level: context.level || context.command_level || context.commandLevel || "",
+        persona: context.persona || "",
+        requested_output: context.output || "",
+        specialist_trigger_type: specialistDecision.primary_category || "",
+        specialist_agent: specialistDecision.primary_agent || "",
+        clarification_question_count: clarityQuestions.length,
+        ip_address: req.ip,
+        user_agent: req.get("user-agent")
+      });
+
+      return res.json({
+        ok: true,
+        build_iso: BUILD_ISO,
+        answered_at: new Date().toISOString(),
+        response_agent_build_iso: specialistDecision.trigger_agent_build_iso,
+        response_path: "DYNAMIC CLARIFICATION",
+        path: "DYNAMIC CLARIFICATION",
+        rag: "AMBER",
+        rag_status: "AMBER",
+        hitl: "Clarification required before advice",
+        confidence: "Needs clarification",
+        source_mode: "No database search before clarification",
+        answer: clarificationAnswer,
+        sources: [],
+        specialist_trigger: specialistDecision
       });
     }
 
