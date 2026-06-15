@@ -106,13 +106,19 @@ const SPECIALIST_TRIGGER_GROUPS = [
       "terror",
       "terrorism",
       "terrorist",
+      "terror attack",
+      "terrorist threat",
       "hostile activity",
       "hostile actor",
+      "hostile threat",
+      "hostile-threat",
+      "hostile threat exercise",
+      "hostile-threat exercise",
+      "hostile reconnaissance",
       "marauding",
       "mtfa",
       "attack",
-      "suspicious behaviour",
-      "hostile reconnaissance"
+      "suspicious behaviour"
     ]
   },
   {
