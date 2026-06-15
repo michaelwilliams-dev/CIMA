@@ -194,6 +194,13 @@ function assessClarificationNeed(input = {}) {
   const isVagueRequest = containsAny(question, VAGUE_REQUEST_TERMS);
   const hasSpecificIncidentType = isHighRisk || words >= 8;
 
+  const isClearLiveDroneIncident =
+    containsAny(combinedText, ["drone", "uav"]) &&
+    hasLiveMode &&
+    hasCommandContext &&
+    containsAny(combinedText, ["site", "location", "venue", "building", "event", "area", "near", "outside", "inside", "gate"]) &&
+    containsAny(combinedText, ["observation reporting", "confirmation checks", "safety cordon", "escalation", "police liaison", "communications", "logging", "human review", "defensive"]);
+
    if (!question || words < 4) {
     reasons.push("The question is too short or lacks a clear request.");
     clarificationQuestions.push("Please state the incident, issue, or decision you want CIMA to support.");
@@ -214,7 +221,7 @@ function assessClarificationNeed(input = {}) {
     clarificationQuestions.push("Who is asking: Bronze, Silver, Gold, control room, site lead, security lead, or trainer?");
   }
 
-  if (isHighRisk && hasLiveMode && hasNonLiveMode) {
+    if (isHighRisk && hasLiveMode && hasNonLiveMode && !isClearLiveDroneIncident) {
     reasons.push("The question contains both live-incident and training/planning language.");
     clarificationQuestions.push("Please confirm whether this is a real live incident or only a training/planning scenario.");
   }
