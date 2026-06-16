@@ -239,7 +239,7 @@ function buildDemoCimaAnswer({ question = "", context = {}, path = "FAST PATH" }
   sections.push("");
   sections.push("## Human Review");
   sections.push(
-    "This is a CIMA demo response. It is operational support only. A responsible human lead must review the facts, local procedures, live risks and source material before relying on the answer or taking operational action."
+        "This is a CIMA operational support response. It is draft support only. A responsible human lead must review the facts, local procedures, live risks and source material before relying on the answer or taking operational action."
   );
 
   return sections.join("\n");
