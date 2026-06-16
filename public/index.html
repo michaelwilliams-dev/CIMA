@@ -3969,32 +3969,64 @@ addMessage(
 
         debugStage = "fetch /cima-chat";
 
-        const res = await fetch("/cima-chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
+        const cimaPayload = {
+          question,
+          context,
+          access: {
+            mode: accessMode,
+            email: gateEmailOne
           },
-          body: JSON.stringify({
-            question,
-            context,
-            access: {
-              mode: accessMode,
-              email: gateEmailOne
-            },
-            terms: {
-              accepted: true,
-              accepted_at: new Date().toISOString()
-            },
-            session: {
-              question_count: questions.length,
-              include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
-            }
-          })
-        });
+          terms: {
+            accepted: true,
+            accepted_at: new Date().toISOString()
+          },
+          session: {
+            question_count: questions.length,
+            include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
+          }
+        };
 
-       debugStage = "parse /cima-chat json";
+        async function postCimaChatOnce() {
+          const response = await fetch("/cima-chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(cimaPayload)
+          });
 
-        const data = await res.json();
+          const rawText = await response.text();
+
+          try {
+            return {
+              res: response,
+              data: JSON.parse(rawText)
+            };
+          } catch (parseError) {
+            throw new Error(
+              "Could not parse /cima-chat JSON. HTTP status: " +
+              response.status +
+              ". First response text: " +
+              String(rawText || "").slice(0, 300)
+            );
+          }
+        }
+
+        let res;
+        let data;
+
+        try {
+          debugStage = "fetch /cima-chat first attempt";
+          const firstAttempt = await postCimaChatOnce();
+          res = firstAttempt.res;
+          data = firstAttempt.data;
+        } catch (firstError) {
+          debugStage = "fetch /cima-chat retry after parse failure";
+          await new Promise((resolve) => setTimeout(resolve, 700));
+          const secondAttempt = await postCimaChatOnce();
+          res = secondAttempt.res;
+          data = secondAttempt.data;
+        }
 
         debugStage = "validate /cima-chat json";
 
