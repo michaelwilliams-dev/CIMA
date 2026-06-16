@@ -100,6 +100,8 @@ function buildDroneThreatResponse(input = {}) {
   const selectedMode = normaliseText(context.mode || input.mode || "Not supplied");
   const selectedPersona = normaliseText(context.persona || input.persona || "Not supplied");
   const selectedCommandLevel = normaliseText(context.command_level || context.commandLevel || input.command_level || "Not supplied");
+  const commandLevelUpper = selectedCommandLevel.toUpperCase();
+  const isSilverCommand = commandLevelUpper.includes("SILVER");
 
   const clarityQuestions =
     Array.isArray(triggerDecision.clarity_questions) && triggerDecision.clarity_questions.length > 0
@@ -131,6 +133,15 @@ function buildDroneThreatResponse(input = {}) {
     "Check whether the incident affects public safety, aviation, transport, events, critical infrastructure, vulnerable people or business continuity.",
     "Agree a single communication route so staff do not circulate speculation.",
     "Record decisions, uncertainties, handovers and rationale in the incident log."
+  ];
+
+  const silverTacticalActions = [
+    "Set the tactical objective for the next operational period and confirm the immediate safety priority.",
+    "Allocate Bronze leads for site control, public safety, security observation, communications, welfare and logging.",
+    "Confirm the escalation route to Gold if public safety, media interest, evacuation, transport disruption or critical infrastructure risk increases.",
+    "Maintain a controlled update rhythm so Bronze leads report facts, decisions, uncertainties and resource needs at agreed times.",
+    "Coordinate with police, emergency services, aviation contacts, venue control or site security through one agreed liaison route.",
+    "Prevent parallel instructions by confirming which messages are tactical decisions, which are observations and which remain unverified."
   ];
 
   const informationToCapture = [
@@ -186,6 +197,9 @@ function buildDroneThreatResponse(input = {}) {
     "Command actions",
     buildNumberedList(commandActions),
     "",
+    isSilverCommand ? "Silver tactical coordination" : "",
+    isSilverCommand ? buildNumberedList(silverTacticalActions) : "",
+    isSilverCommand ? "" : "",
     "Information to capture in the incident log",
     buildNumberedList(informationToCapture),
     "",
