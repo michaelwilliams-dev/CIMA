@@ -3962,8 +3962,12 @@ addMessage(
       let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
       let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
 
+      let debugStage = "before fetch";
+
       try {
         sendButton.disabled = true;
+
+        debugStage = "fetch /cima-chat";
 
         const res = await fetch("/cima-chat", {
           method: "POST",
@@ -3988,7 +3992,11 @@ addMessage(
           })
         });
 
+       debugStage = "parse /cima-chat json";
+
         const data = await res.json();
+
+        debugStage = "validate /cima-chat json";
 
         if (!res.ok || !data.ok) {
           throw new Error(data.error || "Backend response failed.");
@@ -4040,7 +4048,8 @@ addMessage(
           "",
           "## Error Detail",
           "",
-          `- ${error.message}`,
+          `- Stage: ${debugStage}`,
+          `- Error: ${error.message}`,
           "",
           "## What This Means",
           "",
