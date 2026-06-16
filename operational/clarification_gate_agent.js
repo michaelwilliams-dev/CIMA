@@ -224,7 +224,8 @@ function assessClarificationNeed(input = {}) {
     question &&
     words < MIN_CLEAR_OPERATIONAL_WORDS &&
     (isHighRisk || isVagueRequest) &&
-    !isClearShortTrainingRequest
+    !isClearShortTrainingRequest &&
+    !isClearLiveDroneIncident
   ) {
     reasons.push("The question is under the minimum clarity threshold for operational or high-risk CIMA guidance.");
     clarificationQuestions.push("Please provide more detail before CIMA gives operational guidance. Include what has happened, whether it is live or training, who is asking, the site or location involved, and what decision support is required.");
