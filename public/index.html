@@ -3984,13 +3984,14 @@ addMessage(
       let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
 
       let debugStage = "before fetch";
+      let cimaPayload = null;
 
       try {
         sendButton.disabled = true;
 
         debugStage = "fetch /cima-chat";
 
-        const cimaPayload = {
+          cimaPayload = {
           question,
           context,
           access: {
@@ -4119,7 +4120,12 @@ addMessage(
           "## Error Detail",
           "",
           `- Stage: ${debugStage}`,
-          `- Error: ${error.message}`,
+          `- Error name: ${error.name || "Not supplied"}`,
+          `- Error message: ${error.message || "Not supplied"}`,
+          `- Browser page URL: ${window.location.href}`,
+          `- Backend URL: https://cima-7fj2.onrender.com/cima-chat`,
+          `- Payload length: ${JSON.stringify(cimaPayload).length}`,
+          `- Browser online: ${navigator.onLine ? "Yes" : "No"}`,
           "",
           "## What This Means",
           "",
