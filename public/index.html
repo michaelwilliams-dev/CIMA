@@ -4072,6 +4072,23 @@ addMessage(
         }
 
         latestSources = data.sources || [];
+
+        if (
+          window.CimaClarification &&
+          typeof window.CimaClarification.extractQuestionsFromAnswer === "function" &&
+          typeof window.CimaClarification.start === "function"
+        ) {
+          const clarificationQuestions = window.CimaClarification.extractQuestionsFromAnswer(answer);
+          const answerTextForClarification = String(answer || "").toUpperCase();
+
+          if (
+            answerTextForClarification.includes("CLARIFICATION REQUIRED") &&
+            clarificationQuestions.length > 0
+          ) {
+            window.CimaClarification.start(question, context, clarificationQuestions);
+            document.getElementById("lastOutput").textContent = "Clarification required. Original question stored for follow-up.";
+          }
+        }
       } catch (error) {
         answer = [
           "## Backend Connection Error",
