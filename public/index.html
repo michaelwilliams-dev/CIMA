@@ -4590,6 +4590,10 @@ async function sendTrainerNotesEmail() {
 }
 
     function clearSession() {
+      if (window.CimaClarification && typeof window.CimaClarification.reset === "function") {
+        window.CimaClarification.reset();
+      }
+
       questions = [];
       transcriptEntries = [];
 
