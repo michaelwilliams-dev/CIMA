@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Clarification Gate Agent
  * File: operational/clarification_gate_agent.js
- * ISO Timestamp: 2026-06-15T06:20:00+01:00
+ * ISO Timestamp: 2026-06-16T10:50:00+01:00
  *
  * Purpose:
  * - Checks whether an incoming CIMA question is clear enough to answer.
@@ -11,6 +11,7 @@
  *
  * Change Log:
  * - v0.1.0: created standalone clarification gate agent.
+ * - v0.2.0: replaced single-word blocking with three-signal clarification scoring.
  *
  * ISO Control Notes:
  * - This agent does not send email.
@@ -20,7 +21,7 @@
  * - This agent exists to prevent unsafe or premature operational answers.
  */
 
-const CLARIFICATION_GATE_BUILD_ISO = "2026-06-15T06:20:00+01:00";
+const CLARIFICATION_GATE_BUILD_ISO = "2026-06-16T10:50:00+01:00";
 
 function safeString(value = "") {
   if (value === null || value === undefined) {
@@ -53,10 +54,46 @@ function wordCount(value = "") {
 function containsAny(text = "", terms = []) {
   const haystack = lowerText(text);
 
-  return terms.some((term) => haystack.includes(term));
+  return terms.some((term) => haystack.includes(lowerText(term)));
 }
 
-const HIGH_RISK_TERMS = [
+function hasMeaningfulValue(value = "") {
+  const clean = lowerText(value);
+
+  return Boolean(
+    clean &&
+    clean !== "n/a" &&
+    clean !== "na" &&
+    clean !== "none" &&
+    clean !== "not supplied" &&
+    clean !== "not set"
+  );
+}
+
+const HARD_UNSAFE_TERMS = [
+  "how do i disable",
+  "how can i disable",
+  "disable a drone",
+  "disable the drone",
+  "jam a drone",
+  "jamming a drone",
+  "shoot down",
+  "bring down a drone",
+  "capture a drone",
+  "follow the drone",
+  "track the operator",
+  "weaponise",
+  "weaponize",
+  "make a bomb",
+  "build a bomb",
+  "avoid detection",
+  "evade police",
+  "bypass security",
+  "attack method",
+  "targeting advice"
+];
+
+const RISK_TERMS = [
   "terror",
   "terrorist",
   "terrorism",
@@ -89,6 +126,23 @@ const HIGH_RISK_TERMS = [
   "hostile",
   "threat",
   "incident"
+];
+
+const SPECIALIST_RISK_TERMS = [
+  "terror",
+  "terrorist",
+  "terrorism",
+  "bomb",
+  "explosive",
+  "weapon",
+  "armed",
+  "hostage",
+  "shooting",
+  "drone",
+  "uav",
+  "suspicious package",
+  "chemical",
+  "hazmat"
 ];
 
 const LIVE_MODE_TERMS = [
@@ -130,7 +184,65 @@ const COMMAND_TERMS = [
   "site lead",
   "security lead",
   "control room",
-  "duty manager"
+  "duty manager",
+  "trainer",
+  "communications lead",
+  "safeguarding lead",
+  "loggist"
+];
+
+const LOCATION_TERMS = [
+  "site",
+  "location",
+  "venue",
+  "building",
+  "event",
+  "area",
+  "near",
+  "outside",
+  "inside",
+  "gate",
+  "stadium",
+  "office",
+  "school",
+  "campus",
+  "transport hub",
+  "data centre",
+  "airport",
+  "car park"
+];
+
+const SAFE_REQUEST_TERMS = [
+  "record",
+  "log",
+  "logging",
+  "incident log",
+  "incident report",
+  "audit",
+  "review",
+  "debrief",
+  "lessons learned",
+  "escalation",
+  "communications",
+  "communication",
+  "holding line",
+  "briefing",
+  "command support",
+  "decision record",
+  "training",
+  "training note",
+  "exercise",
+  "tabletop",
+  "plan",
+  "planning",
+  "policy",
+  "procedure",
+  "checklist",
+  "defensive",
+  "defensive incident management",
+  "defensive incident-management",
+  "human review",
+  "source check"
 ];
 
 const VAGUE_REQUEST_TERMS = [
@@ -148,6 +260,7 @@ const VAGUE_REQUEST_TERMS = [
 ];
 
 const MIN_CLEAR_OPERATIONAL_WORDS = 20;
+const MIN_CLARIFICATION_SIGNALS = 3;
 
 function getContextValue(context = {}, keys = []) {
   if (!context || typeof context !== "object") {
@@ -163,6 +276,12 @@ function getContextValue(context = {}, keys = []) {
   }
 
   return "";
+}
+
+function addUniqueQuestion(questions = [], value = "") {
+  if (!questions.includes(value)) {
+    questions.push(value);
+  }
 }
 
 function assessClarificationNeed(input = {}) {
@@ -184,90 +303,133 @@ function assessClarificationNeed(input = {}) {
 
   const reasons = [];
   const clarificationQuestions = [];
+  const clarificationSignals = [];
 
   const words = wordCount(question);
-  const isHighRisk = containsAny(question, HIGH_RISK_TERMS);
+
+  const hasHardUnsafeLanguage = containsAny(question, HARD_UNSAFE_TERMS);
+  const hasRiskLanguage = containsAny(question, RISK_TERMS);
+  const hasSpecialistRiskLanguage = containsAny(question, SPECIALIST_RISK_TERMS);
+
   const hasLiveMode = containsAny(combinedText, LIVE_MODE_TERMS);
   const hasNonLiveMode = containsAny(combinedText, NON_LIVE_MODE_TERMS);
-  const hasAnyMode = Boolean(mode) || hasLiveMode || hasNonLiveMode;
-  const hasCommandContext = Boolean(commandLevel) || Boolean(persona) || containsAny(combinedText, COMMAND_TERMS);
-  const isVagueRequest = containsAny(question, VAGUE_REQUEST_TERMS);
-  const hasSpecificIncidentType = isHighRisk || words >= 8;
+  const hasModeValue = hasMeaningfulValue(mode);
+  const hasAnyMode = hasModeValue || hasLiveMode || hasNonLiveMode;
 
-  const isClearLiveDroneIncident =
-    containsAny(combinedText, ["drone", "uav"]) &&
+  const hasCommandContext =
+    hasMeaningfulValue(commandLevel) ||
+    hasMeaningfulValue(persona) ||
+    containsAny(combinedText, COMMAND_TERMS);
+
+  const hasLocationContext = containsAny(combinedText, LOCATION_TERMS);
+  const hasSafeRequest = containsAny(combinedText, SAFE_REQUEST_TERMS);
+  const isVagueRequest = containsAny(question, VAGUE_REQUEST_TERMS);
+
+  const isClearSafeManagementRequest =
+    hasCommandContext &&
+    hasSafeRequest &&
+    !hasHardUnsafeLanguage;
+
+  const isClearNonLiveTrainingScenario =
+    hasNonLiveMode &&
+    hasSafeRequest &&
+    (
+      hasCommandContext ||
+      containsAny(combinedText, ["classroom", "tabletop", "exercise", "training", "training note", "scenario", "simulation", "simulated"])
+    ) &&
+    !hasHardUnsafeLanguage;
+
+  const isClearLiveSpecialistIncident =
+    hasSpecialistRiskLanguage &&
     hasLiveMode &&
     hasCommandContext &&
-    containsAny(combinedText, ["site", "location", "venue", "building", "event", "area", "near", "outside", "inside", "gate"]) &&
-    containsAny(combinedText, ["observation reporting", "confirmation checks", "safety cordon", "escalation", "police liaison", "communications", "logging", "human review", "defensive"]);
+    hasLocationContext &&
+    hasSafeRequest &&
+    !hasHardUnsafeLanguage;
 
-   if (!question || words < 4) {
+  if (!question || words < 4) {
     reasons.push("The question is too short or lacks a clear request.");
-    clarificationQuestions.push("Please state the incident, issue, or decision you want CIMA to support.");
+    addUniqueQuestion(
+      clarificationQuestions,
+      "Please state the incident, issue, or decision you want CIMA to support."
+    );
   }
 
-  const isClearShortTrainingRequest =
-    hasNonLiveMode &&
-    hasCommandContext &&
-    containsAny(combinedText, [
-      "training",
-      "training note",
-      "classroom",
-      "exercise",
-      "tabletop",
-      "incident logging",
-      "logging",
-      "command team"
-    ]);
+  if (hasHardUnsafeLanguage) {
+    reasons.push("The question appears to request unsafe operational detail rather than defensive CIMA support.");
+    addUniqueQuestion(
+      clarificationQuestions,
+      "Please reframe the request as defensive incident management, escalation, communications, logging, audit, training or human-review support only."
+    );
+  }
 
   if (
     question &&
-    words < MIN_CLEAR_OPERATIONAL_WORDS &&
-    (isHighRisk || isVagueRequest) &&
-    !isClearShortTrainingRequest &&
-    !isClearLiveDroneIncident
-  ) {
-    reasons.push("The question is under the minimum clarity threshold for operational or high-risk CIMA guidance.");
-    clarificationQuestions.push("Please provide more detail before CIMA gives operational guidance. Include what has happened, whether it is live or training, who is asking, the site or location involved, and what decision support is required.");
-  }
-
-  if (isHighRisk && !hasAnyMode) {
-    reasons.push("The question appears high-risk, but it is unclear whether this is live, exercise, training, or planning.");
-    clarificationQuestions.push("Is this a live incident, an exercise, a planning scenario, or a training request?");
-  }
-
-  if (isHighRisk && !hasCommandContext) {
-    reasons.push("The command or user role is unclear for a high-risk question.");
-    clarificationQuestions.push("Who is asking: Bronze, Silver, Gold, control room, site lead, security lead, or trainer?");
-  }
-
-    if (isHighRisk && hasLiveMode && hasNonLiveMode && !isClearLiveDroneIncident) {
-    reasons.push("The question contains both live-incident and training/planning language.");
-    clarificationQuestions.push("Please confirm whether this is a real live incident or only a training/planning scenario.");
-  }
-
-  if (isVagueRequest && !hasSpecificIncidentType) {
-    reasons.push("The request is vague and does not identify the incident type clearly.");
-    clarificationQuestions.push("What type of incident or risk are you referring to?");
-  }
-
-    const isClearNonLiveTrainingScenario =
-    hasNonLiveMode &&
-    (
-      containsAny(combinedText, ["classroom", "tabletop", "exercise", "training", "training note", "scenario", "simulation", "simulated"]) ||
-      containsAny(combinedText, ["observation reporting", "logging", "communications", "escalation"])
-    );
-
-  if (
-    isHighRisk &&
+    !hasHardUnsafeLanguage &&
+    !isClearSafeManagementRequest &&
     !isClearNonLiveTrainingScenario &&
-    !containsAny(combinedText, ["site", "location", "venue", "building", "event", "area", "near", "outside", "inside"])
+    !isClearLiveSpecialistIncident
   ) {
-    reasons.push("The operating context or location is unclear.");
-    clarificationQuestions.push("What site, venue, building, event, or operating area is involved?");
-  }
+    if (hasRiskLanguage && !hasAnyMode) {
+      clarificationSignals.push("missing_status");
+      addUniqueQuestion(
+        clarificationQuestions,
+        "Is this a live incident, an exercise, a planning scenario, or a training request?"
+      );
+    }
 
-  const uniqueQuestions = [...new Set(clarificationQuestions)];
+    if ((hasRiskLanguage || isVagueRequest) && !hasCommandContext) {
+      clarificationSignals.push("missing_role");
+      addUniqueQuestion(
+        clarificationQuestions,
+        "Who is asking: Bronze, Silver, Gold, control room, site lead, security lead, trainer, communications lead, safeguarding lead or loggist?"
+      );
+    }
+
+    if (hasRiskLanguage && hasLiveMode && !hasLocationContext) {
+      clarificationSignals.push("missing_location");
+      addUniqueQuestion(
+        clarificationQuestions,
+        "What site, venue, building, event, operating area or location is involved?"
+      );
+    }
+
+    if (isVagueRequest) {
+      clarificationSignals.push("vague_request");
+      addUniqueQuestion(
+        clarificationQuestions,
+        "What specific decision, record, communication, escalation, plan or review do you want CIMA to support?"
+      );
+    }
+
+    if (
+      hasRiskLanguage &&
+      words < MIN_CLEAR_OPERATIONAL_WORDS &&
+      !hasSafeRequest
+    ) {
+      clarificationSignals.push("insufficient_detail");
+      addUniqueQuestion(
+        clarificationQuestions,
+        "Please provide more detail before CIMA gives operational guidance. Include what has happened, whether it is live or training, who is asking, the location involved, and what decision support is required."
+      );
+    }
+
+    if (
+      hasRiskLanguage &&
+      hasLiveMode &&
+      hasNonLiveMode
+    ) {
+      clarificationSignals.push("conflicting_status");
+      addUniqueQuestion(
+        clarificationQuestions,
+        "Please confirm whether this is a real live incident or only a training, planning or exercise scenario."
+      );
+    }
+
+    if (clarificationSignals.length >= MIN_CLARIFICATION_SIGNALS) {
+      reasons.push("The question has several missing or ambiguous context signals and requires clarification before CIMA can route it safely.");
+    }
+  }
 
   const clarificationRequired = reasons.length > 0;
 
@@ -277,13 +439,22 @@ function assessClarificationNeed(input = {}) {
     build_iso: CLARIFICATION_GATE_BUILD_ISO,
     clarification_required: clarificationRequired,
     reasons,
-    clarification_questions: uniqueQuestions,
+    clarification_questions: clarificationQuestions,
     detected: {
-      high_risk_question: isHighRisk,
+      high_risk_question: hasRiskLanguage,
       live_mode_language: hasLiveMode,
       non_live_mode_language: hasNonLiveMode,
       command_context_present: hasCommandContext,
+      location_context_present: hasLocationContext,
+      safe_request_language: hasSafeRequest,
       vague_request_language: isVagueRequest,
+      hard_unsafe_language: hasHardUnsafeLanguage,
+      specialist_risk_language: hasSpecialistRiskLanguage,
+      clear_safe_management_request: isClearSafeManagementRequest,
+      clear_non_live_training_scenario: isClearNonLiveTrainingScenario,
+      clear_live_specialist_incident: isClearLiveSpecialistIncident,
+      clarification_signal_count: clarificationSignals.length,
+      clarification_signals: clarificationSignals,
       word_count: words
     }
   };
@@ -340,10 +511,12 @@ function getClarificationGateAgentStatus() {
     ok: true,
     agent: "clarification_gate_agent",
     build_iso: CLARIFICATION_GATE_BUILD_ISO,
-    purpose: "Requests clarification where an incoming CIMA question is unclear, incomplete, high-risk or operationally ambiguous.",
+    purpose: "Requests clarification only where a question is too short, unsafe, or has three or more missing context signals.",
     provides_operational_guidance: false,
     external_search: false,
-    audit_direct_write: false
+    audit_direct_write: false,
+    single_word_blocking: false,
+    clarification_scoring: true
   };
 }
 
