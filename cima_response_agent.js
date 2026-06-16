@@ -284,6 +284,34 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       .trim();
   }
 
+  function isAssetSource(source = {}, url = "") {
+    const combined = [
+      url,
+      source.source_file,
+      source.title,
+      source.snippet
+    ].join(" ").toLowerCase();
+
+    const blockedExtensions = [
+      ".css",
+      ".js",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".gif",
+      ".svg",
+      ".webp",
+      ".woff",
+      ".woff2",
+      ".ttf",
+      ".eot",
+      ".ico",
+      ".map"
+    ];
+
+    return blockedExtensions.some((extension) => combined.includes(extension));
+  }
+
   function cleanSourceTitle(source = {}, url = "") {
     const rawFile = String(source.source_file || source.title || "").trim();
 
@@ -315,6 +343,11 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
 
   for (const source of sources) {
     const url = extractUrl(source.snippet || "");
+
+    if (isAssetSource(source, url)) {
+      continue;
+    }
+
     const key = normaliseUrl(url) || source.source_file || source.chunk_id || "";
 
     if (key && seen.has(key)) {
