@@ -4100,11 +4100,21 @@ addMessage(
           typeof window.CimaClarification.extractQuestionsFromAnswer === "function" &&
           typeof window.CimaClarification.start === "function"
         ) {
-          const clarificationQuestions = window.CimaClarification.extractQuestionsFromAnswer(answer);
+          const backendClarificationQuestions = Array.isArray(data.clarification_questions)
+            ? data.clarification_questions
+            : [];
+
+          const clarificationQuestions = backendClarificationQuestions.length > 0
+            ? backendClarificationQuestions
+            : window.CimaClarification.extractQuestionsFromAnswer(answer);
+
           const answerTextForClarification = String(answer || "").toUpperCase();
 
           if (
-            answerTextForClarification.includes("CLARIFICATION REQUIRED") &&
+            (
+              data.pending_clarification === true ||
+              answerTextForClarification.includes("CLARIFICATION REQUIRED")
+            ) &&
             clarificationQuestions.length > 0
           ) {
             window.CimaClarification.start(question, context, clarificationQuestions);
