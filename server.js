@@ -711,7 +711,7 @@ app.post("/cima-chat", async (req, res) => {
 
     const intakeHasSpecialistTrigger = intakeResult.specialist_trigger?.detected === true;
 
-    if (intakeResult.needs_clarification && intakeHasSpecialistTrigger) {
+    if (intakeResult.needs_clarification) {
       await writeAuditEvent({
         event_type: "cima_question_needs_clarification",
         route: "/cima-chat",
