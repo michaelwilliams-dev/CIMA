@@ -10,8 +10,9 @@
  * - v0.3.0: retained transcript PDF and DOCX generation inside server.js for now
  * - v0.3.0: retained /health, /meta, /send-access-code-email, /check-access, /cima-chat and /send-transcript-email
  * - v0.3.0: no Companies House, FCA, insolvency, director, OCR or security agents
- *
- * Notes:
+ * - v0.3.1: restricted QUESTION INTAKE clarification in /cima-chat to specialist-triggered questions only; general enquiry now continues to the normal CIMA response path.
+* - v0.3.2: added clarification carry-forward support so original_question and clarification_answer are combined before CIMA answers.
+  * Notes:
  * - Temporary working CIMA backend.
  * - Designed to match the current CIMA demo index.html.
  * - All operational outputs are draft support only and require human review.
@@ -449,7 +450,33 @@ app.post("/question-intake-test", async (req, res) => {
 });
 
 app.post("/cima-chat", async (req, res) => {
-  const question = String(req.body.question || "").trim();
+  const rawQuestion = String(req.body.question || "").trim();
+
+  const originalQuestion = String(
+    req.body.original_question ||
+    req.body.originalQuestion ||
+    ""
+  ).trim();
+
+  const clarificationAnswer = String(
+    req.body.clarification_answer ||
+    req.body.clarificationAnswer ||
+    ""
+  ).trim();
+
+  const isClarificationFollowUp = Boolean(originalQuestion && clarificationAnswer);
+
+  const question = isClarificationFollowUp
+    ? cleanText([
+        "Original CIMA question:",
+        originalQuestion,
+        "",
+        "Clarification supplied by user:",
+        clarificationAnswer,
+        "",
+        "Answer the original question using the clarification supplied. Do not treat the clarification as a separate standalone question."
+      ].join("\n"))
+    : rawQuestion;
 
   const context = req.body.context && typeof req.body.context === "object"
     ? req.body.context
@@ -612,6 +639,10 @@ app.post("/cima-chat", async (req, res) => {
         source_mode: "No database search before clarification",
         answer: clarificationAnswer,
         sources: [],
+        pending_clarification: true,
+        original_question: question,
+        clarification_questions: clarityQuestions,
+        clarification_follow_up_required: true,
         specialist_trigger: specialistDecision
       });
     }
@@ -659,7 +690,13 @@ app.post("/cima-chat", async (req, res) => {
         ...clarificationGateResponse,
         build_iso: BUILD_ISO,
         answered_at: new Date().toISOString(),
-        response_agent_build_iso: clarificationGateResponse.response_agent_build_iso || clarificationGateResponse.build_iso
+        response_agent_build_iso: clarificationGateResponse.response_agent_build_iso || clarificationGateResponse.build_iso,
+        pending_clarification: true,
+        original_question: question,
+        clarification_questions: Array.isArray(clarificationGateResponse.clarification_questions)
+          ? clarificationGateResponse.clarification_questions
+          : [],
+        clarification_follow_up_required: true
       });
     }
 
@@ -672,7 +709,9 @@ app.post("/cima-chat", async (req, res) => {
       context
     });
 
-    if (intakeResult.needs_clarification) {
+    const intakeHasSpecialistTrigger = intakeResult.specialist_trigger?.detected === true;
+
+    if (intakeResult.needs_clarification && intakeHasSpecialistTrigger) {
       await writeAuditEvent({
         event_type: "cima_question_needs_clarification",
         route: "/cima-chat",
@@ -682,7 +721,7 @@ app.post("/cima-chat", async (req, res) => {
         terms_accepted: true,
         question,
         context_mode: context.mode || "",
-        command_level: context.level || "",
+        command_level: context.level || context.command_level || context.commandLevel || "",
         persona: context.persona || "",
         requested_output: context.output || "",
         intake_agent: intakeResult.agent,
@@ -721,13 +760,19 @@ app.post("/cima-chat", async (req, res) => {
         response_agent_build_iso: intakeResult.build_iso,
         response_path: "QUESTION INTAKE",
         path: "QUESTION INTAKE",
-        rag: intakeResult.specialist_trigger?.detected ? "AMBER" : "GREEN",
-        rag_status: intakeResult.specialist_trigger?.detected ? "AMBER" : "GREEN",
-        hitl: intakeResult.specialist_trigger?.detected ? "Required before advice" : "Clarification required",
+        rag: "AMBER",
+        rag_status: "AMBER",
+        hitl: "Required before advice",
         confidence: "Needs clarification",
         source_mode: "No database search before clarification",
         answer: clarificationAnswer,
         sources: [],
+        pending_clarification: true,
+        original_question: question,
+        clarification_questions: Array.isArray(intakeResult.clarification_questions)
+          ? intakeResult.clarification_questions
+          : [],
+        clarification_follow_up_required: true,
         intake: intakeResult
       });
     }
