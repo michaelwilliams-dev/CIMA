@@ -3905,12 +3905,33 @@ body {
         return;
       }
 
-       const input = document.getElementById("questionInput");
+      const input = document.getElementById("questionInput");
       const sendButton = document.getElementById("sendButton");
-      const question = input.value.trim();
+      let question = input.value.trim();
 
       if (!question) {
         return;
+      }
+
+      if (
+        window.CimaClarification &&
+        typeof window.CimaClarification.hasActiveSession === "function" &&
+        typeof window.CimaClarification.recordAnswer === "function" &&
+        typeof window.CimaClarification.isComplete === "function" &&
+        typeof window.CimaClarification.buildCombinedQuestion === "function" &&
+        window.CimaClarification.hasActiveSession()
+      ) {
+        window.CimaClarification.recordAnswer(question);
+
+        if (!window.CimaClarification.isComplete()) {
+          const nextQuestion = window.CimaClarification.getCurrentQuestion();
+          input.value = "";
+          document.getElementById("lastOutput").textContent =
+            "Clarification recorded. Next clarification needed: " + nextQuestion;
+          return;
+        }
+
+        question = window.CimaClarification.buildCombinedQuestion();
       }
 
       activeReplyView = "standard";
