@@ -3899,333 +3899,419 @@ body {
       ].join("\n");
     }
 
-    async function askQuestion() {
-      if (!accessConfirmed) {
-        alert("Access has not been confirmed.");
-        return;
-      }
+async function askQuestion() {
+  if (!accessConfirmed) {
+    alert("Access has not been confirmed.");
+    return;
+  }
 
-      const input = document.getElementById("questionInput");
-      const sendButton = document.getElementById("sendButton");
-      let question = input.value.trim();
+  const input = document.getElementById("questionInput");
+  const sendButton = document.getElementById("sendButton");
+  const replyArea = document.getElementById("replyArea");
 
-      if (!question) {
-        return;
-      }
+  let question = input.value.trim();
 
-      if (
-        window.CimaClarification &&
-        typeof window.CimaClarification.hasActiveSession === "function" &&
-        typeof window.CimaClarification.recordAnswer === "function" &&
-        typeof window.CimaClarification.isComplete === "function" &&
-        typeof window.CimaClarification.buildCombinedQuestion === "function" &&
-        window.CimaClarification.hasActiveSession()
-      ) {
-        window.CimaClarification.recordAnswer(question);
+  if (!question) {
+    return;
+  }
 
-        if (!window.CimaClarification.isComplete()) {
-          const nextQuestion = window.CimaClarification.getCurrentQuestion();
-          input.value = "";
-          document.getElementById("lastOutput").textContent =
-            "Clarification recorded. Next clarification needed: " + nextQuestion;
-          return;
-        }
+  let questionWasBuiltFromClarification = false;
 
-        question = window.CimaClarification.buildCombinedQuestion();
-      }
+  if (
+    window.CimaClarification &&
+    typeof window.CimaClarification.hasActiveSession === "function" &&
+    typeof window.CimaClarification.recordAnswer === "function" &&
+    typeof window.CimaClarification.isComplete === "function" &&
+    typeof window.CimaClarification.buildCombinedQuestion === "function" &&
+    window.CimaClarification.hasActiveSession()
+  ) {
+    const clarificationAnswer = question;
 
-      activeReplyView = "standard";
+    window.CimaClarification.recordAnswer(clarificationAnswer);
 
-      const replyArea = document.getElementById("replyArea");
-      if (replyArea) {
-        replyArea.className = "";
-        replyArea.innerHTML = "";
-      }
+    if (!window.CimaClarification.isComplete()) {
+      const nextQuestion =
+        typeof window.CimaClarification.getCurrentQuestion === "function"
+          ? window.CimaClarification.getCurrentQuestion()
+          : "Please provide the next clarification detail.";
 
-      questions.push(question);
-
-      const predictedPath = determinePath(question);
-      const context = getContext();
-
-      document.getElementById("questionCount").textContent = String(questions.length);
-      document.getElementById("pathStatus").textContent = predictedPath;
-      document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
-      document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
-
-      document.getElementById("processStepAccess").className = "process-step active";
-      document.getElementById("processStepContext").className = "process-step active";
-      document.getElementById("processStepQuestion").className = "process-step active";
-      document.getElementById("processStepResponse").className = "process-step active";
-      document.getElementById("processStepDelivery").className = "process-step muted";
-
-      updateContextFromControls();
-
-      document.getElementById("deliveryQuestionStatus").textContent = "Submitted";
-      document.getElementById("deliveryQuestionStatus").className = "";
-
-      document.getElementById("deliveryResponseStatus").textContent = "Preparing";
-      document.getElementById("deliveryResponseStatus").className = "pending";
-
-addMessage(
-  "user",
-  `Question ${questions.length}`,
-  `
-    <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
-    <p>${escapeHtml(question)}</p>
-  `
-);
-    input.value = "Searching the CIMA database and preparing the response...";
-    document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
-
-      let answer = "";
-      let finalPath = predictedPath;
-      let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
-      let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
-      let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
-
-      let debugStage = "before fetch";
-      let cimaPayload = null;
-
-      try {
-        sendButton.disabled = true;
-
-        debugStage = "fetch /cima-chat";
-
-          cimaPayload = {
-          question,
-          context,
-          access: {
-            mode: accessMode,
-            email: gateEmailOne
-          },
-          terms: {
-            accepted: true,
-            accepted_at: new Date().toISOString()
-          },
-          session: {
-            question_count: questions.length,
-            include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
-          }
-        };
-
-        async function postCimaChatOnce() {
-            const response = await fetch("/cima-chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(cimaPayload)
-          });
-
-          const rawText = await response.text();
-
-          try {
-            return {
-              res: response,
-              data: JSON.parse(rawText)
-            };
-          } catch (parseError) {
-            throw new Error(
-              "Could not parse /cima-chat JSON. HTTP status: " +
-              response.status +
-              ". First response text: " +
-              String(rawText || "").slice(0, 300)
-            );
-          }
-        }
-
-        let res;
-        let data;
-
-        try {
-          debugStage = "fetch /cima-chat first attempt";
-          const firstAttempt = await postCimaChatOnce();
-          res = firstAttempt.res;
-          data = firstAttempt.data;
-        } catch (firstError) {
-          debugStage = "fetch /cima-chat retry after parse failure";
-          await new Promise((resolve) => setTimeout(resolve, 700));
-          const secondAttempt = await postCimaChatOnce();
-          res = secondAttempt.res;
-          data = secondAttempt.data;
-        }
-
-        debugStage = "validate /cima-chat json";
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Backend response failed.");
-        }
-
-                if (!data.answer) {
-          throw new Error(
-            "Backend returned ok:true but no answer field. Response keys: " +
-            Object.keys(data || {}).join(", ")
-          );
-        }
-
-        answer = data.answer;
-        finalPath = data.response_path || data.path || predictedPath;
-        hitl = data.hitl || data.human_in_the_loop || hitl;
-        confidence = data.confidence || confidence;
-        rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
-
-        const answerForRagCheck = String(answer || "").toUpperCase();
-        const questionForRagCheck = String(question || "").toUpperCase();
-
-        const isLiveConfirmedRisk =
-          (
-            questionForRagCheck.includes("LIVE") ||
-            questionForRagCheck.includes("CONFIRMED") ||
-            questionForRagCheck.includes("NOW")
-          ) &&
-          (
-            questionForRagCheck.includes("DRONE") ||
-            questionForRagCheck.includes("TERRORIST") ||
-            questionForRagCheck.includes("THREAT")
-          );
-
-        if (isLiveConfirmedRisk) {
-          rag = "RED";
-        } else if (
-          answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
-          questionForRagCheck.includes("UNCONFIRMED")
-        ) {
-          rag = "AMBER";
-        }
-
-        latestSources = data.sources || [];
-
-        if (
-          window.CimaClarification &&
-          typeof window.CimaClarification.extractQuestionsFromAnswer === "function" &&
-          typeof window.CimaClarification.start === "function"
-        ) {
-          const backendClarificationQuestions = Array.isArray(data.clarification_questions)
-            ? data.clarification_questions
-            : [];
-
-          const clarificationQuestions = backendClarificationQuestions.length > 0
-            ? backendClarificationQuestions
-            : window.CimaClarification.extractQuestionsFromAnswer(answer);
-
-          const answerTextForClarification = String(answer || "").toUpperCase();
-
-          if (
-            (
-              data.pending_clarification === true ||
-              answerTextForClarification.includes("CLARIFICATION REQUIRED")
-            ) &&
-            clarificationQuestions.length > 0
-          ) {
-            window.CimaClarification.start(question, context, clarificationQuestions);
-            document.getElementById("lastOutput").textContent = "Clarification required. Original question stored for follow-up.";
-          }
-        }
-      } catch (error) {
-        answer = [
-          "## Backend Connection Error",
-          "",
-          "CIMA did not receive a usable response from /cima-chat.",
-          "",
-          "## Error Detail",
-          "",
-          `- Stage: ${debugStage}`,
-          `- Error name: ${error.name || "Not supplied"}`,
-          `- Error message: ${error.message || "Not supplied"}`,
-          `- Browser page URL: ${window.location.href}`,
-          `- Backend URL: https://cima-7fj2.onrender.com/cima-chat`,
-          `- Payload length: ${JSON.stringify(cimaPayload).length}`,
-          `- Browser online: ${navigator.onLine ? "Yes" : "No"}`,
-          "",
-          "## What This Means",
-          "",
-          "The browser is using the frontend error path. The backend may not have redeployed, the browser may be hitting an old service, or the frontend may not be calling the same /cima-chat route tested successfully in Render Shell.",
-          "",
-          "## Safety Note",
-          "",
-          "CIMA has not generated an operational response for this question."
-        ].join("\n");
-
-        finalPath = "BACKEND CONNECTION ERROR";
-        rag = "AMBER";
-        hitl = "Required";
-        confidence = "Backend response not received";
-
-        latestSources = [
-          {
-            title: "Frontend error",
-            note: error.message
-          }
-        ];
-      } finally {
-        sendButton.disabled = false;
-      }
-
-      const universalHitlNotice = [
-        "",
-        "## Human in the loop required before reliance",
-        "All CIMA outputs are draft support only. An authorised human lead must review the output before operational use, onward communication, escalation, de-escalation, public statement or record entry."
-      ].join("\n");
-
-      if (!String(answer || "").includes("Human in the loop required before reliance")) {
-        answer = `${answer}${universalHitlNotice}`;
-      }
-
-      latestAnswer = answer;
-
-      const trainingModeBtn = document.getElementById("trainingModeBtn");
-      if (trainingModeBtn) {
-        trainingModeBtn.disabled = false;
-      }
-
-      document.getElementById("pathStatus").textContent = finalPath;
-      document.getElementById("hitlStatus").textContent = hitl;
-      document.getElementById("confidenceStatus").textContent = confidence;
-
-      updateResponseDashboard({
-        path: finalPath,
-        rag,
-        hitl,
-        confidence,
-        answer
-      });
-
-      latestStandardHtml = `
-        ${markdownToHtml(answer)}
-      `;
-
-      document.getElementById("cimaSearchNotice")?.remove();
+      addMessage(
+        "user",
+        "Clarification answer",
+        `<p>${escapeHtml(clarificationAnswer)}</p>`
+      );
 
       addMessage(
         "agent",
-        "CIMA Assistant",
-        latestStandardHtml
+        "Clarification question",
+        `<p>${escapeHtml(nextQuestion)}</p>`
       );
-      transcriptEntries.push({
-        at: new Date().toISOString(),
-        question,
-        path: finalPath,
-        rag,
-        hitl,
-        confidence,
-        answer
-      });
-
-      document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
-
-      document.getElementById("deliveryResponseStatus").textContent = "Complete";
-      document.getElementById("deliveryResponseStatus").className = "";
-
-      const humanReviewCheck = document.getElementById("humanReviewCheck");
-      if (humanReviewCheck) {
-        humanReviewCheck.disabled = false;
-      }
 
       input.value = "";
+      input.placeholder = "Answer the clarification question...";
+      document.getElementById("lastOutput").textContent =
+        "Clarification recorded. Next clarification question shown.";
 
-      renderSessionQa();
-      setRightTab("thread");
+      return;
     }
+
+    question = window.CimaClarification.buildCombinedQuestion();
+    questionWasBuiltFromClarification = true;
+
+    if (typeof window.CimaClarification.reset === "function") {
+      window.CimaClarification.reset();
+    }
+
+    input.value = "";
+    input.placeholder = "Ask CIMA a question...";
+
+    if (replyArea) {
+      replyArea.className = "";
+      replyArea.innerHTML = "";
+    }
+
+    document.getElementById("lastOutput").textContent =
+      "Clarification complete. Submitting revised Question 1.";
+  }
+
+  activeReplyView = "standard";
+
+  if (replyArea) {
+    replyArea.className = "";
+    replyArea.innerHTML = "";
+  }
+
+  const predictedPath = determinePath(question);
+  const context = getContext();
+  const nextQuestionNumber = questions.length + 1;
+
+  document.getElementById("pathStatus").textContent = predictedPath;
+  document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
+  document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
+
+  document.getElementById("processStepAccess").className = "process-step active";
+  document.getElementById("processStepContext").className = "process-step active";
+  document.getElementById("processStepQuestion").className = "process-step active";
+  document.getElementById("processStepResponse").className = "process-step active";
+  document.getElementById("processStepDelivery").className = "process-step muted";
+
+  updateContextFromControls();
+
+  document.getElementById("deliveryQuestionStatus").textContent = questionWasBuiltFromClarification
+    ? "Revised and submitted"
+    : "Submitted";
+  document.getElementById("deliveryQuestionStatus").className = "";
+
+  document.getElementById("deliveryResponseStatus").textContent = "Preparing";
+  document.getElementById("deliveryResponseStatus").className = "pending";
+
+  addMessage(
+    "user",
+    `Question ${nextQuestionNumber}`,
+    `
+      <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+      ${
+        questionWasBuiltFromClarification
+          ? "<p><strong>Revised question built from clarification answers.</strong></p>"
+          : ""
+      }
+      <p>${escapeHtml(question)}</p>
+    `
+  );
+
+  input.value = "Searching the CIMA database and preparing the response...";
+  document.getElementById("lastOutput").textContent =
+    "Searching the CIMA database and preparing the response...";
+
+  let answer = "";
+  let finalPath = predictedPath;
+  let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
+  let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
+  let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
+
+  let debugStage = "before fetch";
+  let cimaPayload = null;
+
+  try {
+    sendButton.disabled = true;
+
+    debugStage = "fetch /cima-chat";
+
+    cimaPayload = {
+      question,
+      context,
+      access: {
+        mode: accessMode,
+        email: gateEmailOne
+      },
+      terms: {
+        accepted: true,
+        accepted_at: new Date().toISOString()
+      },
+      session: {
+        question_count: nextQuestionNumber,
+        include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
+      }
+    };
+
+    async function postCimaChatOnce() {
+      const response = await fetch("/cima-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(cimaPayload)
+      });
+
+      const rawText = await response.text();
+
+      try {
+        return {
+          res: response,
+          data: JSON.parse(rawText)
+        };
+      } catch (parseError) {
+        throw new Error(
+          "Could not parse /cima-chat JSON. HTTP status: " +
+          response.status +
+          ". First response text: " +
+          String(rawText || "").slice(0, 300)
+        );
+      }
+    }
+
+    let res;
+    let data;
+
+    try {
+      debugStage = "fetch /cima-chat first attempt";
+      const firstAttempt = await postCimaChatOnce();
+      res = firstAttempt.res;
+      data = firstAttempt.data;
+    } catch (firstError) {
+      debugStage = "fetch /cima-chat retry after parse failure";
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const secondAttempt = await postCimaChatOnce();
+      res = secondAttempt.res;
+      data = secondAttempt.data;
+    }
+
+    debugStage = "validate /cima-chat json";
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Backend response failed.");
+    }
+
+    const backendClarificationQuestions = Array.isArray(data.clarification_questions)
+      ? data.clarification_questions
+      : [];
+
+    const answerTextForClarification = String(data.answer || "").toUpperCase();
+
+    const clarificationQuestions =
+      backendClarificationQuestions.length > 0
+        ? backendClarificationQuestions
+        : (
+            window.CimaClarification &&
+            typeof window.CimaClarification.extractQuestionsFromAnswer === "function"
+              ? window.CimaClarification.extractQuestionsFromAnswer(data.answer || "")
+              : []
+          );
+
+    if (
+      !questionWasBuiltFromClarification &&
+      window.CimaClarification &&
+      typeof window.CimaClarification.start === "function" &&
+      (
+        data.pending_clarification === true ||
+        answerTextForClarification.includes("CLARIFICATION REQUIRED")
+      ) &&
+      clarificationQuestions.length > 0
+    ) {
+      window.CimaClarification.start(question, context, clarificationQuestions);
+
+      const firstClarificationQuestion =
+        typeof window.CimaClarification.getCurrentQuestion === "function"
+          ? window.CimaClarification.getCurrentQuestion()
+          : clarificationQuestions[0];
+
+      if (replyArea) {
+        replyArea.className = "";
+        replyArea.innerHTML = `
+          <div class="message user">
+            <strong>Original question</strong>
+            <p>${escapeHtml(question)}</p>
+          </div>
+
+          <div class="message agent">
+            <strong>Clarification Required</strong>
+            <p>CIMA needs more detail before producing the final answer.</p>
+            <h3>Clarification question 1 of ${clarificationQuestions.length}</h3>
+            <p>${escapeHtml(firstClarificationQuestion)}</p>
+          </div>
+        `;
+      }
+
+      document.getElementById("deliveryResponseStatus").textContent = "Clarification required";
+      document.getElementById("deliveryResponseStatus").className = "pending";
+
+      document.getElementById("lastOutput").textContent =
+        "Clarification required. Answer the question shown in the reply area.";
+
+      input.value = "";
+      input.placeholder = "Answer the clarification question...";
+
+      return;
+    }
+
+    if (!data.answer) {
+      throw new Error(
+        "Backend returned ok:true but no answer field. Response keys: " +
+        Object.keys(data || {}).join(", ")
+      );
+    }
+
+    answer = data.answer;
+    finalPath = data.response_path || data.path || predictedPath;
+    hitl = data.hitl || data.human_in_the_loop || hitl;
+    confidence = data.confidence || confidence;
+    rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
+
+    const answerForRagCheck = String(answer || "").toUpperCase();
+    const questionForRagCheck = String(question || "").toUpperCase();
+
+    const isLiveConfirmedRisk =
+      (
+        questionForRagCheck.includes("LIVE") ||
+        questionForRagCheck.includes("CONFIRMED") ||
+        questionForRagCheck.includes("NOW")
+      ) &&
+      (
+        questionForRagCheck.includes("DRONE") ||
+        questionForRagCheck.includes("TERRORIST") ||
+        questionForRagCheck.includes("THREAT")
+      );
+
+    if (isLiveConfirmedRisk) {
+      rag = "RED";
+    } else if (
+      answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
+      questionForRagCheck.includes("UNCONFIRMED")
+    ) {
+      rag = "AMBER";
+    }
+
+    latestSources = data.sources || [];
+  } catch (error) {
+    answer = [
+      "## Backend Connection Error",
+      "",
+      "CIMA did not receive a usable response from /cima-chat.",
+      "",
+      "## Error Detail",
+      "",
+      `- Stage: ${debugStage}`,
+      `- Error name: ${error.name || "Not supplied"}`,
+      `- Error message: ${error.message || "Not supplied"}`,
+      `- Browser page URL: ${window.location.href}`,
+      `- Backend URL: https://cima-7fj2.onrender.com/cima-chat`,
+      `- Payload length: ${JSON.stringify(cimaPayload || {}).length}`,
+      `- Browser online: ${navigator.onLine ? "Yes" : "No"}`,
+      "",
+      "## What This Means",
+      "",
+      "The browser is using the frontend error path. The backend may not have redeployed, the browser may be hitting an old service, or the frontend may not be calling the same /cima-chat route tested successfully in Render Shell.",
+      "",
+      "## Safety Note",
+      "",
+      "CIMA has not generated an operational response for this question."
+    ].join("\n");
+
+    finalPath = "BACKEND CONNECTION ERROR";
+    rag = "AMBER";
+    hitl = "Required";
+    confidence = "Backend response not received";
+
+    latestSources = [
+      {
+        title: "Frontend error",
+        note: error.message
+      }
+    ];
+  } finally {
+    sendButton.disabled = false;
+  }
+
+  const universalHitlNotice = [
+    "",
+    "## Human in the loop required before reliance",
+    "All CIMA outputs are draft support only. An authorised human lead must review the output before operational use, onward communication, escalation, de-escalation, public statement or record entry."
+  ].join("\n");
+
+  if (!String(answer || "").includes("Human in the loop required before reliance")) {
+    answer = `${answer}${universalHitlNotice}`;
+  }
+
+  latestAnswer = answer;
+
+  const trainingModeBtn = document.getElementById("trainingModeBtn");
+  if (trainingModeBtn) {
+    trainingModeBtn.disabled = false;
+  }
+
+  questions.push(question);
+
+  document.getElementById("questionCount").textContent = String(questions.length);
+  document.getElementById("pathStatus").textContent = finalPath;
+  document.getElementById("hitlStatus").textContent = hitl;
+  document.getElementById("confidenceStatus").textContent = confidence;
+
+  updateResponseDashboard({
+    path: finalPath,
+    rag,
+    hitl,
+    confidence,
+    answer
+  });
+
+  latestStandardHtml = `
+    ${markdownToHtml(answer)}
+  `;
+
+  document.getElementById("cimaSearchNotice")?.remove();
+
+  addMessage(
+    "agent",
+    "CIMA Assistant",
+    latestStandardHtml
+  );
+
+  transcriptEntries.push({
+    at: new Date().toISOString(),
+    question,
+    path: finalPath,
+    rag,
+    hitl,
+    confidence,
+    answer
+  });
+
+  document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
+
+  document.getElementById("deliveryResponseStatus").textContent = "Complete";
+  document.getElementById("deliveryResponseStatus").className = "";
+
+  const humanReviewCheck = document.getElementById("humanReviewCheck");
+  if (humanReviewCheck) {
+    humanReviewCheck.disabled = false;
+  }
+
+  input.value = "";
+  input.placeholder = "Ask CIMA a question...";
+
+  renderSessionQa();
+  setRightTab("thread");
+}
 
     function renderSessionQa() {
       const list = document.getElementById("sessionQaList");
