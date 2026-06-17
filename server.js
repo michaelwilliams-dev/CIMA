@@ -252,8 +252,16 @@ app.get("/meta", (req, res) => {
     transcript_agent: getTranscriptAgentStatus(),
     training_agent: getCimaTrainingAgentStatus(),
     training_synopsis_agent: getTrainingSynopsisAgentStatus(),
-    source_index_agent: getSourceIndexAgentStatus(),
-    faiss_knowledge_agent: getFaissKnowledgeAgentStatus(),
+    source_index_agent: {
+      ok: true,
+      status: "not_checked_on_meta",
+      note: "Disabled on /meta to prevent Render memory pressure. Use a separate controlled source-index test route or shell test for deep FAISS/source checks."
+    },
+    faiss_knowledge_agent: {
+      ok: true,
+      status: "not_checked_on_meta",
+      note: "Disabled on /meta to prevent Render memory pressure. Retrieval agent should only be checked during controlled retrieval tests."
+    },
   
     data_review_email: DATA_REVIEW_EMAIL,
     pdf_index_ready: false,
