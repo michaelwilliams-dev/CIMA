@@ -3908,6 +3908,8 @@ body {
       const input = document.getElementById("questionInput");
       const sendButton = document.getElementById("sendButton");
       let question = input.value.trim();
+      let clarificationRunHtml = "";
+      let questionTitleOverride = "";
 
       if (!question) {
         return;
@@ -3921,6 +3923,12 @@ body {
         typeof window.CimaClarification.buildCombinedQuestion === "function" &&
         window.CimaClarification.hasActiveSession()
       ) {
+        const clarificationAnswer = question;
+        const clarificationQuestion =
+          typeof window.CimaClarification.getCurrentQuestion === "function"
+            ? window.CimaClarification.getCurrentQuestion()
+            : "";
+
         window.CimaClarification.recordAnswer(question);
 
         if (!window.CimaClarification.isComplete()) {
@@ -3931,7 +3939,39 @@ body {
           return;
         }
 
-        question = window.CimaClarification.buildCombinedQuestion();
+        const combinedQuestion = window.CimaClarification.buildCombinedQuestion();
+        const combinedText = String(combinedQuestion || "");
+
+        let originalQuestion = combinedText;
+        const originalLabel = "Original question:";
+        const sessionLabel = "Session fact base:";
+        const originalStart = combinedText.indexOf(originalLabel);
+        const sessionStart = combinedText.indexOf(sessionLabel);
+
+        if (originalStart !== -1 && sessionStart !== -1 && sessionStart > originalStart) {
+          originalQuestion = combinedText
+            .slice(originalStart + originalLabel.length, sessionStart)
+            .trim();
+        }
+
+        const revisedQuestion = [originalQuestion, clarificationAnswer].join(" ").trim();
+
+        question = revisedQuestion;
+        questionTitleOverride = "Question 1";
+
+        clarificationRunHtml = `
+          <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+          <p>${escapeHtml(originalQuestion)}</p>
+
+          <p><strong>Clarification needed</strong></p>
+          <p>${escapeHtml(clarificationQuestion)}</p>
+
+          <p><strong>Clarification answer</strong></p>
+          <p>${escapeHtml(clarificationAnswer)}</p>
+
+          <p><strong>Revised search question sent to CIMA</strong></p>
+          <p>${escapeHtml(revisedQuestion)}</p>
+        `;
       }
 
       activeReplyView = "standard";
@@ -3966,29 +4006,17 @@ body {
       document.getElementById("deliveryResponseStatus").textContent = "Preparing";
       document.getElementById("deliveryResponseStatus").className = "pending";
 
-const questionDisplayText = String(question || "").includes("Session fact base:")
-  ? String(question || "")
-      .replace(/Session fact base:[\s\S]*$/i, "")
-      .replace(/^Original question:\s*/i, "")
-      .trim()
-  : question;
+const questionMessageTitle = questionTitleOverride || `Question ${questions.length}`;
 
-const questionDisplayNumber = String(question || "").includes("Session fact base:")
-  ? 1
-  : questions.length;
-
-const clarificationDisplayNote = String(question || "").includes("Session fact base:")
-  ? "<p><strong>Clarification answers added to Question 1.</strong></p>"
-  : "";
+const questionMessageBody = clarificationRunHtml || `
+  <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+  <p>${escapeHtml(question)}</p>
+`;
 
 addMessage(
   "user",
-  `Question ${questionDisplayNumber}`,
-  `
-    <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
-    ${clarificationDisplayNote}
-    <p>${escapeHtml(questionDisplayText)}</p>
-  `
+  questionMessageTitle,
+  questionMessageBody
 );
     input.value = "Searching the CIMA database and preparing the response...";
     document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
