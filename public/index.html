@@ -3910,6 +3910,10 @@ body {
       let question = input.value.trim();
       let clarificationRunHtml = "";
       let questionTitleOverride = "";
+      let originalQuestion = "";
+      let clarificationAnswer = "";
+      let clarificationQuestion = "";
+      let revisedQuestion = "";
 
       if (!question) {
         return;
@@ -3923,8 +3927,8 @@ body {
         typeof window.CimaClarification.buildCombinedQuestion === "function" &&
         window.CimaClarification.hasActiveSession()
       ) {
-        const clarificationAnswer = question;
-        const clarificationQuestion =
+        clarificationAnswer = question;
+        clarificationQuestion =
           typeof window.CimaClarification.getCurrentQuestion === "function"
             ? window.CimaClarification.getCurrentQuestion()
             : "";
@@ -3942,7 +3946,7 @@ body {
         const combinedQuestion = window.CimaClarification.buildCombinedQuestion();
         const combinedText = String(combinedQuestion || "");
 
-        let originalQuestion = combinedText;
+        originalQuestion = combinedText;
         const originalLabel = "Original question:";
         const sessionLabel = "Session fact base:";
         const originalStart = combinedText.indexOf(originalLabel);
@@ -3954,7 +3958,7 @@ body {
             .trim();
         }
 
-        const revisedQuestion = [originalQuestion, clarificationAnswer].join(" ").trim();
+        revisedQuestion = [originalQuestion, clarificationAnswer].join(" ").trim();
 
         question = revisedQuestion;
         questionTitleOverride = "Question 1";
@@ -4013,7 +4017,22 @@ const questionMessageBody = clarificationRunHtml || `
   <p>${escapeHtml(question)}</p>
 `;
 
-if (!questionTitleOverride) {
+if (questionTitleOverride) {
+  addMessage(
+    "user",
+    "Question 1 - clarified",
+    `
+      <p><strong>Original question:</strong></p>
+      <p>${escapeHtml(originalQuestion)}</p>
+
+      <p><strong>Clarification answer:</strong></p>
+      <p>${escapeHtml(clarificationAnswer)}</p>
+
+      <p><strong>Final question sent to CIMA:</strong></p>
+      <p>${escapeHtml(revisedQuestion)}</p>
+    `
+  );
+} else {
   addMessage(
     "user",
     questionMessageTitle,
