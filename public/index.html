@@ -4037,6 +4037,9 @@ addMessage(
 
           cimaPayload = {
           question,
+          original_question: questionTitleOverride ? question : "",
+          clarification_follow_up: Boolean(questionTitleOverride),
+          clarification_complete: Boolean(questionTitleOverride),
           context,
           access: {
             mode: accessMode,
@@ -4048,7 +4051,9 @@ addMessage(
           },
           session: {
             question_count: questions.length,
-            include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false
+            include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false,
+            clarification_follow_up: Boolean(questionTitleOverride),
+            clarification_complete: Boolean(questionTitleOverride)
           }
         };
 
