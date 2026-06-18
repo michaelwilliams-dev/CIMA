@@ -3937,9 +3937,22 @@ body {
 
         if (!window.CimaClarification.isComplete()) {
           const nextQuestion = window.CimaClarification.getCurrentQuestion();
+
           input.value = "";
+          input.placeholder = "Answer this clarification question...";
+
+          addMessage(
+            "agent",
+            "Clarification needed",
+            `
+              <p><strong>Please answer this next clarification question:</strong></p>
+              <p>${escapeHtml(nextQuestion)}</p>
+            `
+          );
+
           document.getElementById("lastOutput").textContent =
-            "Clarification recorded. Next clarification needed: " + nextQuestion;
+            "Answer the clarification question shown in the main reply area.";
+
           return;
         }
 
@@ -4188,7 +4201,37 @@ if (questionTitleOverride) {
             clarificationQuestions.length > 0
           ) {
             window.CimaClarification.start(question, context, clarificationQuestions);
-            document.getElementById("lastOutput").textContent = "Clarification required. Original question stored for follow-up.";
+
+            const firstClarificationQuestion =
+              typeof window.CimaClarification.getCurrentQuestion === "function"
+                ? window.CimaClarification.getCurrentQuestion()
+                : clarificationQuestions[0];
+
+            const replyArea = document.getElementById("replyArea");
+            if (replyArea) {
+              replyArea.className = "";
+              replyArea.innerHTML = "";
+            }
+
+            addMessage(
+              "agent",
+              "Clarification needed",
+              `
+                <p><strong>Please answer this clarification question:</strong></p>
+                <p>${escapeHtml(firstClarificationQuestion)}</p>
+              `
+            );
+
+            input.value = "";
+            input.placeholder = "Answer this clarification question...";
+
+            document.getElementById("deliveryResponseStatus").textContent = "Clarification needed";
+            document.getElementById("deliveryResponseStatus").className = "pending";
+
+            document.getElementById("lastOutput").textContent =
+              "Answer the clarification question shown in the main reply area.";
+
+            return;
           }
         }
       } catch (error) {
