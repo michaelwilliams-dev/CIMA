@@ -4347,15 +4347,30 @@ if (questionTitleOverride) {
 
       function extractClarificationQuestion(answerText = "") {
         const text = String(answerText || "");
+
+        const directQuestionMatch = text.match(/Is this[^?\n]*\?/i);
+        if (directQuestionMatch && directQuestionMatch[0]) {
+          return directQuestionMatch[0].trim();
+        }
+
         const lines = text
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean);
 
         for (const line of lines) {
-          const match = line.match(/^\d+\.\s+(.+)$/);
-          if (match && match[1]) {
-            return match[1].trim();
+          const numberedMatch = line.match(/^\d+\.\s+(.+)$/);
+          if (numberedMatch && numberedMatch[1]) {
+            return numberedMatch[1].trim();
+          }
+
+          const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+          if (bulletMatch && bulletMatch[1] && bulletMatch[1].includes("?")) {
+            return bulletMatch[1].trim();
+          }
+
+          if (line.includes("?")) {
+            return line.trim();
           }
         }
 
