@@ -4013,11 +4013,13 @@ const questionMessageBody = clarificationRunHtml || `
   <p>${escapeHtml(question)}</p>
 `;
 
-addMessage(
-  "user",
-  questionMessageTitle,
-  questionMessageBody
-);
+if (!questionTitleOverride) {
+  addMessage(
+    "user",
+    questionMessageTitle,
+    questionMessageBody
+  );
+}
     input.value = "Searching the CIMA database and preparing the response...";
     document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
 
