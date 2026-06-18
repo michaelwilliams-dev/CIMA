@@ -4326,6 +4326,34 @@ if (!questionTitleOverride) {
         return transcriptEntries;
       }
 
+      function extractClarificationQuestion(answerText = "") {
+        const text = String(answerText || "");
+        const lines = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        for (const line of lines) {
+          const match = line.match(/^\d+\.\s+(.+)$/);
+          if (match && match[1]) {
+            return match[1].trim();
+          }
+        }
+
+        return "Clarification was requested before CIMA produced the final answer.";
+      }
+
+      function extractClarificationAnswer(originalQuestion = "", revisedQuestion = "") {
+        const original = String(originalQuestion || "").trim();
+        const revised = String(revisedQuestion || "").trim();
+
+        if (original && revised.startsWith(original)) {
+          return revised.slice(original.length).trim() || "Not supplied";
+        }
+
+        return "Not supplied";
+      }
+
       const cleaned = [];
       let index = 0;
 
@@ -4333,26 +4361,33 @@ if (!questionTitleOverride) {
         const current = transcriptEntries[index];
         const next = transcriptEntries[index + 1];
 
+        const currentQuestion = String(current?.question || "");
         const currentAnswer = String(current?.answer || "");
         const nextQuestion = String(next?.question || "");
 
         const isClarificationEntry =
           currentAnswer.toUpperCase().includes("CLARIFICATION REQUIRED") &&
           next &&
-          nextQuestion.startsWith(String(current.question || ""));
+          nextQuestion.startsWith(currentQuestion);
 
         if (isClarificationEntry) {
+          const clarificationQuestion = extractClarificationQuestion(currentAnswer);
+          const clarificationAnswer = extractClarificationAnswer(currentQuestion, nextQuestion);
+
           cleaned.push({
             at: next.at || current.at,
             question: [
-              "Original question:",
-              current.question || "Not supplied",
+              "ORIGINAL QUESTION:",
+              currentQuestion || "Not supplied",
               "",
-              "Clarification response:",
-              current.answer || "Not supplied",
+              "CLARIFICATION REQUESTED:",
+              clarificationQuestion,
               "",
-              "Revised question sent to CIMA:",
-              next.question || "Not supplied"
+              "CLARIFICATION ANSWER:",
+              clarificationAnswer,
+              "",
+              "FINAL QUESTION SENT TO CIMA:",
+              nextQuestion || "Not supplied"
             ].join("\n"),
             path: next.path || current.path,
             rag: next.rag || current.rag,
@@ -4371,8 +4406,6 @@ if (!questionTitleOverride) {
 
       return cleaned;
     }
-
-      
 
     async function sendTranscriptEmail() {
       const emailOne = document.getElementById("emailOne")?.value.trim() || "";
