@@ -4318,7 +4318,59 @@ addMessage(
       renderSessionQa();
     }
 
-    
+
+    function buildEmailTranscriptEntries() {
+      if (transcriptEntries.length < 2) {
+        return transcriptEntries;
+      }
+
+      const cleaned = [];
+      let index = 0;
+
+      while (index < transcriptEntries.length) {
+        const current = transcriptEntries[index];
+        const next = transcriptEntries[index + 1];
+
+        const currentAnswer = String(current?.answer || "");
+        const nextQuestion = String(next?.question || "");
+
+        const isClarificationEntry =
+          currentAnswer.toUpperCase().includes("CLARIFICATION REQUIRED") &&
+          next &&
+          nextQuestion.startsWith(String(current.question || ""));
+
+        if (isClarificationEntry) {
+          cleaned.push({
+            at: next.at || current.at,
+            question: [
+              "Original question:",
+              current.question || "Not supplied",
+              "",
+              "Clarification response:",
+              current.answer || "Not supplied",
+              "",
+              "Revised question sent to CIMA:",
+              next.question || "Not supplied"
+            ].join("\n"),
+            path: next.path || current.path,
+            rag: next.rag || current.rag,
+            hitl: next.hitl || current.hitl,
+            confidence: next.confidence || current.confidence,
+            answer: next.answer || ""
+          });
+
+          index += 2;
+          continue;
+        }
+
+        cleaned.push(current);
+        index += 1;
+      }
+
+      return cleaned;
+    }
+
+      
 
     async function sendTranscriptEmail() {
       const emailOne = document.getElementById("emailOne")?.value.trim() || "";
@@ -4357,7 +4409,7 @@ addMessage(
             include_transcript_in_email: includeTranscript,
             context: getContext(),
             persona: getContext().persona || "N/A",
-            questions: includeTranscript ? transcriptEntries : transcriptEntries.map((entry) => ({
+            questions: includeTranscript ? buildEmailTranscriptEntries() : buildEmailTranscriptEntries().map((entry) => ({
               at: entry.at,
               question: entry.question,
               path: entry.path,
