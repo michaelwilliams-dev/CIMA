@@ -3960,6 +3960,8 @@ body {
         const combinedText = String(combinedQuestion || "");
 
         originalQuestion = combinedText;
+        let sessionFactBase = "";
+
         const originalLabel = "Original question:";
         const sessionLabel = "Session fact base:";
         const originalStart = combinedText.indexOf(originalLabel);
@@ -3969,9 +3971,40 @@ body {
           originalQuestion = combinedText
             .slice(originalStart + originalLabel.length, sessionStart)
             .trim();
+
+          sessionFactBase = combinedText
+            .slice(sessionStart + sessionLabel.length)
+            .trim();
         }
 
-        revisedQuestion = [originalQuestion, clarificationAnswer].join(" ").trim();
+        const sessionLines = sessionFactBase
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const answerLines = [];
+
+        for (const line of sessionLines) {
+          const answerMatch =
+            line.match(/^answer\s*\d*\s*:\s*(.+)$/i) ||
+            line.match(/^a\s*\d*\s*:\s*(.+)$/i) ||
+            line.match(/^clarification answer\s*\d*\s*:\s*(.+)$/i);
+
+          if (answerMatch && answerMatch[1]) {
+            answerLines.push(answerMatch[1].trim());
+          }
+        }
+
+        const combinedClarificationAnswers = answerLines.length
+          ? answerLines.join(" ")
+          : sessionFactBase;
+
+        clarificationAnswer = combinedClarificationAnswers || clarificationAnswer;
+
+        revisedQuestion = [originalQuestion, combinedClarificationAnswers]
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
 
         question = revisedQuestion;
         questionTitleOverride = "Question 1";
