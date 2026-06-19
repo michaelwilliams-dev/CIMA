@@ -45,6 +45,22 @@ function normaliseEmail(value = "") {
   return cleanValue(value).toLowerCase();
 }
 
+function makeAuditId(prefix = "cima_id") {
+  const timePart = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return prefix + "_" + timePart + "_" + randomPart;
+}
+
+function getSessionId(event = {}) {
+  const suppliedSessionId = cleanValue(event.session_id || event.sessionId || "");
+
+  if (suppliedSessionId) {
+    return suppliedSessionId;
+  }
+
+  return makeAuditId("cima_s");
+}
+
 function ensureAuditDir() {
   if (!fs.existsSync(DEFAULT_AUDIT_DIR)) {
     fs.mkdirSync(DEFAULT_AUDIT_DIR, { recursive: true });
@@ -57,6 +73,9 @@ function auditPath() {
 
 function buildAuditRecord(event = {}) {
   return {
+    record_id: makeAuditId("cima_r"),
+    session_id: getSessionId(event),
+
     timestamp: new Date().toISOString(),
     app: "AIVS / PGB CIMA",
     audit_agent_build_iso: AUDIT_AGENT_BUILD_ISO,
