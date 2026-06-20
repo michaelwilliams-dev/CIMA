@@ -2414,6 +2414,13 @@ body {
     let sourceClass = "resource";
     let metaState = null;
 
+    let cimaBrowserSessionId = sessionStorage.getItem("cima_browser_session_id") || "";
+
+    if (!cimaBrowserSessionId) {
+      cimaBrowserSessionId = "cima_session_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+      sessionStorage.setItem("cima_browser_session_id", cimaBrowserSessionId);
+    }
+
     function updateIsoTime() {
       const now = new Date().toISOString();
 
@@ -5325,7 +5332,7 @@ async function sendTrainerNotesEmail() {
         const button = document.getElementById("saveSensitiveContextBtn");
 
         const payload = {
-          session_id: "frontend_session_" + Date.now().toString(36),
+          session_id: cimaBrowserSessionId,
           query_id: questions.length ? "question_" + String(questions.length) : "pre_question_context",
           user_email: gateEmailOne || "",
           access_mode: accessMode || "",
