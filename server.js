@@ -96,6 +96,10 @@ import {
   buildSpecialistTriggerDecision
 } from "./specialist_trigger_agent.js";
 
+import {
+  registerConfidentialContextJsonlRoute
+} from "./confidential_context_jsonl_agent.js";
+
 dotenv.config();
 
 const app = express();
@@ -169,6 +173,8 @@ registerTrainerNotesRoute(app, {
   BUILD_ISO,
   writeAuditEvent
 });
+
+registerConfidentialContextJsonlRoute(app);
 
 console.log("ENV CHECK:", {
   accessCodeSet: Boolean(ACCESS_CODE),
