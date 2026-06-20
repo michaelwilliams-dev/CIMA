@@ -1604,6 +1604,128 @@ body {
   background: #fff7ea;
 }
 
+/* AIVS / PGB CIMA Front End
+   Feature: Sensitive Context Pop-up styling
+   ISO Timestamp: 2026-06-20T11:35:00+01:00
+   Change:
+   - Adds modal styling for confidential / sensitive context pop-up.
+   - Does not wire open, close, save or backend storage.
+   - Does not search FAISS or alter CIMA answer generation.
+*/
+
+.sensitive-context-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(16, 35, 45, 0.66);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+
+.sensitive-context-overlay[hidden] {
+  display: none;
+}
+
+.sensitive-context-modal {
+  width: min(760px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #fffdfa;
+  border: 1.7px solid var(--border);
+  border-left: 5px solid var(--orange);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+}
+
+.sensitive-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sensitive-context-header h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.sensitive-context-close {
+  border: 1.7px solid var(--border);
+  background: #fffdfa;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sensitive-context-close:hover {
+  border-color: var(--orange);
+  background: #fff7ea;
+}
+
+.sensitive-context-note {
+  margin: 0 0 14px 0;
+  padding: 12px;
+  border: 1.5px solid var(--soft-border);
+  border-left: 5px solid var(--orange);
+  border-radius: 12px;
+  background: #fbfaf5;
+  color: #5f6b72;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.sensitive-context-modal input,
+.sensitive-context-modal textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 9px 10px;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.sensitive-context-modal textarea {
+  resize: vertical;
+}
+
+.sensitive-context-modal input:focus,
+.sensitive-context-modal textarea:focus {
+  border-color: var(--orange);
+  background: #ffffff;
+}
+
+.sensitive-context-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.sensitive-context-status {
+  min-height: 20px;
+  margin: 12px 0 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
   </style>
 </head>
 
@@ -2182,7 +2304,93 @@ body {
       </div>
     </aside>
   </main>
+  <!--
+    AIVS / PGB CIMA Front End
+    Feature: Sensitive Context Pop-up HTML
+    ISO Timestamp: 2026-06-20T11:25:00+01:00
 
+    Change:
+    - Added hidden confidential / sensitive context pop-up structure.
+    - Revised save button wording to reflect later JSONL backend storage.
+    - Does not yet wire open, close, save or backend storage.
+    - Does not search FAISS or alter CIMA answer generation.
+    - Does not expose internal session_id, query_id or sensitive record identifiers.
+    - Prepares frontend fields for later sensitive_context_agent.js JSONL storage.
+  -->
+  <div id="sensitiveContextOverlay" class="sensitive-context-overlay" hidden>
+    <div class="sensitive-context-modal" role="dialog" aria-modal="true" aria-labelledby="sensitiveContextTitle">
+      <div class="sensitive-context-header">
+        <h2 id="sensitiveContextTitle">Confidential / Sensitive Details</h2>
+
+        <button
+          type="button"
+          id="closeSensitiveContextBtn"
+          class="sensitive-context-close"
+          aria-label="Close confidential details"
+        >
+          Close
+        </button>
+      </div>
+
+      <p class="sensitive-context-note">
+        Enter only the minimum sensitive information necessary for the current operational purpose.
+        Do not include unnecessary personal, medical, safeguarding, legally privileged or confidential information.
+        This information is stored separately for audit and governance only. It is not used for FAISS retrieval or answer generation at this stage.
+      </p>
+
+      <div class="field">
+        <label for="incidentPlace">Location / site</label>
+        <input id="incidentPlace" name="incidentPlace" type="text" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="incidentTime">Incident time</label>
+        <input id="incidentTime" name="incidentTime" type="text" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="peopleInvolved">People / roles involved</label>
+        <textarea id="peopleInvolved" name="peopleInvolved" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="vulnerablePersons">Vulnerable persons</label>
+        <textarea id="vulnerablePersons" name="vulnerablePersons" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="injuries">Injuries</label>
+        <textarea id="injuries" name="injuries" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="emergencyServicesInvolved">Emergency services involved</label>
+        <textarea id="emergencyServicesInvolved" name="emergencyServicesInvolved" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="securityContacts">Security / command contacts</label>
+        <textarea id="securityContacts" name="securityContacts" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="sensitiveOperationalNotes">Sensitive operational notes</label>
+        <textarea id="sensitiveOperationalNotes" name="sensitiveOperationalNotes" rows="5"></textarea>
+      </div>
+
+      <div class="sensitive-context-actions">
+        <button type="button" id="saveSensitiveContextBtn" class="report-btn">
+          Save confidential details to secure record
+        </button>
+
+        <button type="button" id="clearSensitiveContextBtn" class="mode-secondary-btn">
+          Clear confidential details
+        </button>
+      </div>
+
+      <p id="sensitiveContextStatus" class="sensitive-context-status" aria-live="polite"></p>
+    </div>
+  </div>
   <script>
     const BUILD_ISO = "2026-06-15T06:30:00+01:00";
 
@@ -5057,7 +5265,32 @@ async function sendTrainerNotesEmail() {
       }
     }
 
-        document.addEventListener("DOMContentLoaded", () => {
+        function openSensitiveContextModal() {
+        const overlay = document.getElementById("sensitiveContextOverlay");
+
+        if (!overlay) {
+          return;
+        }
+
+        overlay.hidden = false;
+
+        const status = document.getElementById("sensitiveContextStatus");
+        if (status) {
+          status.textContent = "";
+        }
+      }
+
+      function closeSensitiveContextModal() {
+        const overlay = document.getElementById("sensitiveContextOverlay");
+
+        if (!overlay) {
+          return;
+        }
+
+        overlay.hidden = true;
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
         const currentYear = Number(document.getElementById("isoTime").textContent.slice(0, 4));
 
         document.getElementById("fromYear").max = String(currentYear);
@@ -5067,6 +5300,25 @@ async function sendTrainerNotesEmail() {
         document.getElementById("toYearLabel").textContent = String(currentYear);
         document.getElementById("evidenceRangeText").textContent =
           document.getElementById("fromYear").value + " to " + String(currentYear);
+
+        const openSensitiveContextBtn = document.getElementById("openSensitiveContextBtn");
+        if (openSensitiveContextBtn) {
+          openSensitiveContextBtn.addEventListener("click", openSensitiveContextModal);
+        }
+
+        const closeSensitiveContextBtn = document.getElementById("closeSensitiveContextBtn");
+        if (closeSensitiveContextBtn) {
+          closeSensitiveContextBtn.addEventListener("click", closeSensitiveContextModal);
+        }
+
+        const sensitiveContextOverlay = document.getElementById("sensitiveContextOverlay");
+        if (sensitiveContextOverlay) {
+          sensitiveContextOverlay.addEventListener("click", (event) => {
+            if (event.target === sensitiveContextOverlay) {
+              closeSensitiveContextModal();
+            }
+          });
+        }
 
         loadStoredGateEmails();
         syncGateState();
