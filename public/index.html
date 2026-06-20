@@ -25,6 +25,7 @@
     - v1.1.2: NOT VERIFIED evidence date range sliders now set their maximum year from the live ISO timestamp so the range rolls forward automatically each year
     - v1.1.3: expanded terms and conditions text, enlarged terms box, enlarged terms checkbox and increased desktop scrollbar width
     - v1.1.4: added frontend RAG response risk dial with information button and movement from CIMA rag/rag_status
+    - v1.1.5: added Mode panel AI Processing Route dropdown and confidential/sensitive details button as visible control-layer preparation
     -->
 
   <meta charset="UTF-8" />
@@ -1571,6 +1572,38 @@ body {
   margin: 4px 0;
 }
 
+/* AIVS / PGB CIMA Front End
+   Feature: AI Processing Route visible control
+   ISO Timestamp: 2026-06-20T10:55:00+01:00
+   Change: Adds styling for AI Processing Route note in the Mode panel.
+*/
+
+.ai-processing-route-note {
+  margin: 8px 0 14px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #5f6b72;
+  font-weight: 700;
+}
+
+.mode-secondary-btn {
+  width: 100%;
+  min-height: 38px;
+  border: 1.7px solid var(--border);
+  border-radius: 10px;
+  background: #fffdfa;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.mode-secondary-btn:hover {
+  border-color: var(--orange);
+  background: #fff7ea;
+}
+
   </style>
 </head>
 
@@ -1733,7 +1766,7 @@ body {
           <h3>Mode</h3>
 
           <p style="margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45;">
-            Select the user persona for the CIMA output.
+            Select the user persona and intended AI processing route for the CIMA output.
           </p>
 
           <div class="field" style="margin-top:12px;">
@@ -1750,20 +1783,48 @@ body {
             </select>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;">
-          
+          <!--
+            AIVS / PGB CIMA Front End
+            Feature: AI Processing Route selector
+            ISO Timestamp: 2026-06-20T10:55:00+01:00
 
-            <button
-            id="trainingModeBtn"
-            class="report-btn"
+            Change:
+            - Adds visible processing-route control following US Anthropic model restriction concerns.
+            - Does not yet alter backend model routing.
+            - Does not expose internal session_id, query_id or sensitive record identifiers.
+          -->
+          <div class="field" style="margin-top:12px;">
+            <label for="aiProcessingRoute">AI Processing Route</label>
+            <select id="aiProcessingRoute" name="aiProcessingRoute" onchange="updateContextFromControls()">
+              <option value="local_spark_only">Local / Spark only</option>
+              <option value="local_first_external_authorised" selected>Local first, external AI only if authorised</option>
+              <option value="external_non_sensitive_only">External AI permitted for non-sensitive material</option>
+              <option value="human_review_before_external">Human review required before external AI use</option>
+            </select>
+          </div>
+
+          <p class="ai-processing-route-note">
+            Records the intended AI processing route. For sensitive or regulated use, CIMA can be configured for local/Spark-first processing, with external AI restricted, disabled or subject to human authorisation.
+          </p>
+
+          <button
+            id="openSensitiveContextBtn"
+            class="mode-secondary-btn"
             type="button"
-            onclick="setTrainingMode()"
-            disabled
           >
-            
+            Add confidential / sensitive details
+          </button>
+
+          <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;">
+            <button
+              id="trainingModeBtn"
+              class="report-btn"
+              type="button"
+              onclick="setTrainingMode()"
+              disabled
+            >
               Training
             </button>
-            
 
             <button
               class="report-btn"
@@ -1774,7 +1835,7 @@ body {
             </button>
           </div>
 
-          <div style="display:none;">
+          <div style="display:none;">          
             <select id="modeSelect" onchange="updateContextFromControls()">
               <option value="" selected>N/A</option>
             </select>
