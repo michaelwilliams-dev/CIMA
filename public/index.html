@@ -4383,6 +4383,7 @@ if (questionTitleOverride) {
           original_question: questionTitleOverride ? question : "",
           clarification_follow_up: Boolean(questionTitleOverride),
           clarification_complete: Boolean(questionTitleOverride),
+          session_id: cimaBrowserSessionId,
           context,
           access: {
             mode: accessMode,
@@ -4393,6 +4394,7 @@ if (questionTitleOverride) {
             accepted_at: new Date().toISOString()
           },
           session: {
+            session_id: cimaBrowserSessionId,
             question_count: questions.length,
             include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false,
             clarification_follow_up: Boolean(questionTitleOverride),
