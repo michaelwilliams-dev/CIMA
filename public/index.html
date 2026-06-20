@@ -2379,11 +2379,11 @@ body {
       </div>
 
       <div class="sensitive-context-actions">
-        <button type="button" id="saveSensitiveContextBtn" class="report-btn">
+        <button type="button" id="saveSensitiveContextBtn" class="report-btn" onclick="saveSensitiveContextToJsonl()">
           Save confidential details to secure record
         </button>
 
-        <button type="button" id="clearSensitiveContextBtn" class="mode-secondary-btn">
+        <button type="button" id="clearSensitiveContextBtn" class="mode-secondary-btn" onclick="clearSensitiveContextFields()">
           Clear confidential details
         </button>
       </div>
@@ -5288,6 +5288,116 @@ async function sendTrainerNotesEmail() {
         }
 
         overlay.hidden = true;
+      }
+
+      function getSensitiveContextFieldValue(id) {
+        const el = document.getElementById(id);
+        return el ? String(el.value || "").trim() : "";
+      }
+
+      function clearSensitiveContextFields() {
+        const fieldIds = [
+          "incidentPlace",
+          "incidentTime",
+          "peopleInvolved",
+          "vulnerablePersons",
+          "injuries",
+          "emergencyServicesInvolved",
+          "securityContacts",
+          "sensitiveOperationalNotes"
+        ];
+
+        fieldIds.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.value = "";
+          }
+        });
+
+        const status = document.getElementById("sensitiveContextStatus");
+        if (status) {
+          status.textContent = "Confidential details cleared.";
+        }
+      }
+
+      async function saveSensitiveContextToJsonl() {
+        const status = document.getElementById("sensitiveContextStatus");
+        const button = document.getElementById("saveSensitiveContextBtn");
+
+        const payload = {
+          session_id: "frontend_session_" + Date.now().toString(36),
+          query_id: questions.length ? "question_" + String(questions.length) : "pre_question_context",
+          user_email: gateEmailOne || "",
+          access_mode: accessMode || "",
+          ai_processing_route: document.getElementById("aiProcessingRoute")?.value || "",
+
+          incident_place: getSensitiveContextFieldValue("incidentPlace"),
+          incident_time: getSensitiveContextFieldValue("incidentTime"),
+          people_involved: getSensitiveContextFieldValue("peopleInvolved"),
+          vulnerable_persons: getSensitiveContextFieldValue("vulnerablePersons"),
+          injuries: getSensitiveContextFieldValue("injuries"),
+          emergency_services_involved: getSensitiveContextFieldValue("emergencyServicesInvolved"),
+          security_contacts: getSensitiveContextFieldValue("securityContacts"),
+          sensitive_operational_notes: getSensitiveContextFieldValue("sensitiveOperationalNotes"),
+
+          created_from: "cima_frontend_popup"
+        };
+
+        const hasAnySensitiveDetail = [
+          payload.incident_place,
+          payload.incident_time,
+          payload.people_involved,
+          payload.vulnerable_persons,
+          payload.injuries,
+          payload.emergency_services_involved,
+          payload.security_contacts,
+          payload.sensitive_operational_notes
+        ].some((value) => String(value || "").trim());
+
+        if (!hasAnySensitiveDetail) {
+          if (status) {
+            status.textContent = "Enter at least one confidential detail before saving.";
+          }
+          return;
+        }
+
+        try {
+          if (button) {
+            button.disabled = true;
+            button.textContent = "Saving...";
+          }
+
+          if (status) {
+            status.textContent = "Saving confidential details to secure record...";
+          }
+
+          const res = await fetch("https://cima-7fj2.onrender.com/cima-confidential-context", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Confidential context save failed.");
+          }
+
+          if (status) {
+            status.textContent = "Confidential details saved to secure record.";
+          }
+        } catch (error) {
+          if (status) {
+            status.textContent = "Save failed: " + error.message;
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "Save confidential details to secure record";
+          }
+        }
       }
 
       document.addEventListener("DOMContentLoaded", () => {
