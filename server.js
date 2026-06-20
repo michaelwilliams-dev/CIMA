@@ -1,1343 +1,5455 @@
 
-/**
- * AIVS / PGB CIMA Demo Backend - server.js
- * ISO Timestamp: 2026-06-02T13:55:00Z
- *
- * Change Log:
- * - v0.3.0: moved Mailjet email sending into agents/email_agent.js
- * - v0.3.0: server.js now imports sendAccessCodeEmail, sendTranscriptEmail and getEmailAgentStatus
- * - v0.3.0: removed direct Mailjet client setup from server.js
- * - v0.3.0: retained transcript PDF and DOCX generation inside server.js for now
- * - v0.3.0: retained /health, /meta, /send-access-code-email, /check-access, /cima-chat and /send-transcript-email
- * - v0.3.0: no Companies House, FCA, insolvency, director, OCR or security agents
- * - v0.3.1: restricted QUESTION INTAKE clarification in /cima-chat to specialist-triggered questions only; general enquiry now continues to the normal CIMA response path.
-* - v0.3.2: added clarification carry-forward support so original_question and clarification_answer are combined before CIMA answers.
-  * Notes:
- * - Temporary working CIMA backend.
- * - Designed to match the current CIMA demo index.html.
- * - All operational outputs are draft support only and require human review.
- */
-
-const BUILD_ISO = "2026-06-02T13:55:00Z";
-console.log("PGB CIMA BACKEND BUILD:", BUILD_ISO);
-
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-
-
-import {
-  sendAccessCodeEmail,
-  sendTranscriptEmail
-} from "./export/mailjetExporter.js";
-
-import {
-  getAuditAgentStatus,
-  writeAuditEvent
-} from "./audit_agent.js";
-
-import {
-  buildCimaResponse,
-  getCimaResponseAgentStatus
-} from "./cima_response_agent.js";
-
-import {
-  buildTranscriptPackage,
-  getTranscriptAgentStatus
-} from "./transcript_agent.js";
-
-
-import {
-  buildCimaTrainingOutput,
-  getCimaTrainingAgentStatus
-} from "./cima_training_agent.js";
-
-import {
-  buildTrainingSynopsis,
-  getTrainingSynopsisAgentStatus
-} from "./training/training_synopsis_agent.js";
-
-import {
-  getTrainingQuestionsAgentStatus
-} from "./training/training_questions_agent.js";
-
-import {
-  getTrainingQaAgentStatus
-} from "./training/training_qa_agent.js";
-
-import {
-  registerTrainingSynopsisRoute
-} from "./training/training_synopsis_route.js";
-
-import {
-  registerTrainingQuestionsRoute
-} from "./training/training_questions_route.js";
-
-import {
-  registerTrainingQaRoute
-} from "./training/training_qa_route.js";
-
-import {
-  registerTrainerNotesRoute
-} from "./training/trainer_notes_route.js";
-
-import {
-  getSourceIndexAgentStatus
-} from "./source_index_agent.js";
-
-import {
-  getFaissKnowledgeAgentStatus,
-  searchFaissKnowledgeByKeyword
-} from "./retrieval/faiss_knowledge_agent.js";
-
-import {
-  buildSpecialistTriggerDecision
-} from "./specialist_trigger_agent.js";
-
-import {
-  registerConfidentialContextJsonlRoute
-} from "./confidential_context_jsonl_agent.js";
-
-dotenv.config();
-
-const app = express();
-const PORT = Number(process.env.PORT || 10000);
-
-const ACCESS_CODE = String(
-  process.env.ACCESS_CODE ||
-  process.env.VACANCY_CODE ||
-  "DEMO"
-).trim();
-
-const DATA_REVIEW_EMAIL = String(
-  process.env.DATA_REVIEW_EMAIL ||
-  "michael@aivs.uk"
-).trim();
-
-function getEmailAgentStatus() {
-  return {
-    ok: true,
-    agent: "mailjetExporter",
-    mailjet_ready: Boolean(
-      process.env.MAILJET_API_KEY ||
-      process.env.MJ_APIKEY_PUBLIC
-    ) && Boolean(
-      process.env.MAILJET_API_SECRET ||
-      process.env.MJ_APIKEY_PRIVATE
-    ),
-    from_email_ready: Boolean(
-      process.env.MAILJET_FROM_EMAIL ||
-      process.env.MJ_FROM_EMAIL
-    )
-  };
-}
-
-const EMAIL_AGENT_STATUS = getEmailAgentStatus();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-app.use(cors());
-app.options("*", cors());
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public"), {
-  etag: false,
-  lastModified: false,
-  setHeaders: (res) => {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.setHeader("Surrogate-Control", "no-store");
-  }
-}));
-
-registerTrainingSynopsisRoute(app, {
-  BUILD_ISO,
-  writeAuditEvent
-});
-
-registerTrainingQuestionsRoute(app, {
-  BUILD_ISO,
-  writeAuditEvent
-});
-
-registerTrainingQaRoute(app, {
-  BUILD_ISO,
-  writeAuditEvent
-});
-
-registerTrainerNotesRoute(app, {
-  BUILD_ISO,
-  writeAuditEvent
-});
-
-registerConfidentialContextJsonlRoute(app);
-
-console.log("ENV CHECK:", {
-  accessCodeSet: Boolean(ACCESS_CODE),
-  accessCodeLength: ACCESS_CODE.length,
-  emailAgentReady: EMAIL_AGENT_STATUS.mailjet_ready,
-  fromEmailReady: EMAIL_AGENT_STATUS.from_email_ready,
-  dataReviewEmail: DATA_REVIEW_EMAIL
-});
-
-/* -------------------------- BASIC HELPERS -------------------------- */
-
-function safeString(value = "") {
-  if (value === null || value === undefined || value === "") {
-    return "Not supplied";
-  }
-
-  return String(value);
-}
-
-function cleanText(value = "") {
-  return String(value || "")
-    .replace(/\u0000/g, "")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function escapeHtml(value = "") {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function normaliseEmailList(value) {
-  if (Array.isArray(value)) {
-    return value
-      .map((email) => String(email || "").trim())
-      .filter((email) => email.includes("@"));
-  }
-
-  return String(value || "")
-    .split(/[;,]/)
-    .map((email) => email.trim())
-    .filter((email) => email.includes("@"));
-}
-
-function safeFilenamePart(value = "") {
-  return String(value || "")
-    .replace(/[^\w.\-]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 80) || "CIMA";
-}
-
-
-/* -------------------------- ROUTES -------------------------- */
-
-app.get("/health", (req, res) => {
-  return res.json({
-    ok: true,
-    app: "AIVS / PGB CIMA Demo Backend",
-    build_iso: BUILD_ISO,
-    checked_at: new Date().toISOString()
-  });
-});
-
-app.get("/meta", (req, res) => {
-  return res.json({
-    ok: true,
-    app: "AIVS / PGB CIMA Demo Backend",
-    build_iso: BUILD_ISO,
-    iso_timestamp: new Date().toISOString(),
-    access_ready: Boolean(ACCESS_CODE),
-
-    email_agent: getEmailAgentStatus(),
-    audit_agent: getAuditAgentStatus(),
-    cima_response_agent: getCimaResponseAgentStatus(),
-    transcript_agent: getTranscriptAgentStatus(),
-    training_agent: getCimaTrainingAgentStatus(),
-    training_synopsis_agent: getTrainingSynopsisAgentStatus(),
-    source_index_agent: {
-      ok: true,
-      status: "not_checked_on_meta",
-      note: "Disabled on /meta to prevent Render memory pressure. Use a separate controlled source-index test route or shell test for deep FAISS/source checks."
-    },
-    faiss_knowledge_agent: {
-      ok: true,
-      status: "not_checked_on_meta",
-      note: "Disabled on /meta to prevent Render memory pressure. Retrieval agent should only be checked during controlled retrieval tests."
-    },
-  
-    data_review_email: DATA_REVIEW_EMAIL,
-    pdf_index_ready: false,
-    html_index_ready: false,
-    pdf_document_count: 0,
-    html_page_count: 0,
-    chunk_count: 0,
-    last_indexed_at: "Not indexed in demo starter backend",
-
-    routes: [
-      "/health",
-      "/meta",
-      "/send-access-code-email",
-      "/check-access",
-      "/cima-chat",
-      "/cima-training",
-      "/send-transcript-email",
-      "/send-cima-transcript-email"
-    ]
-  });
-});
-
-app.post("/send-access-code-email", async (req, res) => {
-  const toEmail = String(req.body.toEmail || "").trim();
-  const secondEmail = String(req.body.secondEmail || "").trim();
-
-  try {
-    const result = await sendAccessCodeEmail({
-      toEmail,
-      secondEmail,
-      accessCode: ACCESS_CODE
-    });
-
-    await writeAuditEvent({
-      event_type: "access_code_email_sent",
-      route: "/send-access-code-email",
-      success: true,
-      user_email: toEmail,
-      second_email: secondEmail,
-      access_mode: "one-time-code",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.json({
-      ok: true,
-      build_iso: BUILD_ISO,
-      sent_at: new Date().toISOString(),
-      email_sent: true,
-      provider: result.provider,
-      status: result.status,
-      to: result.to,
-      email_agent_build_iso: result.email_agent_build_iso
-    });
-  } catch (err) {
-    console.error("ERROR /send-access-code-email failed:", err);
-
-    await writeAuditEvent({
-      event_type: "access_code_email_failed",
-      route: "/send-access-code-email",
-      success: false,
-      error: err.message,
-      user_email: toEmail,
-      second_email: secondEmail,
-      access_mode: "one-time-code",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.status(500).json({
-      ok: false,
-      error: "Access code email failed.",
-      detail: err.message,
-      build_iso: BUILD_ISO
-    });
-  }
-});
-
-app.post("/check-access", async (req, res) => {
-  const submittedCode = String(
-    req.body.accessCode ||
-    req.body.vacancyCode ||
-    req.body.code ||
-    ""
-  ).trim();
-
-  const userEmail = String(
-    req.body.email ||
-    req.body.toEmail ||
-    ""
-  ).trim();
-
-  const secondEmail = String(
-    req.body.secondEmail ||
-    ""
-  ).trim();
-
-  console.log("ACCESS CHECK:", {
-    submittedLength: submittedCode.length,
-    requiredLength: ACCESS_CODE.length,
-    accessCodeSource: process.env.ACCESS_CODE
-      ? "ACCESS_CODE"
-      : process.env.VACANCY_CODE
-        ? "VACANCY_CODE"
-        : "DEMO"
-  });
-
-  if (!submittedCode) {
-    await writeAuditEvent({
-      event_type: "access_check_failed",
-      route: "/check-access",
-      success: false,
-      error: "Access code required.",
-      user_email: userEmail,
-      second_email: secondEmail,
-      access_mode: "one-time-code",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.status(400).json({
-      ok: false,
-      error: "Access code required.",
-      build_iso: BUILD_ISO
-    });
-  }
-
-  if (submittedCode !== ACCESS_CODE) {
-    await writeAuditEvent({
-      event_type: "access_check_failed",
-      route: "/check-access",
-      success: false,
-      error: "Invalid access code.",
-      user_email: userEmail,
-      second_email: secondEmail,
-      access_mode: "one-time-code",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.status(403).json({
-      ok: false,
-      error: "Invalid access code.",
-      build_iso: BUILD_ISO
-    });
-  }
-
-  await writeAuditEvent({
-    event_type: "access_check_success",
-    route: "/check-access",
-    success: true,
-    user_email: userEmail,
-    second_email: secondEmail,
-    access_mode: "one-time-code",
-    ip_address: req.ip,
-    user_agent: req.get("user-agent")
-  });
-
-  return res.json({
-    ok: true,
-    message: "Access confirmed.",
-    build_iso: BUILD_ISO
-  });
-});
-
-app.post("/question-intake-test", async (req, res) => {
-  const question = String(req.body.question || "").trim();
-
-  try {
-    const {
-      assessCimaQuestion
-    } = await import("./operational/question_intake_agent.js");
-
-    const intakeResult = assessCimaQuestion({
-      question
-    });
-
-    return res.json({
-      ok: true,
-      build_iso: BUILD_ISO,
-      tested_at: new Date().toISOString(),
-      intake: intakeResult
-    });
-  } catch (err) {
-    console.error("ERROR /question-intake-test failed:", err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "Question intake test route failed.",
-      detail: err.message,
-      build_iso: BUILD_ISO
-    });
-  }
-});
-
-app.post("/cima-chat", async (req, res) => {
-  const rawQuestion = String(req.body.question || "").trim();
-
-  const originalQuestion = String(
-    req.body.original_question ||
-    req.body.originalQuestion ||
-    ""
-  ).trim();
-
-  const clarificationAnswer = String(
-    req.body.clarification_answer ||
-    req.body.clarificationAnswer ||
-    ""
-  ).trim();
-
-  const isClarificationFollowUp = Boolean(originalQuestion && clarificationAnswer);
-
-  const question = isClarificationFollowUp
-    ? cleanText([
-        "Original CIMA question:",
-        originalQuestion,
-        "",
-        "Clarification supplied by user:",
-        clarificationAnswer,
-        "",
-        "Answer the original question using the clarification supplied. Do not treat the clarification as a separate standalone question."
-      ].join("\n"))
-    : rawQuestion;
-
-  const context = req.body.context && typeof req.body.context === "object"
-    ? req.body.context
-    : {};
-
-  const terms = req.body.terms && typeof req.body.terms === "object"
-    ? req.body.terms
-    : {};
-
-  const access = req.body.access && typeof req.body.access === "object"
-    ? req.body.access
-    : {};
-
-  const userEmail = String(
-    access.email ||
-    req.body.email ||
-    req.body.user_email ||
-    ""
-  ).trim();
-
-  try {
-    if (!terms.accepted) {
-      await writeAuditEvent({
-        event_type: "cima_question_rejected",
-        route: "/cima-chat",
-        success: false,
-        error: "Terms and Conditions not accepted.",
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: false,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
-
-      return res.status(403).json({
-        ok: false,
-        error: "Terms and Conditions must be confirmed before using the assistant.",
-        build_iso: BUILD_ISO
-      });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    AIVS / PGB CIMA Front End
+    File: index.html
+    ISO Timestamp: 2026-06-15T06:30:00+01:00
+
+    Change Log:
+    - v1.1.0: added front access gate using email access code and T&C acceptance
+    - v1.1.0: added temporary demo bypass using access code value "demo"
+    - v1.1.0: removed right-panel T&C gate as the primary access control
+    - v1.1.0: retained logos, CIMA visual structure, tabs, transcript, sources and audit controls
+    - v1.1.0: added CIMA Response Dashboard above the answer
+    - v1.1.0: added optional Show Session Q&A on screen toggle
+    - v1.1.0: added optional Include transcript in email toggle
+    - v1.1.0: displays questions and answers on screen when enabled
+    - v1.1.0: retained /cima-chat, /send-access-code-email, /check-access and /send-transcript-email backend calls
+    - v1.1.1: removed inner-panel T&C tab from the working area
+    - v1.1.1: renamed This Answer to Answer
+    - v1.1.1: renamed Thread / Email to Email
+    - v1.1.1: shortened source selector labels to Index, Source, Policy, Playbooks
+    - v1.1.1: removed temporary bottom label-patching script
+    - v1.1.2: NOT VERIFIED evidence date range sliders now set their maximum year from the live ISO timestamp so the range rolls forward automatically each year
+    - v1.1.3: expanded terms and conditions text, enlarged terms box, enlarged terms checkbox and increased desktop scrollbar width
+    - v1.1.4: added frontend RAG response risk dial with information button and movement from CIMA rag/rag_status
+    - v1.1.5: added Mode panel AI Processing Route dropdown and confidential/sensitive details button as visible control-layer preparation
+    -->
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>AIVS / PGB CIMA</title>
+
+  <style>
+    :root {
+      --page-bg: #eee9df;
+      --panel-bg: #f0eadf;
+      --white: #ffffff;
+      --panel-bg: #e2d6c7;
+      --orange: #dc9325;
+      --orange-dark: #c98118;
+      --ink: #10232d;
+      --muted: #7d878e;
+      --faint: #a4abb0;
+      --border: #d6cbbd;
+      --soft-border: #e5ded2;
+      --blue: #2f73c8;
+      --green: #24814f;
+      --amber: #9b6a10;
+      --red: #a33a2b;
+      --shadow: 0 16px 35px rgba(40, 35, 25, 0.10);
+      --radius: 24px;
     }
 
-    if (!question) {
-      await writeAuditEvent({
-        event_type: "cima_question_rejected",
-        route: "/cima-chat",
-        success: false,
-        error: "Question required.",
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
+    * { box-sizing: border-box; }
 
-      return res.status(400).json({
-        ok: false,
-        error: "Question required.",
-        build_iso: BUILD_ISO
-      });
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #ffffff;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      overflow: hidden;
     }
 
-    const specialistDecision = buildSpecialistTriggerDecision({
-      question,
-      context,
-      terms,
-      access
-    });
-
-    const specialistClarificationContext = specialistDecision.clarification_context || {};
-    const specialistUnsafeWording = Array.isArray(specialistClarificationContext.unsafeWording)
-      ? specialistClarificationContext.unsafeWording
-      : [];
-
-    const questionForSpecialistGate = String(question || "").toLowerCase();
-
-    const isClearExerciseOrTrainingScenario =
-      questionForSpecialistGate.includes("classroom") ||
-      questionForSpecialistGate.includes("tabletop") ||
-      questionForSpecialistGate.includes("exercise") ||
-      questionForSpecialistGate.includes("training note");
-
-    const shouldReturnDynamicSpecialistClarification =
-      specialistDecision.triggered === true &&
-      (
-        specialistUnsafeWording.length > 0 ||
-        (
-          specialistClarificationContext.isTrainingRequest === true &&
-          !isClearExerciseOrTrainingScenario &&
-          !specialistClarificationContext.isLive &&
-          !specialistClarificationContext.isConfirmed &&
-          !specialistClarificationContext.isSuspected
-        )
-      );
-
-    if (shouldReturnDynamicSpecialistClarification) {
-      const clarityQuestions = Array.isArray(specialistDecision.clarity_questions)
-        ? specialistDecision.clarity_questions
-        : [];
-
-      const clarificationAnswer = [
-        "## Clarification Required",
-        "",
-        `You asked: "${question}"`,
-        "",
-        "CIMA needs to clarify the request before giving a safe response. The question appears to involve a high-consequence topic and may need to be reframed as defensive incident-management, training, command, escalation, communications, logging, audit and human-review support only.",
-        "",
-        "## Information Needed Before CIMA Answers",
-        "",
-        ...clarityQuestions.map((item) => `- ${item}`),
-        "",
-        "## Safety Boundary",
-        "",
-        specialistDecision.safety_notice || "CIMA can provide defensive incident-management support only and must not provide unsafe operational detail.",
-        "",
-        "## Source Status",
-        "",
-        "The controlled CIMA database has not yet been searched because the request requires clarification first."
-      ].join("\n");
-
-      await writeAuditEvent({
-        event_type: "cima_dynamic_specialist_clarification",
-        route: "/cima-chat",
-        success: true,
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || context.command_level || context.commandLevel || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        specialist_trigger_type: specialistDecision.primary_category || "",
-        specialist_agent: specialistDecision.primary_agent || "",
-        clarification_question_count: clarityQuestions.length,
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
-
-      return res.json({
-        ok: true,
-        build_iso: BUILD_ISO,
-        answered_at: new Date().toISOString(),
-        response_agent_build_iso: specialistDecision.trigger_agent_build_iso,
-        response_path: "DYNAMIC CLARIFICATION",
-        path: "DYNAMIC CLARIFICATION",
-        rag: "AMBER",
-        rag_status: "AMBER",
-        hitl: "Clarification required before advice",
-        confidence: "Needs clarification",
-        source_mode: "No database search before clarification",
-        answer: clarificationAnswer,
-        sources: [],
-        pending_clarification: true,
-        original_question: question,
-        clarification_questions: clarityQuestions,
-        clarification_follow_up_required: true,
-        specialist_trigger: specialistDecision
-      });
+    button,
+    input,
+    textarea,
+    select {
+      font-family: inherit;
     }
 
-    const {
-      buildClarificationRequiredResponse
-    } = await import("./operational/clarification_gate_agent.js");
-
-    const clarificationGateResponse = buildClarificationRequiredResponse({
-      question,
-      context,
-      terms,
-      access
-    });
-
-    if (clarificationGateResponse.response_path === "CLARIFICATION_REQUIRED") {
-      await writeAuditEvent({
-        event_type: "cima_clarification_gate_triggered",
-        route: "/cima-chat",
-        success: true,
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        response_path: clarificationGateResponse.response_path || "",
-        rag_status: clarificationGateResponse.rag_status || "",
-        hitl_status: clarificationGateResponse.hitl || "",
-        confidence: clarificationGateResponse.confidence || "",
-        clarification_reason_count: Array.isArray(clarificationGateResponse.clarification_reasons)
-          ? clarificationGateResponse.clarification_reasons.length
-          : 0,
-        clarification_question_count: Array.isArray(clarificationGateResponse.clarification_questions)
-          ? clarificationGateResponse.clarification_questions.length
-          : 0,
-        source_search_performed: false,
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
-
-      return res.json({
-        ...clarificationGateResponse,
-        build_iso: BUILD_ISO,
-        answered_at: new Date().toISOString(),
-        response_agent_build_iso: clarificationGateResponse.response_agent_build_iso || clarificationGateResponse.build_iso,
-        pending_clarification: true,
-        original_question: question,
-        clarification_questions: Array.isArray(clarificationGateResponse.clarification_questions)
-          ? clarificationGateResponse.clarification_questions
-          : [],
-        clarification_follow_up_required: true
-      });
+    .mac-dots {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-left: 13px;
+      background: #ffffff;
     }
 
-    const {
-      assessCimaQuestion
-    } = await import("./operational/question_intake_agent.js");
-
-    const intakeResult = assessCimaQuestion({
-      question,
-      context
-    });
-
-    const intakeHasSpecialistTrigger = intakeResult.specialist_trigger?.detected === true;
-
-    if (intakeResult.needs_clarification) {
-      await writeAuditEvent({
-        event_type: "cima_question_needs_clarification",
-        route: "/cima-chat",
-        success: true,
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || context.command_level || context.commandLevel || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        intake_agent: intakeResult.agent,
-        intake_word_count: intakeResult.word_count,
-        specialist_trigger_detected: intakeResult.specialist_trigger?.detected === true,
-        specialist_trigger_type: intakeResult.specialist_trigger?.type || "",
-        specialist_trigger_agent: intakeResult.specialist_trigger?.agent || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
-
-      const clarificationAnswer = [
-        "## Clarification Required",
-        "",
-        intakeResult.reason,
-        "",
-        "## Safety and Use Limitation",
-        "",
-        intakeResult.safety_notice,
-        "",
-        "## Information Needed Before CIMA Answers",
-        "",
-        ...intakeResult.clarification_questions.map((item) => `- ${item}`),
-        "",
-        "## Source Status",
-        "",
-        "The controlled CIMA database has not yet been searched because the question requires clarification first.",
-        "",
-        "Once the missing details are supplied, CIMA should search approved internal sources before considering any external search."
-      ].join("\n");
-
-      return res.json({
-        ok: true,
-        build_iso: BUILD_ISO,
-        answered_at: new Date().toISOString(),
-        response_agent_build_iso: intakeResult.build_iso,
-        response_path: "QUESTION INTAKE",
-        path: "QUESTION INTAKE",
-        rag: "AMBER",
-        rag_status: "AMBER",
-        hitl: "Required before advice",
-        confidence: "Needs clarification",
-        source_mode: "No database search before clarification",
-        answer: clarificationAnswer,
-        sources: [],
-        pending_clarification: true,
-        original_question: question,
-        clarification_questions: Array.isArray(intakeResult.clarification_questions)
-          ? intakeResult.clarification_questions
-          : [],
-        clarification_follow_up_required: true,
-        intake: intakeResult
-      });
+    .mac-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      display: block;
     }
 
-    if (intakeResult.specialist_trigger?.detected === true) {
-      let specialistResponse = null;
-      let specialistKnowledgeSearch = null;
+    .red-dot { background: #ff5f57; }
+    .yellow-dot { background: #ffbd2e; }
+    .green-dot { background: #28c840; }
 
-      const specialistSearchQuestion = [
-        question,
-        ...(intakeResult.specialist_trigger.agent === "drone_agent"
-          ? [
-              "drone sighting venue response",
-              "unmanned aircraft public venue",
-              "hostile reconnaissance drone",
-              "Silver command drone incident",
-              "event control drone report",
-              "public safety drone incident"
-            ]
-          : []),
-        ...(intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
-          ? [
-              "terrorism public venue incident management",
-              "hostile activity command response",
-              "marauding terrorist attack protective security",
-              "hostile reconnaissance public venue",
-              "Silver command terrorism incident",
-              "public safety hostile activity",
-              "security control room terrorist incident"
-            ]
-          : [])
-      ].join(" ");
+    .top-logo-strip {
+      height: 120px;
+      background: var(--page-bg);
+      border-bottom: 1.5px solid var(--soft-border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 34px;
+      padding: 14px 22px;
+    }
+
+    .top-logo-left {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 34px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .iso-time-stamp {
+        min-width: 228px;
+        height: 40px;
+        border: 1.5px solid var(--border);
+        border-radius: 14px;
+        background: #fffdfa;
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 5px 14px rgba(40, 35, 25, 0.12);
+        margin-left: auto;
+      }
+
+      .top-logo-strip img.aivs-top-logo {
+        max-height: 62px;
+        max-width: 230px;
+      }
+
+      .top-logo-strip img.iso-logo {
+        max-height: 54px;
+        max-width: 200px;
+      }
+
+      .top-logo-strip img.quad-logo {
+        max-height: 58px;
+        max-width: 245px;
+      }
+
+    .access-gate {
+      min-height: calc(100vh - 110px);
+      background: var(--page-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 26px;
+    }
+
+    .access-card {
+      width: min(980px, 100%);
+      background: #fffdfa;
+      border: 1.7px solid var(--border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+
+    .access-intro {
+      background: #14232b;
+      color: #fffdfa;
+      padding: 34px;
+    }
+
+    .access-intro h1 {
+      margin: 0 0 14px 0;
+      font-size: 38px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .access-intro h1 span {
+      color: var(--orange);
+      padding: 0 6px;
+    }
+
+    .access-intro p {
+      margin: 0 0 16px 0;
+      color: #d9e1e6;
+      line-height: 1.55;
+      font-size: 15px;
+    }
+
+    .access-points {
+      margin-top: 22px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .access-point {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-left: 5px solid var(--orange);
+      border-radius: 14px;
+      padding: 13px;
+      background: rgba(255,255,255,0.05);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .access-form {
+      padding: 34px;
+      background: #fffdfa;
+    }
+
+    .access-form h2 {
+      margin: 0 0 8px 0;
+      font-size: 25px;
+      color: var(--ink);
+    }
+
+    .access-form p {
+      margin: 0 0 18px 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .gate-field {
+      margin-bottom: 13px;
+    }
+
+    .gate-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 900;
+      color: #5f6b72;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+
+    .gate-field input {
+      width: 100%;
+      min-height: 44px;
+      border: 1.6px solid var(--border);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+      font-size: 15px;
+    }
+
+    .gate-field input:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(220,147,37,0.18);
+    }
+
+    .gate-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .gate-btn {
+      min-height: 46px;
+      border: 0;
+      border-radius: 13px;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .gate-btn.primary {
+      background: var(--orange);
+      color: var(--ink);
+      box-shadow: 3px 3px 0 var(--orange-dark);
+    }
+
+    .gate-btn.dark {
+      background: #14232b;
+      color: #fffdfa;
+    }
+
+    .gate-btn:disabled {
+      background: #b8aa99 !important;
+      color: #ffffff !important;
+      box-shadow: none !important;
+      cursor: not-allowed;
+    }
+
+    .terms-box {
+      border: 1.8px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      background: #f8f5ee;
+      margin-top: 18px;
+      max-height: 360px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .terms-box::-webkit-scrollbar {
+      width: 18px;
+    }
+
+    .terms-box::-webkit-scrollbar-track {
+      background: #efe6d8;
+      border-radius: 999px;
+    }
+
+    .terms-box::-webkit-scrollbar-thumb {
+      background: var(--orange);
+      border-radius: 999px;
+      border: 4px solid #efe6d8;
+    }
+
+    .terms-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 20px;
+      color: var(--ink);
+    }
+
+    .terms-box p {
+      margin: 0 0 12px 0;
+      font-size: 15px;
+      line-height: 1.55;
+      color: #4a5f6c;
+    }
+
+    .terms-check {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: start;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1.5px solid var(--border);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+
+    .terms-check input {
+      margin-top: 2px;
+      width: 28px;
+      height: 28px;
+      accent-color: var(--orange);
+    }
+
+    .access-note {
+      min-height: 24px;
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
+    .access-note.good {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .access-note.bad {
+      color: var(--red);
+      font-weight: 800;
+    }
+
+    .app {
+      height: calc(100vh - 110px);
+      display: none;
+      grid-template-columns: 330px 1fr 390px;
+      gap: 16px;
+      background: var(--page-bg);
+      padding: 0 16px;
+    }
+
+    .app.unlocked {
+      display: grid;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .left-top {
+      padding: 18px 14px 0 14px;
+    }
+
+    .brand-row {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 16px;
+    }
+
+    .pgb-cima-logo {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      color: #050505;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .pgb-cima-logo span {
+      color: var(--orange);
+      padding: 0 6px;
+      font-weight: 900;
+    }
+
+    .collapse {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .left-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 37px 12px 12px 12px;
+    }
+
+    .context-heading {
+      color: var(--ink);
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin: 8px 0 14px 4px;
+    }
+
+    .context-box {
+      border: 1.7px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 18px;
+      background: #fffdfa;
+      padding: 11px;
+      margin-bottom: 12px;
+    }
+
+    .context-box h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .cima-process-card {
+      border: 1.7px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 18px;
+      background: #fffdfa;
+      padding: 14px 12px;
+      margin: 12px 0;
+    }
+
+    .cima-process-card h3,
+    .delivery-status-card h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .process-rail {
+      position: relative;
+      display: grid;
+      gap: 10px;
+      padding: 2px 0;
+    }
+
+    .process-rail::before {
+      content: "";
+      position: absolute;
+      left: 22px;
+      top: 20px;
+      bottom: 20px;
+      width: 3px;
+      background: #d7cabc;
+      border-radius: 999px;
+    }
+
+    .process-step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 10px;
+      align-items: center;
+      min-height: 52px;
+      z-index: 1;
+    }
+
+    .process-marker {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 3px solid #b8aa99;
+      background: #f8f5ee;
+      color: #6f7a80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+    }
+
+    .process-step.active .process-marker {
+      border-color: var(--orange);
+      background: #fff7ea;
+      color: var(--ink);
+      box-shadow: 0 0 0 4px rgba(220, 147, 37, 0.14);
+    }
+
+    .process-copy strong {
+      display: block;
+      font-size: 14px;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }
+
+    .process-copy span {
+      display: block;
+      font-size: 12px;
+      line-height: 1.35;
+      color: #5f6b72;
+      font-weight: 700;
+    }
+
+    .process-step.muted .process-copy strong,
+    .process-step.muted .process-copy span {
+      color: #7f8a90;
+    }
+
+    .delivery-status-card {
+      border: 1.7px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 18px;
+      background: #fffdfa;
+      padding: 14px 12px;
+      margin: 12px 0 0 0;
+    }
+
+    .delivery-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--soft-border);
+      padding-top: 8px;
+      margin-top: 8px;
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+
+    .delivery-line span {
+      color: #4a5f6c;
+      font-weight: 800;
+    }
+
+    .delivery-line strong {
+      color: var(--green);
+      font-weight: 900;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .delivery-line strong.pending {
+      color: var(--amber);
+    }
+
+    .delivery-line strong.not-started {
+      color: #6f7a80;
+    }
+
+    .field {
+      margin-bottom: 9px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: bold;
+      color: #5f6b72;
+      margin-bottom: 4px;
+    }
+
+    .field select {
+      width: 100%;
+      height: 36px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #f8f5ee;
+      color: var(--ink);
+      padding: 0 10px;
+      outline: none;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .field select:focus {
+      border-color: var(--orange);
+      background: #ffffff;
+    }
+
+    .left-footer {
+      min-height: 128px;
+      border-top: 1.5px solid var(--border);
+      background: rgba(255, 255, 255, 0.52);
+      padding: 13px 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+    }
+
+    .footer-link {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fffdfa;
+      color: var(--muted);
+      padding: 8px 9px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .footer-link:hover {
+      border-color: var(--orange);
+      color: var(--ink);
+    }
+
+    .centre-panel {
+      background: var(--panel-bg);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .main-header {
+      height: 96px;
+      flex: 0 0 96px;
+      border-bottom: 1.5px solid var(--soft-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 0 28px;
+      background: var(--panel-bg);
+    }
+    .thread-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .thread-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .access-pill {
+      min-height: auto;
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      color: var(--green);
+      font-size: 16px;
+      font-weight: 900;
+      padding: 0;
+      white-space: nowrap;
+    }
+
+    .main-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
+    .clean-action-btn {
+      min-width: 130px;
+      height: 44px;
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      background: #fffdfa;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      padding: 0 22px;
+      box-shadow: 0 6px 16px rgba(40, 35, 25, 0.12);
+    }
+
+    .clean-action-btn:hover {
+      border-color: var(--orange);
+      background: #ffffff;
+    }
+
+    .centre-workspace {
+      flex: 1;
+      background: transparent;
+      display: grid;
+      grid-template-rows: auto 1fr auto ;
+      gap: 16px;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    .ask-card {
+      border: 1.7px solid var(--border);
+      border-radius: 20px;
+      background: #fffdfa;
+      box-shadow: 0 8px 22px rgba(20, 30, 38, 0.06);
+      padding: 18px;
+    }
+
+    .ask-card h2 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      color: var(--ink);
+    }
+
+    .ask-card p {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .clear-composer {
+      display: grid;
+      grid-template-columns: 1fr 52px;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .clear-composer textarea {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      border: 1.7px solid var(--border);
+      border-radius: 15px;
+      background: #ffffff;
+      padding: 13px 14px;
+      color: var(--ink);
+      font-size: 15px;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.45;
+    }
+
+    .send-btn {
+      width: 52px;
+      border: 0;
+      border-radius: 15px;
+      background: var(--orange);
+      color: #ffffff;
+      font-size: 26px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .send-btn:disabled {
+      background: #c7b69f;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .reply-card {
+      border: 1.7px solid var(--border);
+      border-radius: 20px;
+      background: #ffffff;
+      padding: 18px;
+      overflow-y: visible;
+      min-height: 460px;
+    }
+
+    /* AIVS visual edge fix — centre Ask / Reply cards only */
+    .ask-card,
+    .reply-card {
+      border-left: 5px solid var(--orange);
+    }
+
+    .reply-card h2 {
+      margin: 0 0 10px 0;
+      color: var(--ink);
+      font-size: 18px;
+    }
+
+    .response-dashboard {
+      border: 1.7px solid var(--border);
+      border-left: 6px solid var(--orange);
+      border-radius: 17px;
+      background: #fffaf2;
+      padding: 14px;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .response-dashboard.on {
+      display: block;
+    }
+
+    .dashboard-title {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--ink);
+      margin-bottom: 10px;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .dash-card {
+      border: 1.4px solid var(--border);
+      border-radius: 12px;
+      background: #ffffff;
+      padding: 9px;
+      min-height: 62px;
+    }
+
+    .dash-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 900;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .dash-value {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--ink);
+      line-height: 1.25;
+    }
+
+    .rag-green { color: var(--green); }
+    .rag-amber { color: var(--amber); }
+    .rag-red { color: var(--red); }
+    .rag-grey { color: #6b7280; }
+
+    .top-actions {
+      border-top: 1px solid var(--soft-border);
+      padding-top: 9px;
+      font-size: 13px;
+      color: #4a5f6c;
+      line-height: 1.45;
+    }
+
+    .top-actions strong {
+      color: var(--ink);
+    }
+
+    .reply-placeholder {
+      min-height: 250px;
+      border: 1.5px dashed #d8cfc2;
+      border-radius: 16px;
+      background: #fbfaf5;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 28px;
+      line-height: 1.45;
+    }
+
+    .message {
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 13px 15px;
+      margin: 12px 0;
+      font-size: 14px;
+      line-height: 1.48;
+    }
+
+    .message.user {
+      background: #f8f9fa;
+      border-right: 4px solid var(--orange);
+    }
+
+    .message.agent {
+      background: #fffaf2;
+      border-left: 4px solid var(--orange);
+    }
+
+    .message strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .message h3 {
+      font-size: 15px;
+      margin: 10px 0 6px 0;
+      color: var(--ink);
+    }
+
+    .message p {
+      margin: 6px 0;
+    }
+
+    .message ul {
+      margin: 8px 0 8px 20px;
+      padding: 0;
+    }
+
+    .session-qa-panel {
+      border: 1.7px solid var(--border);
+      border-radius: 18px;
+      background: #fbfaf5;
+      padding: 14px;
+      max-height: 190px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .session-qa-panel.on {
+      display: block;
+    }
+
+    .session-qa-panel h2 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: var(--ink);
+    }
+
+    .qa-item {
+      border-top: 1px solid var(--soft-border);
+      padding: 9px 0;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .qa-item:first-of-type {
+      border-top: 0;
+    }
+
+    .qa-item .q {
+      font-weight: 900;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .qa-item .a {
+      color: #4a5f6c;
+    }
+
+    .right-panel {
+      background: var(--panel-bg);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .right-header {
+      height: 96px;
+      min-height: 96px;
+      flex: 0 0 96px;
+      border-bottom: 1.5px solid var(--soft-border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 0 28px;
+      background: var(--panel-bg);
+      border-top-left-radius: var(--radius);
+      border-top-right-radius: var(--radius);
+    }
+
+    .right-header h2 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .right-header span {
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .right-body {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--panel-bg);
+      padding-top: 6px;
+    }
+
+    .source-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+      margin-bottom: 12px;
+      width: 100%;
+    }
+
+    .source-tab {
+      min-height: 38px;
+      border: 1.7px solid var(--orange);
+      background: #fffdfa;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 6px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .source-tab.active {
+      border-color: var(--orange);
+      background: #fff7ea;
+      color: var(--orange-dark);
+      box-shadow: inset 0 0 0 1px var(--orange);
+    }
+
+    .answer-tabs {
+      margin: 0 30px 16px 30px;
+      border-bottom: 1.5px solid var(--border);
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .answer-tab {
+      padding: 9px 12px;
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: bold;
+      border: 0;
+      background: transparent;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .answer-tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--orange);
+    }
+
+    .output-tabs {
+      margin: 0 0 14px 0;
+      border-bottom: 1.5px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding-bottom: 8px;
+      overflow: visible;
+    }
+
+    .output-tabs .answer-tab {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: #c7b69f;
+      color: #ffffff;
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 4px;
+      text-align: center;
+      padding: 8px 10px;
+    }
+
+    .output-tabs .answer-tab.active {
+      background: var(--orange);
+      color: #17242d;
+    }
+    
+
+    .source-search {
+      margin: 0 42px 18px 42px;
+    }
+
+    .source-search input {
+      height: 39px;
+      border: 1.5px solid #dedbd3;
+      border-radius: 9px;
+      background: #ffffff;
+      padding: 0 13px;
+      color: var(--ink);
+      font-size: 14px;
+      outline: none;
+      width: 100%;
+    }
+
+    .source-view {
+        background: #fffdfa;
+        border: 2px solid var(--border);
+        border-left: 5px solid var(--orange);
+        border-radius: 16px;
+        padding: 14px;
+        margin: 18px;
+        min-height: 130px;
+        color: #5e6970;
+        font-size: 13px;
+        line-height: 1.45;
+        box-shadow: 0 8px 18px rgba(40, 35, 25, 0.10);
+      }
+
+    .source-view h3 {
+      margin: 0 0 8px 0;
+      color: var(--ink);
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+
+    .source-view .output-tabs .answer-tab {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--orange);
+      color: #17242d;
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    .source-view .output-tabs .answer-tab:disabled {
+      background: #c7b69f;
+      color: #ffffff;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    #emailCimaAnswerPanel > p:first-child strong,
+    #emailSynopsisPanel > p:first-child strong,
+    #emailQuestionsPanel > p:first-child strong,
+    #emailCombinedPanel > p:first-child strong,
+    #emailTrainerNotesPanel > p:first-child strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 900;
+      color: var(--ink);
+    }
+    .source-view p {
+      margin: 7px 0;
+    }
+
+    .source-view ul {
+      margin: 8px 0 8px 18px;
+      padding: 0;
+    }
+
+    .status-area {
+      display: none;
+    }
+
+    .status-card {
+      background: #fffdfa;
+      border: 2px solid var(--border);
+      border-left: 5px solid var(--orange);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 18px rgba(40, 35, 25, 0.10);
+    }
+
+    .status-card h3 {
+      margin: 0 0 9px 0;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .status-card p {
+      margin: 6px 0;
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.42;
+    }
+
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--soft-border);
+      padding-top: 8px;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .status-line span {
+      color: #4a5f6c;
+      font-weight: 700;
+    }
+
+    .status-line strong {
+      color: var(--ink);
+      text-align: right;
+    }
+
+    .toggle-line {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding-top: 9px;
+      margin-top: 9px;
+      border-top: 1px solid var(--soft-border);
+      font-size: 13px;
+      line-height: 1.4;
+      color: #4a5f6c;
+    }
+
+    .toggle-line input {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--orange);
+      margin-top: 1px;
+    }
+
+    .email-input {
+      width: 100%;
+      height: 34px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      background: #f8f5ee;
+      padding: 0 10px;
+      font-size: 13px;
+      margin-bottom: 8px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .report-btn {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--orange);
+      color: #17242d;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    .report-btn:disabled {
+      background: #c7b69f;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+      /* AIVS controlled UI simplification
+        Hide CIMA Response Dashboard from the visible interface.
+        Do not delete dashboard IDs, JavaScript functions, backend routes, or data connections. */
+      #responseDashboard {
+        display: none !important;
+      }
+
+    /* AIVS controlled UI simplification
+      Hide Sources and Audit tabs from the visible interface.
+      Do not delete IDs, JavaScript functions, backend routes, or data connections. */
+    #sourcesTab,
+    #auditTab {
+      display: none !important;
+    }
+
+  /* AIVS title size alignment — CIMA Context, Process Status, Delivery Status */
+    .context-box h3,
+    .cima-process-card h3,
+    .delivery-status-card h3 {
+      margin: 0 0 12px 0;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 900;
+      color: var(--ink);
+
+    }
+
+    @media (max-width: 1180px) {
+      html,
+      body {
+        overflow: auto;
+      }
+
+      .top-logo-strip {
+        min-height: 120px;
+        flex-wrap: wrap;
+        gap: 18px;
+        padding: 14px 22px;
+      }
+
+      .access-card {
+        grid-template-columns: 1fr;
+      }
+
+      .app {
+        height: auto;
+        grid-template-columns: 1fr;
+        padding: 0 10px 10px 10px;
+      }
+
+      .left-panel,
+      .centre-panel,
+      .right-panel {
+        min-height: 500px;
+      }
+
+      .centre-workspace {
+        min-height: 560px;
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+/* AIVS scroll fix */
+html,
+body {
+  width: 100% !important;
+  min-height: 100% !important;
+  height: auto !important;
+  margin: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Front access page uses the main page scroll */
+.access-gate {
+  min-height: calc(100vh - 152px) !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* Action page uses the main page scroll */
+.app.unlocked {
+  min-height: calc(100vh - 152px) !important;
+  height: auto !important;
+  overflow: visible !important;
+  align-items: start !important;
+}
+
+/* Let the three columns grow naturally */
+.left-panel {
+  height: auto !important;
+  min-height: 0 !important;
+  align-self: stretch !important;
+  overflow: visible !important;
+}
+
+.centre-panel,
+.right-panel {
+  height: auto !important;
+  min-height: 0 !important;
+  align-self: stretch !important;
+  overflow: hidden !important;
+  border-radius: var(--radius) !important;
+}
+
+/* Remove inner scroll traps but keep centre content contained */
+.left-scroll,
+.right-body,
+.status-area {
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+.centre-workspace,
+.reply-card {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+
+/* AIVS CIMA RAG Dial Box
+   ISO Timestamp: 2026-06-15T06:00:00+01:00
+   Change: Adds visual RAG dial box only. No backend wiring.
+*/
+
+.cima-rag-dial-box {
+  margin: 0 18px 18px 18px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-left: 5px solid var(--orange);
+  border-radius: 16px;
+  background: #fffdfa;
+  box-shadow: 0 8px 18px rgba(40, 35, 25, 0.10);
+}
+
+.cima-rag-dial-title {
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 900;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.cima-rag-dial-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cima-rag-dial {
+  position: relative;
+  width: 128px;
+  height: 78px;
+  overflow: hidden;
+}
+
+.cima-rag-dial-face {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 225deg,
+      #18b35b 0deg 90deg,
+      #ffb321 90deg 180deg,
+      #e23b2f 180deg 270deg,
+      transparent 270deg 360deg
+    );
+}
+
+.cima-rag-dial-inner {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #fffdfa;
+}
+
+.cima-rag-dial-needle {
+  position: absolute;
+  left: 61px;
+  top: 16px;
+  width: 6px;
+  height: 50px;
+  background: var(--ink);
+  border-radius: 6px;
+  transform-origin: 50% 100%;
+  transform: rotate(0deg);
+  transition: transform 0.35s ease;
+  z-index: 4;
+}
+
+.cima-rag-dial-centre {
+  position: absolute;
+  left: 53px;
+  top: 53px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid #fffdfa;
+  z-index: 5;
+}
+
+.cima-rag-dial-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.cima-rag-dial-status {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #5e6970;
+  line-height: 1.4;
+}
+
+.cima-rag-dial-status strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.cima-rag-dial-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cima-rag-dial-title-row .cima-rag-dial-title {
+  margin-bottom: 0;
+}
+
+.cima-rag-info-btn {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--orange);
+  border-radius: 50%;
+  background: #fffdfa;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 0 0 3px rgba(220, 147, 37, 0.14);
+}
+
+.cima-rag-info-btn:hover {
+  border-color: var(--orange);
+  background: #fff7ea;
+}
+
+.cima-rag-dial-info {
+  display: none;
+  margin: 0 0 10px 0;
+  padding: 8px 9px;
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+  background: #fbfaf5;
+  color: #5e6970;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cima-rag-dial-info.open {
+  display: block;
+}
+
+.cima-rag-dial-info p {
+  margin: 4px 0;
+}
+
+/* AIVS / PGB CIMA Front End
+   Feature: AI Processing Route visible control
+   ISO Timestamp: 2026-06-20T10:55:00+01:00
+   Change: Adds styling for AI Processing Route note in the Mode panel.
+*/
+
+.ai-processing-route-note {
+  margin: 8px 0 14px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #5f6b72;
+  font-weight: 700;
+}
+
+.mode-secondary-btn {
+  width: 100%;
+  min-height: 38px;
+  border: 1.7px solid var(--border);
+  border-radius: 10px;
+  background: #fffdfa;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.mode-secondary-btn:hover {
+  border-color: var(--orange);
+  background: #fff7ea;
+}
+
+/* AIVS / PGB CIMA Front End
+   Feature: Sensitive Context Pop-up styling
+   ISO Timestamp: 2026-06-20T11:35:00+01:00
+   Change:
+   - Adds modal styling for confidential / sensitive context pop-up.
+   - Does not wire open, close, save or backend storage.
+   - Does not search FAISS or alter CIMA answer generation.
+*/
+
+.sensitive-context-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(16, 35, 45, 0.66);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+
+.sensitive-context-overlay[hidden] {
+  display: none;
+}
+
+.sensitive-context-modal {
+  width: min(760px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #fffdfa;
+  border: 1.7px solid var(--border);
+  border-left: 5px solid var(--orange);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+}
+
+.sensitive-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sensitive-context-header h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.sensitive-context-close {
+  border: 1.7px solid var(--border);
+  background: #fffdfa;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sensitive-context-close:hover {
+  border-color: var(--orange);
+  background: #fff7ea;
+}
+
+.sensitive-context-note {
+  margin: 0 0 14px 0;
+  padding: 12px;
+  border: 1.5px solid var(--soft-border);
+  border-left: 5px solid var(--orange);
+  border-radius: 12px;
+  background: #fbfaf5;
+  color: #5f6b72;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.sensitive-context-modal input,
+.sensitive-context-modal textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 9px 10px;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.sensitive-context-modal textarea {
+  resize: vertical;
+}
+
+.sensitive-context-modal input:focus,
+.sensitive-context-modal textarea:focus {
+  border-color: var(--orange);
+  background: #ffffff;
+}
+
+.sensitive-context-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.sensitive-context-status {
+  min-height: 20px;
+  margin: 12px 0 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+  </style>
+</head>
+
+<body>
+  <div class="mac-dots">
+    <span class="mac-dot red-dot"></span>
+    <span class="mac-dot yellow-dot"></span>
+    <span class="mac-dot green-dot"></span>
+  </div>
+
+  <div class="top-logo-strip">
+    <div class="top-logo-left">
+      <img class="aivs-top-logo" src="AIVS_logo.png" alt="AIVS Software Limited" />
+      <img class="iso-logo" src="ISO_logo.png" alt="ISO/IEC 42001" />
+      <img class="quad-logo" src="Quad%20Logo.jpg" alt="Quad" />
+    </div>
+    <div id="topIsoStamp" class="iso-time-stamp">ISO loading...</div>
+  </div>
+
+  <section id="accessGate" class="access-gate">
+    <div class="access-card">
+      <div class="access-intro">
+        <h1>PGB <span>|</span> CIMA</h1>
+        <p>
+          Critical Incident Management Assistant with controlled access, human review,
+          transcript capture, source awareness and governance-first operation.
+        </p>
+        <p>
+          Use requires an emailed one-time access code or the temporary demo bypass.
+        </p>
+
+        <div class="access-points">
+          <div class="access-point">
+            <strong>1. Access first.</strong><br>
+            Enter your email, request a code, then enter the emailed code.
+          </div>
+          <div class="access-point">
+            <strong>2. Terms second.</strong><br>
+            Confirm the human-review terms before using CIMA.
+          </div>
+          <div class="access-point">
+            <strong>3. Temporary demo mode.</strong><br>
+            For testing only, enter <strong>demo</strong> as the access code.
+          </div>
+        </div>
+      </div>
+
+      <div class="access-form">
+        <h2>Access CIMA</h2>
+        <p>
+          Enter the user email address, send the access code, then confirm the terms.
+          For temporary demonstration access, type <strong>demo</strong> into the access code field.
+        </p>
+
+        <div class="gate-field">
+          <label for="gateEmailOne">Email address</label>
+          <input id="gateEmailOne" type="email" placeholder="Primary email address" autocomplete="email" />
+        </div>
+
+        <div class="gate-field">
+          <label for="gateEmailTwo">Second email address</label>
+          <input id="gateEmailTwo" type="email" placeholder="Optional second email address" autocomplete="email" />
+        </div>
+
+        <div class="gate-actions">
+          <button id="sendGateCodeBtn" class="gate-btn primary" type="button" onclick="sendGateAccessCode()">
+            Email access code
+          </button>
+          <button id="refreshGateMetaBtn" class="gate-btn dark" type="button" onclick="loadMeta()">
+            Refresh status
+          </button>
+        </div>
+
+        <div class="gate-field">
+          <label for="gateAccessCode">Access code</label>
+          <input id="gateAccessCode" type="password" placeholder="Enter emailed access code or demo" autocomplete="off" oninput="syncGateState()" />
+        </div>
+
+        <div class="terms-box">
+          <h3>Terms and conditions</h3>
+
+          <p>
+            CIMA is a critical incident management support tool. It provides draft operational, planning and assurance support only.
+            It does not replace command judgement, safeguarding judgement, professional advice, legal advice, medical advice,
+            emergency-service instructions or the decision-making responsibilities of authorised personnel.
+          </p>
+
+          <p>
+            CIMA outputs may be incomplete, provisional, out of date or unsuitable for the circumstances unless checked against
+            current facts, live source material, local procedures and the judgement of the responsible human decision maker.
+          </p>
+
+          <p>
+            All outputs must be reviewed by an authorised human before reliance, onward communication, operational action,
+            external disclosure, public statement, escalation, de-escalation or record entry.
+          </p>
+
+          <p>
+            CIMA must not be used as the sole basis for decisions involving life safety, safeguarding, medical risk, legal rights,
+            disciplinary action, public communications, evacuation, restraint, security response, police liaison or emergency response.
+          </p>
+
+          <p>
+            Users remain responsible for checking facts, identifying uncertainty, recording decisions, preserving audit trails,
+            protecting confidential information and escalating matters to the appropriate human authority where required.
+          </p>
+
+          <p>
+            Do not enter unnecessary personal, confidential, medical, safeguarding or legally privileged information. Where such
+            information is required for a legitimate operational purpose, enter only the minimum necessary information.
+          </p>
+
+          <p>
+            Transcripts, access records and session outputs may be retained for governance, audit, quality assurance, incident review
+            and compliance purposes, subject to the organisation's agreed data handling rules.
+          </p>
+
+          <p>
+            Demo access is for temporary testing only. It must not be treated as production access control and must not be used for
+            live incidents unless specifically authorised.
+          </p>
+
+          <label class="terms-check">
+            <input id="gateTermsCheck" type="checkbox" onchange="syncGateState()" />
+            <span>
+              I understand and accept the terms of use. CIMA outputs are draft support only, require authorised human review before
+              reliance, and must not replace professional, command, safeguarding, legal, medical or emergency judgement.
+            </span>
+          </label>
+        </div>
+
+        <div class="gate-actions">
+          <button id="enterCimaBtn" class="gate-btn primary" type="button" onclick="enterCima()" disabled>
+            Check access and enter
+          </button>
+          <button class="gate-btn dark" type="button" onclick="resetGate()">
+            Clear
+          </button>
+        </div>
+
+        <div id="gateNote" class="access-note">
+          Enter email, access code and accept terms to continue.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main id="cimaApp" class="app">
+    <aside class="panel left-panel">
+      <div class="left-top">
+        <div class="brand-row">
+          <div class="pgb-cima-logo">PGB<span>|</span>CIMA</div>
+        </div>
+      </div>
+
+      <div class="left-scroll">
+        
+
+        <div class="context-box">
+          <h3>Mode</h3>
+
+          <p style="margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45;">
+            Select the user persona and intended AI processing route for the CIMA output.
+          </p>
+
+          <div class="field" style="margin-top:12px;">
+            <label for="personaSelect">Persona</label>
+            <select id="personaSelect" onchange="updateContextFromControls()">
+              <option value="Bronze operational level" selected>Bronze operational level</option>
+              <option value="Gold / Strategic Lead">Gold / Strategic Lead</option>
+              <option value="Silver / Tactical Lead">Silver / Tactical Lead</option>
+              <option value="Bronze / Operational Lead">Bronze / Operational Lead</option>
+              <option value="Trainer / Facilitator">Trainer / Facilitator</option>
+              <option value="Communications Lead">Communications Lead</option>
+              <option value="Safeguarding Lead">Safeguarding Lead</option>
+              <option value="Loggist / Decision Recorder">Loggist / Decision Recorder</option>
+            </select>
+          </div>
+
+          <!--
+            AIVS / PGB CIMA Front End
+            Feature: AI Processing Route selector
+            ISO Timestamp: 2026-06-20T10:55:00+01:00
+
+            Change:
+            - Adds visible processing-route control following US Anthropic model restriction concerns.
+            - Does not yet alter backend model routing.
+            - Does not expose internal session_id, query_id or sensitive record identifiers.
+          -->
+          <div class="field" style="margin-top:12px;">
+            <label for="aiProcessingRoute">AI Processing Route</label>
+            <select id="aiProcessingRoute" name="aiProcessingRoute" onchange="updateContextFromControls()">
+              <option value="local_spark_only">Local / Spark only</option>
+              <option value="local_first_external_authorised" selected>Local first, external AI only if authorised</option>
+              <option value="external_non_sensitive_only">External AI permitted for non-sensitive material</option>
+              <option value="human_review_before_external">Human review required before external AI use</option>
+            </select>
+          </div>
+
+          <p class="ai-processing-route-note">
+            Records the intended AI processing route. For sensitive or regulated use, CIMA can be configured for local/Spark-first processing, with external AI restricted, disabled or subject to human authorisation.
+          </p>
+
+          <button
+            id="openSensitiveContextBtn"
+            class="mode-secondary-btn"
+            type="button"
+          >
+            Add confidential / sensitive details
+          </button>
+
+          <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;">
+            <button
+              id="trainingModeBtn"
+              class="report-btn"
+              type="button"
+              onclick="setTrainingMode()"
+              disabled
+            >
+              Training
+            </button>
+
+            <button
+              class="report-btn"
+              type="button"
+              onclick="clearSession()"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div style="display:none;">          
+            <select id="modeSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
+
+            <select id="levelSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
+
+
+            <select id="outputSelect" onchange="updateContextFromControls()">
+              <option value="" selected>N/A</option>
+            </select>
+
+            <select id="fromYear" onchange="updateContextFromControls()">
+              <option value="2010" selected>2010</option>
+            </select>
+
+            <select id="toYear" onchange="updateContextFromControls()">
+              <option value="2026" selected>2026</option>
+            </select>
+
+            <strong id="evidenceRangeText">2010 to 2026</strong>
+            <span id="fromYearLabel">2010</span>
+            <span id="toYearLabel">2026</span>
+          </div>
+        </div>
+
+          <div class="cima-process-card">
+            <h3>Delivery Status</h3>
+
+            <div style="margin: 2px 0 18px 0; color: var(--orange); font-size: 13px; line-height: 1.35; font-weight: 900; letter-spacing: 0.22em; text-transform: uppercase;">
+              Use the steps below to track progress
+            </div>
+
+            <div class="process-rail">
+
+              <div id="processStepAccess" class="process-step muted">
+                <div class="process-marker">01</div>
+                <div class="process-copy">
+                  <strong>Access gate</strong>
+                  <span id="deliveryAccessStatus">Confirmed</span>
+                </div>
+              </div>
+
+              <div id="processStepContext" class="process-step muted">
+                <div class="process-marker">02</div>
+                <div class="process-copy">
+                  <strong>Persona</strong>
+                  <span id="deliveryPersonaStatus" class="not-started">Not connected</span>
+                  <span id="deliveryContextStatus" class="pending" style="display:none;">Pending</span>
+                </div>
+              </div>
+
+              <div id="processStepQuestion" class="process-step muted">
+                <div class="process-marker">03</div>
+                <div class="process-copy">
+                  <strong>Question submitted</strong>
+                  <span id="deliveryQuestionStatus" class="not-started">Not started</span>
+                </div>
+              </div>
+
+              <div id="processStepResponse" class="process-step muted">
+                <div class="process-marker">04</div>
+                <div class="process-copy">
+                  <strong>CIMA response</strong>
+                  <span id="deliveryResponseStatus" class="not-started">Not started</span>
+                </div>
+              </div>
+
+              <div id="processStepDelivery" class="process-step muted">
+                <div class="process-marker">05</div>
+                <div class="process-copy">
+                  <strong>Word/PDF email</strong>
+                  <span id="deliveryEmailStatus" class="not-started">Not sent</span>
+                </div>
+              </div>
+
+              <div id="processStepTrainingSynopsis" class="process-step muted">
+                <div class="process-marker">06</div>
+                <div class="process-copy">
+                  <strong>Training Synopsis</strong>
+                  <span id="deliveryTrainingSynopsisStatus" class="not-started">Not generated</span>
+                </div>
+              </div>
+
+              <div id="processStepTrainingQuestions" class="process-step muted">
+                <div class="process-marker">07</div>
+                <div class="process-copy">
+                  <strong>Training Questions</strong>
+                  <span id="deliveryTrainingQuestionsStatus" class="not-started">Not generated</span>
+                </div>
+              </div>
+
+              <div id="processStepTrainingQa" class="process-step muted">
+                <div class="process-marker">08</div>
+                <div class="process-copy">
+                  <strong>Training Q &amp; A</strong>
+                  <span id="deliveryTrainingQaStatus" class="not-started">Not generated</span>
+                </div>
+              </div>
+
+              <div id="processStepTrainerNotes" class="process-step muted">
+                <div class="process-marker">09</div>
+                <div class="process-copy">
+                  <strong>Trainer Notes</strong>
+                  <span id="deliveryTrainerNotesStatus" class="not-started">Not generated</span>
+                </div>
+              </div>
+
+            <div id="processStepReview" class="process-step muted">
+              <div class="process-marker">10</div>
+              <div class="process-copy">
+                <strong>Human review</strong>
+                <label style="display:grid; grid-template-columns:18px 1fr; gap:7px; align-items:center; margin-top:4px; font-size:12px; line-height:1.35; color:#5f6b72; font-weight:700;">
+                  <input
+                    id="humanReviewCheck"
+                    type="checkbox"
+                    disabled
+                    onchange="updateHumanReviewStatus()"
+                    style="width:16px; height:16px; accent-color:var(--orange);"
+                  />
+                  <span id="deliveryReviewStatus" class="pending">Required</span>
+                </label>
+              </div>
+            </div>
+
+
+            </div>
+          </div>
+        </div>
+
+        </aside>
+    <section class="panel centre-panel">
+
+      <div class="main-header" style="height:96px; min-height:96px; flex:0 0 96px;">
+        <div class="thread-left">
+          <div class="thread-title" id="threadTitle">CIMA Incident Thread</div>
+          <div id="accessPill" class="access-pill">Access confirmed</div>
+        </div>
+      </div>
+
+      <div class="centre-workspace">
+        <div class="ask-card">
+          <h2>Ask CIMA</h2>
+          <p>Ask a clear operational, planning or assurance question.</p>
+
+          <div class="clear-composer">
+            <textarea id="questionInput" placeholder="Ask CIMA a question..."></textarea>
+            <button id="sendButton" class="send-btn" type="button" onclick="askQuestion()">↑</button>
+          </div>
+        </div>
+
+        <div class="reply-card">
+          <h2>Reply</h2>
+
+          <div class="output-tabs">
+            
+
+            <button id="replyReturnCimaTab" class="answer-tab hidden training-mode-tab" type="button" onclick="setCimaMode()">
+              Return to CIMA
+            </button>
+
+            <button
+            id="replySynopsisTab"
+            class="answer-tab hidden training-mode-tab"
+            type="button"
+            onclick="setReplyView('synopsis'); if (!latestTrainingHtml) generateTrainingSynopsisOutput(this);"
+          >
+            Training Synopsis
+          </button>
+
+            <button
+              id="replyQuestionsTab"
+              class="answer-tab hidden training-mode-tab"
+              type="button"
+              onclick="setReplyView('questions'); if (!latestTrainingQuestionsHtml) generateTrainingQuestionsOutput(this);"
+            >
+              Training Questions
+            </button>
+
+            <button
+            id="replyCombinedTab"
+            class="answer-tab hidden training-mode-tab"
+            type="button"
+            onclick="setReplyView('combined'); if (!latestTrainingQaHtml) generateTrainingQaOutput(this);"
+          >
+            Training Questions and Answers
+          </button>
+
+          <button
+            id="replyTrainerNotesTab"
+            class="answer-tab hidden training-mode-tab"
+            type="button"
+            onclick="setReplyView('trainerNotes'); if (!latestTrainerNotesHtml) generateTrainerNotesOutput(this);"
+          >
+            Trainer Notes
+          </button>
+          </div>
+
+          <div id="responseDashboard" class="response-dashboard">
+            
+            <div class="dashboard-title">CIMA Response Dashboard</div>
+            <div class="dashboard-grid">
+              <div class="dash-card">
+                <div class="dash-label">Path</div>
+                <div id="dashPath" class="dash-value">FAST PATH</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">RAG</div>
+                <div id="dashRag" class="dash-value rag-grey">Not set</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">HITL</div>
+                <div id="dashHitl" class="dash-value">Not triggered</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">Confidence</div>
+                <div id="dashConfidence" class="dash-value">Provisional</div>
+              </div>
+              <div class="dash-card">
+                <div class="dash-label">Review</div>
+                <div id="dashReview" class="dash-value">Human review</div>
+              </div>
+            </div>
+            <div id="dashActions" class="top-actions">
+              <strong>Top actions:</strong> Not generated yet.
+            </div>
+          </div>
+
+          <div id="replyArea" class="reply-placeholder">
+            Ask a question. CIMA’s response and dashboard will appear here.
+          </div>
+        </div>
+
+        <div id="sessionQaPanel" class="session-qa-panel">
+          <h2>Session Q&amp;A</h2>
+          <div id="sessionQaList">
+            No questions asked yet.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel right-panel">
+      <div class="right-header">
+        <h2>CIMA Emails</h2>
+      </div>
+
+      <div class="right-body">
+        <div id="sourceSearchWrap" class="source-search hidden">
+          <input id="sourceSearch" placeholder="Search sources / personas..." />
+        </div>
+
+
+        <div class="source-view" id="rightView"></div>
+
+        <!-- AIVS CIMA RAG Dial Box
+             ISO Timestamp: 2026-06-15T06:30:00+01:00
+             Change: RAG dial with frontend movement from CIMA rag/rag_status. No backend change.
+        -->
+        <div class="cima-rag-dial-box" id="cimaRagDialBox">
+          <div class="cima-rag-dial-title-row">
+            <div class="cima-rag-dial-title">Response Risk Dial</div>
+            <button
+              class="cima-rag-info-btn"
+              type="button"
+              onclick="toggleRagDialInfo()"
+              aria-label="Explain response risk dial"
+            >
+              i
+            </button>
+          </div>
+
+          <div class="cima-rag-dial-info" id="cimaRagDialInfo">
+            <p><strong>Green</strong> means routine support.</p>
+            <p><strong>Amber</strong> means review before reliance.</p>
+            <p><strong>Red</strong> means high-risk output requiring human review before operational use.</p>
+          </div>
+
+          <div class="cima-rag-dial-wrap">
+            <div class="cima-rag-dial" aria-label="CIMA response risk dial">
+              <div class="cima-rag-dial-face"></div>
+              <div class="cima-rag-dial-inner"></div>
+              <div class="cima-rag-dial-needle" id="cimaRagDialNeedle"></div>
+              <div class="cima-rag-dial-centre"></div>
+            </div>
+          </div>
+
+          <div class="cima-rag-dial-labels">
+            <span>Green</span>
+            <span>Amber</span>
+            <span>Red</span>
+          </div>
+
+          <div class="cima-rag-dial-status">
+            Current position: <strong id="cimaRagDialStatus">Amber / Review</strong>
+          </div>
+        </div>
+
+        <div class="status-area">
+          <div class="status-card">
+            <h3>Session Status</h3>
+            <div class="status-line">
+              <span>Mode</span>
+              <strong id="modeStatus">N/A</strong>
+            </div>
+            <div class="status-line">
+              <span>Command</span>
+              <strong id="levelStatus">N/A</strong>
+            </div>
+            <div class="status-line">
+              <span>Path</span>
+              <strong id="pathStatus">FAST PATH</strong>
+            </div>
+            <div class="status-line">
+              <span>Questions</span>
+              <strong id="questionCount">0</strong>
+            </div>
+            <div class="status-line">
+              <span>HITL</span>
+              <strong id="hitlStatus">Not triggered</strong>
+            </div>
+            <div class="status-line">
+              <span>Confidence</span>
+              <strong id="confidenceStatus">Provisional</strong>
+            </div>
+
+
+         <label class="toggle-line">
+            <input id="includeTranscriptToggle" type="checkbox" checked onchange="renderRightView()" />
+            <span>Include Q&amp;A in Word/PDF email</span>
+          </label>
+        </div>
+          <div class="status-card">
+            <h3>Last Output</h3>
+            <p id="lastOutput">CIMA is ready. Ask a question.</p>
+          </div>
+
+          <div class="status-card">
+            <h3>Build</h3>
+            <p id="isoTime">ISO loading...</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+  <!--
+    AIVS / PGB CIMA Front End
+    Feature: Sensitive Context Pop-up HTML
+    ISO Timestamp: 2026-06-20T11:25:00+01:00
+
+    Change:
+    - Added hidden confidential / sensitive context pop-up structure.
+    - Revised save button wording to reflect later JSONL backend storage.
+    - Does not yet wire open, close, save or backend storage.
+    - Does not search FAISS or alter CIMA answer generation.
+    - Does not expose internal session_id, query_id or sensitive record identifiers.
+    - Prepares frontend fields for later sensitive_context_agent.js JSONL storage.
+  -->
+  <div id="sensitiveContextOverlay" class="sensitive-context-overlay" hidden>
+    <div class="sensitive-context-modal" role="dialog" aria-modal="true" aria-labelledby="sensitiveContextTitle">
+      <div class="sensitive-context-header">
+        <h2 id="sensitiveContextTitle">Confidential / Sensitive Details</h2>
+
+        <button
+          type="button"
+          id="closeSensitiveContextBtn"
+          class="sensitive-context-close"
+          aria-label="Close confidential details"
+        >
+          Close
+        </button>
+      </div>
+
+      <p class="sensitive-context-note">
+        Enter only the minimum sensitive information necessary for the current operational purpose.
+        Do not include unnecessary personal, medical, safeguarding, legally privileged or confidential information.
+        This information is stored separately for audit and governance only. It is not used for FAISS retrieval or answer generation at this stage.
+      </p>
+
+      <div class="field">
+        <label for="incidentPlace">Location / site</label>
+        <input id="incidentPlace" name="incidentPlace" type="text" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="incidentTime">Incident time</label>
+        <input id="incidentTime" name="incidentTime" type="text" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="peopleInvolved">People / roles involved</label>
+        <textarea id="peopleInvolved" name="peopleInvolved" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="vulnerablePersons">Vulnerable persons</label>
+        <textarea id="vulnerablePersons" name="vulnerablePersons" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="injuries">Injuries</label>
+        <textarea id="injuries" name="injuries" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="emergencyServicesInvolved">Emergency services involved</label>
+        <textarea id="emergencyServicesInvolved" name="emergencyServicesInvolved" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="securityContacts">Security / command contacts</label>
+        <textarea id="securityContacts" name="securityContacts" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="sensitiveOperationalNotes">Sensitive operational notes</label>
+        <textarea id="sensitiveOperationalNotes" name="sensitiveOperationalNotes" rows="5"></textarea>
+      </div>
+
+      <div class="sensitive-context-actions">
+        <button type="button" id="saveSensitiveContextBtn" class="report-btn">
+          Save confidential details to secure record
+        </button>
+
+        <button type="button" id="clearSensitiveContextBtn" class="mode-secondary-btn">
+          Clear confidential details
+        </button>
+      </div>
+
+      <p id="sensitiveContextStatus" class="sensitive-context-status" aria-live="polite"></p>
+    </div>
+  </div>
+  <script>
+    const BUILD_ISO = "2026-06-15T06:30:00+01:00";
+
+    let accessConfirmed = false;
+    let accessMode = "locked";
+    let gateEmailOne = "";
+    let gateEmailTwo = "";
+
+    let questions = [];
+    let transcriptEntries = [];
+    let latestAnswer = "";
+    let latestStandardHtml = "";
+    let latestTrainingHtml = "";
+    let latestTrainerNotesHtml = "";
+    let latestTrainingQuestionsHtml = "";
+    let latestTrainingQaHtml = "";
+    let activeReplyView = "standard";
+    let latestSources = [];
+    let latestDashboard = null;
+    let rightTab = "thread";
+    let sourceClass = "resource";
+    let metaState = null;
+
+    function updateIsoTime() {
+      const now = new Date().toISOString();
+
+      document.getElementById("isoTime").textContent = now;
+
+      const topIsoStamp = document.getElementById("topIsoStamp");
+      if (topIsoStamp) {
+        topIsoStamp.textContent = `ISO ${now}`;
+      }
+    }
+
+    updateIsoTime();
+    setInterval(updateIsoTime, 1000);
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function markdownToHtml(value) {
+      const lines = String(value || "").split("\n");
+      let html = "";
+      let inList = false;
+
+      for (const raw of lines) {
+        const line = raw.trim();
+
+        if (!line) {
+          if (inList) {
+            html += "</ul>";
+            inList = false;
+          }
+          continue;
+        }
+
+        if (line.startsWith("## ")) {
+          if (inList) {
+            html += "</ul>";
+            inList = false;
+          }
+          html += `<h3>${escapeHtml(line.replace(/^##\s+/, ""))}</h3>`;
+          continue;
+        }
+
+        if (line.startsWith("# ")) {
+          if (inList) {
+            html += "</ul>";
+            inList = false;
+          }
+          html += `<h3>${escapeHtml(line.replace(/^#\s+/, ""))}</h3>`;
+          continue;
+        }
+
+        if (line.startsWith("- ")) {
+          if (!inList) {
+            html += "<ul>";
+            inList = true;
+          }
+          html += `<li>${escapeHtml(line.replace(/^-+\s*/, "").replace(/^\d+\.\s+/, ""))}</li>`;
+          continue;
+        }
+
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+
+        html += `<p>${escapeHtml(line)}</p>`;
+      }
+
+      if (inList) {
+        html += "</ul>";
+      }
+
+      return html || "<p>No response text returned.</p>";
+    }
+
+    function normaliseEmail(value = "") {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function setGateNote(message, mode = "") {
+      const gateNote = document.getElementById("gateNote");
+      gateNote.textContent = message;
+      gateNote.className = "access-note";
+
+      if (mode === "good") {
+        gateNote.classList.add("good");
+      }
+
+      if (mode === "bad") {
+        gateNote.classList.add("bad");
+      }
+    }
+
+    function syncGateState() {
+      const email = normaliseEmail(document.getElementById("gateEmailOne").value);
+      const code = String(document.getElementById("gateAccessCode").value || "").trim();
+      const terms = document.getElementById("gateTermsCheck").checked;
+      const isDemo = code.toLowerCase() === "demo";
+
+      const canEnter = terms && ((email && code) || isDemo);
+
+      document.getElementById("enterCimaBtn").disabled = !canEnter;
+
+      if (isDemo && terms) {
+        setGateNote("Demo bypass ready. Click Check access and enter.", "good");
+        return;
+      }
+
+      if (!terms) {
+        setGateNote("Accept the terms to continue.");
+        return;
+      }
+
+      if (!email) {
+        setGateNote("Enter an email address or use demo access.");
+        return;
+      }
+
+      if (!code) {
+        setGateNote("Enter the emailed access code.");
+        return;
+      }
+
+      setGateNote("Ready to check access.");
+    }
+
+    function resetGate() {
+      document.getElementById("gateEmailOne").value = "";
+      document.getElementById("gateEmailTwo").value = "";
+      document.getElementById("gateAccessCode").value = "";
+      document.getElementById("gateTermsCheck").checked = false;
+      gateEmailOne = "";
+      gateEmailTwo = "";
+      accessConfirmed = false;
+      accessMode = "locked";
+      syncGateState();
+    }
+
+    async function sendGateAccessCode() {
+      const toEmail = normaliseEmail(document.getElementById("gateEmailOne").value);
+      const secondEmail = normaliseEmail(document.getElementById("gateEmailTwo").value);
+
+      if (!toEmail || !toEmail.includes("@")) {
+        setGateNote("Enter a valid email address before requesting an access code.", "bad");
+        return;
+      }
+
+      const btn = document.getElementById("sendGateCodeBtn");
 
       try {
-        specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(specialistSearchQuestion, {
-          maxResults: 3,
-          maxLines: 1000
-        });
-      } catch (searchErr) {
-        specialistKnowledgeSearch = {
-          ok: false,
-          error: searchErr.message,
-          results: []
-        };
-      }
+        btn.disabled = true;
+        btn.textContent = "Sending...";
 
-      const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_agent"
-        ? [
-            "drone",
-            "uav",
-            "unmanned",
-            "uas",
-            "remotely piloted",
-            "hostile reconnaissance"
-          ]
-        : intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
-          ? [
-              "terror",
-              "terrorist",
-              "hostile activity",
-              "marauding",
-              "attack",
-              "protective security",
-              "security control room"
-            ]
-          : [];
-
-      if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
-        specialistKnowledgeSearch = {
-          ...specialistKnowledgeSearch,
-          results: specialistKnowledgeSearch.results.filter((item) => {
-            const searchableText = [
-              item.text,
-              item.snippet,
-              item.source_file,
-              item.source_type,
-              item.source_collection,
-              item.source_title,
-              item.title
-            ].join(" ").toLowerCase();
-
-            return specialistFilterTerms.some((term) => searchableText.includes(term));
+        const res = await fetch("/send-access-code-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            toEmail,
+            secondEmail
           })
-        };
-      }
-
-      if (intakeResult.specialist_trigger.agent === "drone_agent") {
-        const {
-          buildDroneThreatResponse
-        } = await import("./operational/drone_threat_agent.js");
-
-        specialistResponse = buildDroneThreatResponse({
-          question,
-          context,
-          intake: intakeResult,
-          knowledgeSearch: specialistKnowledgeSearch
-        });
-      }
-      if (intakeResult.specialist_trigger.agent === "terrorist_threat_agent") {
-        const {
-          buildTerroristThreatResponse
-        } = await import("./operational/terrorist_threat_agent.js");
-
-        specialistResponse = buildTerroristThreatResponse({
-          question,
-          context,
-          intake: intakeResult,
-          knowledgeSearch: specialistKnowledgeSearch
-        });
-      }
-
-      if (specialistResponse) {
-        await writeAuditEvent({
-          event_type: "cima_specialist_answer_generated",
-          route: "/cima-chat",
-          success: true,
-          user_email: userEmail,
-          access_mode: access.mode || "",
-          terms_accepted: true,
-          question,
-          context_mode: context.mode || "",
-          command_level: context.level || "",
-          persona: context.persona || "",
-          requested_output: context.output || "",
-          intake_agent: intakeResult.agent,
-          specialist_trigger_type: intakeResult.specialist_trigger?.type || "",
-          specialist_agent: specialistResponse.agent || "",
-          response_path: specialistResponse.response_path || "",
-          rag_status: specialistResponse.rag_status || "",
-          hitl_status: specialistResponse.hitl || "",
-          confidence: specialistResponse.confidence || "",
-          source_search_performed: true,
-          source_result_count: Array.isArray(specialistKnowledgeSearch?.results)
-            ? specialistKnowledgeSearch.results.length
-            : 0,
-          ip_address: req.ip,
-          user_agent: req.get("user-agent")
         });
 
-        return res.json({
-          ok: true,
-          build_iso: BUILD_ISO,
-          answered_at: new Date().toISOString(),
-          response_agent_build_iso: specialistResponse.build_iso,
-          response_path: specialistResponse.response_path,
-          path: specialistResponse.path,
-          rag: specialistResponse.rag,
-          rag_status: specialistResponse.rag_status,
-          hitl: specialistResponse.hitl,
-          confidence: specialistResponse.confidence,
-          source_mode: specialistResponse.source_mode,
-          answer: specialistResponse.answer,
-          sources: specialistResponse.sources || [],
-          intake: intakeResult,
-          specialist: {
-            agent: specialistResponse.agent,
-            safety_notice: specialistResponse.safety_notice,
-            clarification_questions: specialistResponse.clarification_questions,
-            search_plan: specialistResponse.search_plan
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Access code email failed.");
+        }
+
+        gateEmailOne = toEmail;
+        gateEmailTwo = secondEmail;
+
+        sessionStorage.setItem("cima_email_one", gateEmailOne);
+        sessionStorage.setItem("cima_email_two", gateEmailTwo);
+
+        setGateNote("Access code sent. Check the mailbox, then enter the code.", "good");
+      } catch (error) {
+        setGateNote(`Access code email failed: ${error.message}`, "bad");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Email access code";
+        syncGateState();
+      }
+    }
+
+    async function enterCima() {
+      const email = normaliseEmail(document.getElementById("gateEmailOne").value);
+      const secondEmail = normaliseEmail(document.getElementById("gateEmailTwo").value);
+      const code = String(document.getElementById("gateAccessCode").value || "").trim();
+      const terms = document.getElementById("gateTermsCheck").checked;
+
+      if (!terms) {
+        setGateNote("Terms must be accepted before entering CIMA.", "bad");
+        return;
+      }
+
+      if (code.toLowerCase() === "demo") {
+        gateEmailOne = email || "demo@aivs.local";
+        gateEmailTwo = secondEmail;
+        accessConfirmed = true;
+        accessMode = "demo";
+
+        sessionStorage.setItem("cima_email_one", gateEmailOne);
+        sessionStorage.setItem("cima_email_two", gateEmailTwo);
+
+        unlockCima();
+        return;
+      }
+
+      if (!email || !email.includes("@")) {
+        setGateNote("A valid email address is required unless using demo mode.", "bad");
+        return;
+      }
+
+      if (!code) {
+        setGateNote("Access code required.", "bad");
+        return;
+      }
+
+      const btn = document.getElementById("enterCimaBtn");
+
+      try {
+        btn.disabled = true;
+        btn.textContent = "Checking...";
+
+        const res = await fetch("/check-access", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            accessCode: code,
+            code,
+            email,
+            toEmail: email,
+            secondEmail
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Access check failed.");
+        }
+
+        gateEmailOne = email;
+        gateEmailTwo = secondEmail;
+        accessConfirmed = true;
+        accessMode = "one-time-code";
+
+        sessionStorage.setItem("cima_email_one", gateEmailOne);
+        sessionStorage.setItem("cima_email_two", gateEmailTwo);
+
+        unlockCima();
+      } catch (error) {
+        accessConfirmed = false;
+        accessMode = "locked";
+        setGateNote(error.message, "bad");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Check access and enter";
+        syncGateState();
+      }
+    }
+
+    function unlockCima() {
+      document.getElementById("accessGate").classList.add("hidden");
+      document.getElementById("cimaApp").classList.add("unlocked");
+
+      const accessPill = document.getElementById("accessPill");
+      accessPill.textContent = accessMode === "demo" ? "Demo access" : "Access confirmed";
+
+      document.getElementById("lastOutput").textContent =
+        accessMode === "demo"
+          ? "Demo access active. Ask a question."
+          : "Access confirmed. Ask a question.";
+
+      updateContextFromControls();
+      setRightTab("thread");
+      renderRightView();
+    }
+
+    function loadStoredGateEmails() {
+      gateEmailOne = sessionStorage.getItem("cima_email_one") || "";
+      gateEmailTwo = sessionStorage.getItem("cima_email_two") || "";
+
+      document.getElementById("gateEmailOne").value = gateEmailOne;
+      document.getElementById("gateEmailTwo").value = gateEmailTwo;
+    }
+
+    function updateHumanReviewStatus() {
+      const checked = document.getElementById("humanReviewCheck")?.checked === true;
+      const reviewStatus = document.getElementById("deliveryReviewStatus");
+      const reviewStep = document.getElementById("processStepReview");
+
+      if (reviewStatus) {
+        reviewStatus.textContent = checked ? "Confirmed" : "Required";
+        reviewStatus.className = checked ? "" : "pending";
+      }
+
+      if (reviewStep) {
+        reviewStep.className = checked ? "process-step active" : "process-step muted";
+      }
+    }
+
+    function commandLevelFromPersona(persona = "") {
+      const clean = String(persona || "").toUpperCase();
+
+      if (clean.includes("GOLD")) {
+        return "Gold";
+      }
+
+      if (clean.includes("SILVER")) {
+        return "Silver";
+      }
+
+      if (clean.includes("BRONZE")) {
+        return "Bronze";
+      }
+
+      if (clean.includes("TRAINER")) {
+        return "Training";
+      }
+
+      if (clean.includes("COMMUNICATIONS")) {
+        return "Communications";
+      }
+
+      if (clean.includes("SAFEGUARDING")) {
+        return "Safeguarding";
+      }
+
+      if (clean.includes("LOGGIST")) {
+        return "Logging";
+      }
+
+      return "N/A";
+    }
+
+    function getContext() {
+      const persona = document.getElementById("personaSelect").value || "N/A";
+      const commandLevel = commandLevelFromPersona(persona);
+
+      return {
+        thread: document.getElementById("threadTitle").textContent || "CIMA Incident Thread",
+        mode: document.getElementById("modeSelect").value || "N/A",
+        level: commandLevel,
+        command_level: commandLevel,
+        commandLevel: commandLevel,
+        persona: persona,
+        output: document.getElementById("outputSelect").value || "N/A",
+        evidence_from_year: document.getElementById("fromYear")?.value || "2010",
+        evidence_to_year: document.getElementById("toYear")?.value || "2026"
+      };
+    }
+
+    function updateContextFromControls() {
+      const context = getContext();
+
+      document.getElementById("modeStatus").textContent = context.mode;
+      document.getElementById("levelStatus").textContent = context.level;
+
+      const hasContext =
+        context.mode !== "N/A" ||
+        context.level !== "N/A" ||
+        context.persona !== "N/A" ||
+        context.output !== "N/A";
+
+      const deliveryPersonaStatus = document.getElementById("deliveryPersonaStatus");
+      const personaStep = document.getElementById("processStepContext");
+
+      if (deliveryPersonaStatus) {
+        if (context.persona && context.persona !== "N/A") {
+          deliveryPersonaStatus.textContent = "Confirmed";
+          deliveryPersonaStatus.className = "";
+
+          if (personaStep) {
+            personaStep.className = "process-step active";
           }
+        } else {
+          deliveryPersonaStatus.textContent = "N/A";
+          deliveryPersonaStatus.className = "not-started";
+
+          if (personaStep) {
+            personaStep.className = "process-step muted";
+          }
+        }
+      }
+
+      renderRightView();
+    }
+
+    function determinePath(question) {
+      const context = getContext();
+
+      const text = [
+        question,
+        context.mode,
+        context.level,
+        context.persona,
+        context.output
+      ].join(" ").toLowerCase();
+
+      if (
+        text.includes("assurance") ||
+        text.includes("compliance") ||
+        text.includes("statutory") ||
+        text.includes("validate") ||
+        text.includes("source") ||
+        text.includes("citation") ||
+        text.includes("policy") ||
+        text.includes("safeguarding")
+      ) {
+        return "ASSURANCE PATH";
+      }
+
+      return "FAST PATH";
+    }
+
+    function inferRagFromText(answer = "", path = "FAST PATH") {
+      const text = String(answer || "").toLowerCase();
+
+      if (
+        text.includes("immediate risk") ||
+        text.includes("life safety") ||
+        text.includes("emergency") ||
+        text.includes("critical") ||
+        text.includes("red")
+      ) {
+        return "RED";
+      }
+
+      if (
+        path === "ASSURANCE PATH" ||
+        text.includes("check source") ||
+        text.includes("human review") ||
+        text.includes("uncertain") ||
+        text.includes("amber")
+      ) {
+        return "AMBER";
+      }
+
+      return "GREEN";
+    }
+
+    function ragClass(rag = "") {
+      const clean = String(rag || "").toUpperCase();
+
+      if (clean.includes("RED")) return "rag-red";
+      if (clean.includes("AMBER")) return "rag-amber";
+      if (clean.includes("GREEN")) return "rag-green";
+
+      return "rag-grey";
+    }
+
+    function updateRagDial(rag = "AMBER") {
+      const clean = String(rag || "").toUpperCase();
+
+      const needle = document.getElementById("cimaRagDialNeedle");
+      const status = document.getElementById("cimaRagDialStatus");
+
+      if (!needle || !status) {
+        return;
+      }
+
+      if (clean.includes("RED")) {
+        needle.style.transform = "rotate(52deg)";
+        status.textContent = "Red / High Risk";
+        return;
+      }
+
+      if (clean.includes("GREEN")) {
+        needle.style.transform = "rotate(-52deg)";
+        status.textContent = "Green / Routine";
+        return;
+      }
+
+      needle.style.transform = "rotate(0deg)";
+      status.textContent = "Amber / Review";
+    }
+
+    function toggleRagDialInfo() {
+      const panel = document.getElementById("cimaRagDialInfo");
+
+      if (!panel) {
+        return;
+      }
+
+      panel.classList.toggle("open");
+    }
+
+    function extractTopActions(answer = "") {
+      const lines = String(answer || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const bullets = lines
+        .filter((line) => line.startsWith("- "))
+        .map((line) => line.replace(/^-+\s*/, "").trim())
+        .filter(Boolean)
+        .slice(0, 3);
+
+      if (bullets.length) {
+        return bullets;
+      }
+
+      return [
+        "Confirm known facts and assumptions.",
+        "Identify people at immediate risk.",
+        "Set the next owner and review time."
+      ];
+    }
+
+    function updateResponseDashboard({
+      path,
+      rag,
+      hitl,
+      confidence,
+      answer
+    }) {
+      latestDashboard = {
+        path,
+        rag,
+        hitl,
+        confidence,
+        actions: extractTopActions(answer)
+      };
+
+      const dash = document.getElementById("responseDashboard");
+      dash.classList.add("on");
+
+      document.getElementById("dashPath").textContent = path || "FAST PATH";
+
+      const ragEl = document.getElementById("dashRag");
+      ragEl.textContent = rag || "AMBER";
+      ragEl.className = `dash-value ${ragClass(rag)}`;
+
+      updateRagDial(rag || "AMBER");
+
+      document.getElementById("dashHitl").textContent = hitl || "Not triggered";
+      document.getElementById("dashConfidence").textContent = confidence || "Provisional";
+      document.getElementById("dashReview").textContent = "Human review";
+
+      document.getElementById("dashActions").innerHTML = [
+        "<strong>Top actions:</strong>",
+        "<ul>",
+        ...latestDashboard.actions.map((action) => `<li>${escapeHtml(action)}</li>`),
+        "</ul>"
+      ].join("");
+
+      renderRightView();
+    }
+
+    function setSourceClass(value) {
+      sourceClass = value;
+
+      for (const item of ["Resource", "Register", "Policy", "Internal"]) {
+        const id = "sourceBtn" + item;
+        const el = document.getElementById(id);
+        if (el) el.classList.remove("active");
+      }
+
+      const map = {
+        resource: "sourceBtnResource",
+        register: "sourceBtnRegister",
+        policy: "sourceBtnPolicy",
+        internal: "sourceBtnInternal"
+      };
+
+      const active = document.getElementById(map[value] || "sourceBtnResource");
+      if (active) active.classList.add("active");
+
+      setRightTab("sources");
+    }
+
+    function setReplyView(value) {
+      const allowedViews = ["standard", "synopsis", "questions", "combined", "trainerNotes"];
+      activeReplyView = allowedViews.includes(value) ? value : "standard";
+
+      const replyArea = document.getElementById("replyArea");
+
+      document.getElementById("replyStandardTab")?.classList.remove("active");
+      document.getElementById("replySynopsisTab")?.classList.remove("active");
+      document.getElementById("replyQuestionsTab")?.classList.remove("active");
+      document.getElementById("replyCombinedTab")?.classList.remove("active");
+      document.getElementById("replyTrainerNotesTab")?.classList.remove("active");
+
+      const activeTabMap = {
+        standard: "replyStandardTab",
+        synopsis: "replySynopsisTab",
+        questions: "replyQuestionsTab",
+        combined: "replyCombinedTab",
+        trainerNotes: "replyTrainerNotesTab"
+      };
+      document.getElementById(activeTabMap[activeReplyView])?.classList.add("active");
+
+      replyArea.className = "";
+
+      if (activeReplyView === "standard") {
+        if (latestStandardHtml) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>CIMA Assistant</strong>
+              ${latestStandardHtml}
+            </div>
+          `;
+          document.getElementById("lastOutput").textContent = "Showing CIMA answer.";
+          return;
+        }
+
+        replyArea.className = "reply-placeholder";
+        replyArea.textContent = "Ask a question. CIMA's response and dashboard will appear here.";
+        document.getElementById("lastOutput").textContent = "No CIMA answer available yet.";
+        return;
+      }
+
+       if (activeReplyView === "synopsis") {
+  const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+  if (latestTrainingHtml) {
+    replyArea.innerHTML = `
+      <div class="message agent">
+        <strong>Training Synopsis</strong>
+        ${latestTrainingHtml}
+      </div>
+    `;
+
+    document.getElementById("lastOutput").textContent = "Showing training synopsis.";
+    return;
+  }
+
+  replyArea.innerHTML = `
+    <div class="message agent">
+      <strong>Training Synopsis</strong>
+      <p>No training synopsis has been generated yet.</p>
+      <p>Click the Training Synopsis button above to generate it from the latest CIMA answer.</p>
+      <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+    </div>
+  `;
+
+  document.getElementById("lastOutput").textContent = hasTrainingSource
+    ? "Training synopsis is ready to generate."
+    : "Ask a CIMA question before generating a training synopsis.";
+
+  return;
+}
+
+
+    if (activeReplyView === "questions") {
+      const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+      if (latestTrainingQuestionsHtml) {
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>Training Questions</strong>
+            ${latestTrainingQuestionsHtml}
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = "Showing training questions.";
+        return;
+      }
+
+      replyArea.innerHTML = `
+        <div class="message agent">
+          <strong>Training Questions</strong>
+          <p>No training questions have been generated yet.</p>
+          <p>Click the Training Questions button above to generate them from the latest CIMA answer.</p>
+          <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+        </div>
+      `;
+
+      document.getElementById("lastOutput").textContent = hasTrainingSource
+        ? "Training questions are ready to generate."
+        : "Ask a CIMA question before generating training questions.";
+
+      return;
+    }
+
+      if (activeReplyView === "combined") {
+        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+        if (latestTrainingQaHtml) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              ${latestTrainingQaHtml}
+            </div>
+          `;
+
+          document.getElementById("lastOutput").textContent = "Showing training questions and answers.";
+          return;
+        }
+
+        replyArea.innerHTML = `
+          <div class="message agent">
+            <strong>Training Questions and Answers</strong>
+            <p>No training question and answer set has been generated yet.</p>
+            <p>Click the Training Questions and Answers button above to generate it from the latest CIMA answer.</p>
+            <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = hasTrainingSource
+          ? "Training questions and answers are ready to generate."
+          : "Ask a CIMA question before generating training questions and answers.";
+
+        return;
+      }
+
+    if (activeReplyView === "trainerNotes") {
+      const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+      if (latestTrainerNotesHtml) {
+        replyArea.innerHTML = `
+          <div class="message agent">
+            ${latestTrainerNotesHtml}
+          </div>
+        `;
+
+        document.getElementById("lastOutput").textContent = "Showing trainer notes.";
+        return;
+      }
+      replyArea.innerHTML = `
+        <div class="message agent">
+          <strong>Trainer Notes</strong>
+          <p>No trainer notes have been generated yet.</p>
+          <p>Click the Trainer Notes button above to generate them from the latest CIMA answer.</p>
+          <p class="small-note">${hasTrainingSource ? "Ready to generate from the latest CIMA answer." : "Ask a CIMA question first."}</p>
+        </div>
+      `;
+
+      document.getElementById("lastOutput").textContent = hasTrainingSource
+        ? "Trainer notes are ready to generate."
+        : "Ask a CIMA question before generating trainer notes.";
+
+      return;
+    }
+
+
+    }
+
+    function setCimaMode() {
+      document.querySelectorAll(".training-mode-tab").forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("active");
+      });
+
+      document.querySelectorAll(".cima-mode-tab").forEach((el) => {
+        el.classList.remove("hidden");
+      });
+
+      setReplyView("standard");
+      document.getElementById("lastOutput").textContent = "CIMA mode selected.";
+    }
+
+    function setTrainingMode() {
+    
+      document.querySelectorAll(".cima-mode-tab").forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("active");
+      });
+
+      document.querySelectorAll(".training-mode-tab").forEach((el) => {
+        el.classList.remove("hidden");
+      });
+
+      setReplyView("synopsis");
+      document.getElementById("lastOutput").textContent = "Training mode selected.";
+    }
+
+    function setRightTab(value) {
+      rightTab = value;
+
+      for (const id of ["threadTab", "answerTab", "sessionTab", "sourcesTab", "auditTab"]) {
+        document.getElementById(id)?.classList.remove("active");
+      }
+
+      const activeMap = {
+        answer: "answerTab",
+        thread: "threadTab",
+        session: "sessionTab",
+        sources: "sourcesTab",
+        audit: "auditTab"
+      };
+
+      const active = document.getElementById(activeMap[value] || "threadTab");
+      if (active) active.classList.add("active");
+
+      const sourceSearchWrap = document.getElementById("sourceSearchWrap");
+      if (sourceSearchWrap) {
+        sourceSearchWrap.classList.toggle("hidden", value !== "sources");
+      }
+
+      renderRightView();
+    }
+
+    async function generateTrainingOutput(button) {
+      const panel = document.getElementById("trainingOutputWrap");
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training output.";
+        if (panel) {
+          panel.innerHTML = "<p>No completed CIMA question and answer is available for training output yet.</p>";
+        }
+        return;
+      }
+
+      const question = lastEntry.question;
+      const answer = lastEntry.answer;
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (panel) {
+          panel.innerHTML = "<p>Generating training output...</p>";
+        }
+
+        const res = await fetch("/cima-training", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question,
+            answer,
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            },
+            context: getContext()
+          })
         });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training output failed.");
+        }
+
+        if (panel) {
+          panel.innerHTML = data.training?.html || `<pre>${escapeHtml(data.training?.plain_text || "No training output returned.")}</pre>`;
+        }
+
+        const trainingSynopsisStatus = document.getElementById("deliveryTrainingSynopsisStatus");
+        if (trainingSynopsisStatus) {
+          trainingSynopsisStatus.textContent = "Generated";
+          trainingSynopsisStatus.className = "";
+        }
+
+        const trainingSynopsisStep = document.getElementById("processStepTrainingSynopsis");
+        if (trainingSynopsisStep) {
+          trainingSynopsisStep.className = "process-step active";
+        }
+        const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
+        if (trainingQuestionsStatus) {
+          trainingQuestionsStatus.textContent = "Generated";
+          trainingQuestionsStatus.className = "";
+        }
+ 
+        document.getElementById("lastOutput").textContent = "CIMA training output generated.";
+      
+      } catch (error) {
+        if (panel) {
+          panel.innerHTML = `<p>Training output failed: ${escapeHtml(error.message)}</p>`;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training output failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Output";
+        }
       }
     }
 
-    await writeAuditEvent({
-      event_type: "cima_question_submitted",
-      route: "/cima-chat",
-      success: true,
-      user_email: userEmail,
-      access_mode: access.mode || "",
-      terms_accepted: true,
-      question,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
+    async function generateTrainingSynopsisOutput(button) {
+      const replyArea = document.getElementById("replyArea");
 
-    
-    const knowledgeSearch = await searchFaissKnowledgeByKeyword(question, {
-      maxResults: 5,
-      maxLines: 5000
-    });
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
 
-    const cimaResponse = buildCimaResponse({
-      question,
-      context,
-      knowledgeSearch
-    });
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating a training synopsis.";
 
-    await writeAuditEvent({
-      event_type: "cima_answer_generated",
-      route: "/cima-chat",
-      success: true,
-      user_email: userEmail,
-      access_mode: access.mode || "",
-      terms_accepted: true,
-      question,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      response_path: cimaResponse.response_path,
-      rag_status: cimaResponse.rag_status,
-      hitl_status: cimaResponse.hitl,
-      confidence: cimaResponse.confidence,
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              <p>No completed CIMA question and answer is available for training synopsis yet.</p>
+            </div>
+          `;
+        }
 
-    return res.json({
-      ok: true,
-      build_iso: BUILD_ISO,
-      answered_at: new Date().toISOString(),
-      response_agent_build_iso: cimaResponse.response_agent_build_iso,
-      response_path: cimaResponse.response_path,
-      path: cimaResponse.path,
-      rag: cimaResponse.rag,
-      rag_status: cimaResponse.rag_status,
-      hitl: cimaResponse.hitl,
-      confidence: cimaResponse.confidence,
-      source_mode: cimaResponse.source_mode,
-      answer: cimaResponse.answer,
-      sources: cimaResponse.sources
-    });
-  } catch (err) {
-    console.error("ERROR /cima-chat failed:", err);
+        return;
+      }
 
-    await writeAuditEvent({
-      event_type: "cima_chat_failed",
-      route: "/cima-chat",
-      success: false,
-      error: err.message,
-      user_email: userEmail,
-      access_mode: access.mode || "",
-      terms_accepted: terms.accepted === true,
-      question,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
 
-    return res.status(500).json({
-      ok: false,
-      error: "CIMA chat route failed.",
-      detail: err.message,
-      build_iso: BUILD_ISO
-    });
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              <p>Generating training synopsis...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-training-synopsis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training synopsis failed.");
+        }
+
+        latestTrainingHtml = data.synopsis?.html || `<pre>${escapeHtml(data.synopsis?.plain_text || "No training synopsis returned.")}</pre>`;
+
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              ${latestTrainingHtml}
+            </div>
+          `;
+        }
+
+        const trainingSynopsisStatus = document.getElementById("deliveryTrainingSynopsisStatus");
+        if (trainingSynopsisStatus) {
+          trainingSynopsisStatus.textContent = "Generated";
+          trainingSynopsisStatus.className = "";
+        }
+
+        const trainingSynopsisStep = document.getElementById("processStepTrainingSynopsis");
+        if (trainingSynopsisStep) {
+          trainingSynopsisStep.className = "process-step active";
+        }
+        document.getElementById("lastOutput").textContent = "Training synopsis generated.";
+        renderRightView();
+        
+      } catch (error) {
+        if (activeReplyView === "synopsis" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Synopsis</strong>
+              <p>Training synopsis failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training synopsis failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Synopsis";
+        }
+      }
+    }
+
+    async function generateTrainingQuestionsOutput(button) {
+      const replyArea = document.getElementById("replyArea");
+
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training questions.";
+
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              <p>No completed CIMA question and answer is available for training questions yet.</p>
+            </div>
+          `;
+        }
+
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              <p>Generating training questions...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-training-questions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training questions failed.");
+        }
+
+        latestTrainingQuestionsHtml = data.questions?.html || `<pre>${escapeHtml(data.questions?.plain_text || "No training questions returned.")}</pre>`;
+
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              ${latestTrainingQuestionsHtml}
+            </div>
+          `;
+        }
+
+      const trainingQuestionsStatus = document.getElementById("deliveryTrainingQuestionsStatus");
+      if (trainingQuestionsStatus) {
+        trainingQuestionsStatus.textContent = "Generated";
+        trainingQuestionsStatus.className = "";
+      }
+
+      const trainingQuestionsStep = document.getElementById("processStepTrainingQuestions");
+      if (trainingQuestionsStep) {
+        trainingQuestionsStep.className = "process-step active";
+      }
+
+        document.getElementById("lastOutput").textContent = "Training questions generated.";
+        renderRightView();
+      } catch (error) {
+        if (activeReplyView === "questions" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions</strong>
+              <p>Training questions failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training questions failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Questions";
+        }
+      }
+    }
+
+    async function generateTrainingQaOutput(button) {
+      const replyArea = document.getElementById("replyArea");
+
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating training questions and answers.";
+
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              <p>No completed CIMA question and answer is available for training Q&A yet.</p>
+            </div>
+          `;
+        }
+
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              <p>Generating training questions and answers...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-training-qa", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Training questions and answers failed.");
+        }
+
+        latestTrainingQaHtml = data.qa?.html || `<pre>${escapeHtml(data.qa?.plain_text || "No training Q&A returned.")}</pre>`;
+
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              ${latestTrainingQaHtml}
+            </div>
+          `;
+        }
+
+        const trainingQaStatus = document.getElementById("deliveryTrainingQaStatus");
+        if (trainingQaStatus) {
+          trainingQaStatus.textContent = "Generated";
+          trainingQaStatus.className = "";
+        }
+
+        const trainingQaStep = document.getElementById("processStepTrainingQa");
+        if (trainingQaStep) {
+          trainingQaStep.className = "process-step active";
+        }
+
+        document.getElementById("lastOutput").textContent = "Training questions and answers generated.";
+        renderRightView();
+      } catch (error) {
+        if (activeReplyView === "combined" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Training Questions and Answers</strong>
+              <p>Training questions and answers failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Training questions and answers failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Training Questions and Answers";
+        }
+      }
+    }
+
+    async function generateTrainerNotesOutput(button) {
+      const replyArea = document.getElementById("replyArea");
+
+      const lastEntry = transcriptEntries.length
+        ? transcriptEntries[transcriptEntries.length - 1]
+        : null;
+
+      if (!lastEntry || !lastEntry.question || !lastEntry.answer) {
+        document.getElementById("lastOutput").textContent = "Ask a CIMA question before generating trainer notes.";
+
+        if (activeReplyView === "trainerNotes" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Trainer Notes</strong>
+              <p>No completed CIMA question and answer is available for trainer notes yet.</p>
+            </div>
+          `;
+        }
+
+        return;
+      }
+
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Generating...";
+        }
+
+        if (activeReplyView === "trainerNotes" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Trainer Notes</strong>
+              <p>Generating trainer notes...</p>
+            </div>
+          `;
+        }
+
+        const res = await fetch("/cima-trainer-notes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question: lastEntry.question,
+            answer: lastEntry.answer,
+            context: getContext(),
+            terms: {
+              accepted: true,
+              accepted_at: new Date().toISOString()
+            },
+            access: {
+              mode: accessMode,
+              email: gateEmailOne
+            }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Trainer notes failed.");
+        }
+
+        latestTrainerNotesHtml = data.trainer_notes?.html || `<pre>${escapeHtml(data.trainer_notes?.plain_text || "No trainer notes returned.")}</pre>`;
+
+        const trainerNoteHeadings = [
+          "Training Scenario",
+          "Trainer Aim",
+          "Key Teaching Points"
+        ];
+
+        for (const heading of trainerNoteHeadings) {
+          const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+          const paragraphPattern = new RegExp(`<p>\\s*(?:<strong>)?${escapedHeading}(?:</strong>)?\\s*</p>`, "gi");
+          latestTrainerNotesHtml = latestTrainerNotesHtml.replace(
+            paragraphPattern,
+            `<h3>${heading}</h3>`
+          );
+
+          const headingPattern = new RegExp(`<h([1-6])>\\s*(?:<strong>)?${escapedHeading}(?:</strong>)?\\s*</h\\1>`, "gi");
+          latestTrainerNotesHtml = latestTrainerNotesHtml.replace(
+            headingPattern,
+            `<h3>${heading}</h3>`
+          );
+        }
+
+        if (activeReplyView === "trainerNotes" && replyArea) {
+          replyArea.className = "";
+          replyArea.innerHTML = `
+            <div class="message agent">
+              ${latestTrainerNotesHtml}
+            </div>
+          `;
+        }
+
+        const trainerNotesStatus = document.getElementById("deliveryTrainerNotesStatus");
+        if (trainerNotesStatus) {
+          trainerNotesStatus.textContent = "Generated";
+          trainerNotesStatus.className = "";
+        }
+
+        const trainerNotesStep = document.getElementById("processStepTrainerNotes");
+        if (trainerNotesStep) {
+          trainerNotesStep.className = "process-step active";
+        }
+
+        document.getElementById("lastOutput").textContent = "Trainer notes generated.";
+        renderRightView();
+      } catch (error) {
+        if (activeReplyView === "trainerNotes" && replyArea) {
+          replyArea.innerHTML = `
+            <div class="message agent">
+              <strong>Trainer Notes</strong>
+              <p>Trainer notes failed: ${escapeHtml(error.message)}</p>
+            </div>
+          `;
+        }
+
+        document.getElementById("lastOutput").textContent = `Trainer notes failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Generate Trainer Notes";
+        }
+      }
+    }
+
+    function renderRightView() {
+      const panel = document.getElementById("rightView");
+      const context = getContext();
+
+      if (rightTab === "answer") {
+        const hasTrainingSource = transcriptEntries.length > 0 || Boolean(latestAnswer);
+
+        panel.innerHTML = `
+          <h3>Training</h3>
+          <p><strong>Training agent:</strong> Connected to /cima-training.</p>
+          <p>This creates a training output from the latest CIMA question and answer. It is for learning and exercise use only.</p>
+
+          <p><strong>Current response path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
+          <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
+          <p><strong>HITL:</strong> ${escapeHtml(document.getElementById("hitlStatus").textContent)}</p>
+          <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
+
+          <button
+            id="generateTrainingBtn"
+            class="report-btn"
+            type="button"
+            onclick="generateTrainingOutput(this)"
+            ${hasTrainingSource ? "" : "disabled"}
+          >
+            Generate Training Output
+          </button>
+
+          <div id="trainingOutputWrap" style="margin-top:14px;">
+            ${hasTrainingSource ? "<p>Click Generate Training Output to build the training version of the latest CIMA response.</p>" : "<p>Ask a CIMA question first, then return to this tab to generate training output.</p>"}
+          </div>
+        `;
+        return;
+      }
+
+      if (rightTab === "thread") {
+        const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
+
+        panel.innerHTML = `
+         
+          <p>Send one of the generated CIMA outputs by email.</p>
+
+          <div class="output-tabs">
+
+            <button
+              id="emailCimaAnswerTab"
+              class="answer-tab ${transcriptEntries.length ? "active" : ""}"
+              type="button"
+              ${transcriptEntries.length ? "" : "disabled"}
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.add('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.remove('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
+                "
+            >
+              CIMA Answer
+            </button>
+
+            <button
+              id="emailSynopsisTab"
+              class="answer-tab"
+              type="button"
+              ${latestTrainingHtml ? "" : "disabled"}
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.add('active');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.remove('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
+                "
+            >
+              Training Synopsis
+            </button>
+
+            <button
+              id="emailQuestionsTab"
+              class="answer-tab"
+              type="button"
+              ${latestTrainingQuestionsHtml ? "" : "disabled"}
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailQuestionsTab').classList.add('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.remove('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
+              "
+            >
+              Training Questions
+            </button>
+
+            <button
+              id="emailCombinedTab"
+              class="answer-tab"
+              type="button"
+              ${latestTrainingQaHtml ? "" : "disabled"}
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.add('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.remove('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.add('hidden');
+              "
+            >
+              Training Questions and Answers
+            </button>
+
+            <button
+              id="emailTrainerNotesTab"
+              class="answer-tab"
+              type="button"
+              ${latestTrainerNotesHtml ? "" : "disabled"}
+              onclick="
+                document.getElementById('emailCimaAnswerTab').classList.remove('active');
+                document.getElementById('emailSynopsisTab').classList.remove('active');
+                document.getElementById('emailQuestionsTab').classList.remove('active');
+                document.getElementById('emailCombinedTab').classList.remove('active');
+                document.getElementById('emailTrainerNotesTab').classList.add('active');
+
+                document.getElementById('emailCimaAnswerPanel').classList.add('hidden');
+                document.getElementById('emailSynopsisPanel').classList.add('hidden');
+                document.getElementById('emailQuestionsPanel').classList.add('hidden');
+                document.getElementById('emailCombinedPanel').classList.add('hidden');
+                document.getElementById('emailTrainerNotesPanel').classList.remove('hidden');
+              "
+            >
+              Trainer Notes
+            </button>
+          </div>
+
+          <input id="emailOne" class="email-input" placeholder="Primary email" value="${escapeHtml(gateEmailOne || "")}" />
+          <input id="emailTwo" class="email-input" placeholder="Second email optional" value="${escapeHtml(gateEmailTwo || "")}" />
+
+          <div id="emailCimaAnswerPanel">
+            <p><strong>CIMA Answer</strong></p>
+            <p>Send the current CIMA answer as Word and PDF attachments.</p>
+
+            <label class="toggle-line">
+              <input
+                type="checkbox"
+                ${includeTranscript ? "checked" : ""}
+                onchange="
+                  document.getElementById('includeTranscriptToggle').checked = this.checked;
+                  renderRightView();
+                "
+              />
+              <span>Include full Q&amp;A in Word/PDF email</span>
+            </label>
+
+            <button id="sendTranscriptBtn" class="report-btn" type="button" onclick="sendTranscriptEmail()">
+              Send CIMA Answer
+            </button>
+
+            <p class="small-note">Questions recorded this session: ${questions.length}</p>
+            <p class="small-note">Full Q&amp;A included: ${includeTranscript ? "Yes" : "No"}</p>
+          </div>
+
+                    <div id="emailSynopsisPanel" class="hidden">
+            <p><strong>Training Synopsis</strong></p>
+            <p>Send the generated training synopsis.</p>
+
+            ${latestTrainingHtml ? `
+              <button id="sendTrainingSynopsisEmailBtn" class="report-btn" type="button" onclick="sendTrainingSynopsisEmail()">
+                Send Training Synopsis
+              </button>
+            ` : `
+              <p class="small-note">Generate the training synopsis before sending.</p>
+            `}
+          </div>
+
+          <div id="emailQuestionsPanel" class="hidden">
+            <p><strong>Training Questions</strong></p>
+            <p>Send the generated training questions.</p>
+
+            ${latestTrainingQuestionsHtml ? `
+              <button id="sendTrainingQuestionsEmailBtn" class="report-btn" type="button" onclick="sendTrainingQuestionsEmail()">
+                Send Training Questions
+              </button>
+            ` : `
+              <p class="small-note">Generate the training questions before sending.</p>
+            `}
+          </div>
+
+          <div id="emailCombinedPanel" class="hidden">
+            <p><strong>Training Questions and Answers</strong></p>
+            <p>Send the generated training questions and model answers.</p>
+
+            ${latestTrainingQaHtml ? `
+              <button id="sendTrainingQaEmailBtn" class="report-btn" type="button" onclick="sendTrainingQaEmail()">
+                Send Training Questions and Answers
+              </button>
+            ` : `
+              <p class="small-note">Generate the training questions and answers before sending.</p>
+            `}
+          </div>
+
+          <div id="emailTrainerNotesPanel" class="hidden">
+            <p><strong>Trainer Notes</strong></p>
+            <p>Send the generated trainer notes.</p>
+
+            ${latestTrainerNotesHtml ? `
+              <button id="sendTrainerNotesEmailBtn" class="report-btn" type="button" onclick="sendTrainerNotesEmail()">
+                Send Trainer Notes
+              </button>
+            ` : `
+              <p class="small-note">Generate the trainer notes before sending.</p>
+            `}
+          </div>
+        `;
+
+        return;
+      }
+
+      if (rightTab === "session") {
+        const sessionHtml = transcriptEntries.length
+          ? transcriptEntries
+              .map((entry, index) => {
+                return `
+                  <div class="qa-item">
+                    <div class="q">Q${index + 1}. ${escapeHtml(entry.question)}</div>
+                    <div class="a">${markdownToHtml(entry.answer)}</div>
+                  </div>
+                `;
+              })
+              .join("")
+          : "<p>No questions asked yet.</p>";
+
+        panel.innerHTML = `
+          <h3>Session Q&amp;A</h3>
+          <p>Review the continuing questions and answers recorded during this CIMA session.</p>
+
+          <div class="session-qa-panel on" style="display:block; max-height:none; overflow:visible;">
+            ${sessionHtml}
+          </div>
+
+          <p class="small-note">Questions recorded this session: ${questions.length}</p>
+        `;
+        return;
+      }
+
+      if (rightTab === "sources") {
+        const meta = metaState || {};
+
+        function metaValue(...keys) {
+          for (const key of keys) {
+            if (meta[key] !== undefined && meta[key] !== null && meta[key] !== "") {
+              if (meta[key] === true) return "Yes";
+              if (meta[key] === false) return "No";
+              return String(meta[key]);
+            }
+          }
+
+          return "Not returned";
+        }
+
+        const indexStatusHtml = `
+          <h3>Index Status</h3>
+          <p><strong>Backend:</strong> ${meta.ok ? "Online" : "Not confirmed"}</p>
+          <p><strong>Build:</strong> ${escapeHtml(metaValue("build_iso", "build", "version"))}</p>
+          <p><strong>PDF index:</strong> ${escapeHtml(metaValue("pdf_index_ready", "pdf_ready", "pdfIndexReady"))}</p>
+          <p><strong>HTML index:</strong> ${escapeHtml(metaValue("html_index_ready", "html_ready", "htmlIndexReady"))}</p>
+          <p><strong>PDF documents:</strong> ${escapeHtml(metaValue("pdf_document_count", "pdf_count", "pdfDocuments", "pdfs"))}</p>
+          <p><strong>HTML pages:</strong> ${escapeHtml(metaValue("html_page_count", "html_count", "htmlPages", "html"))}</p>
+          <p><strong>Total chunks:</strong> ${escapeHtml(metaValue("chunk_count", "chunks", "total_chunks"))}</p>
+          <p><strong>Last indexed:</strong> ${escapeHtml(metaValue("last_indexed_at", "lastIndexedAt", "indexed_at"))}</p>
+        `;
+
+        const sourceButtons = `
+          <div class="source-tabs">
+            <button id="sourceBtnResource" class="source-tab ${sourceClass === "resource" ? "active" : ""}" type="button" onclick="setSourceClass('resource')">Index</button>
+            <button id="sourceBtnRegister" class="source-tab ${sourceClass === "register" ? "active" : ""}" type="button" onclick="setSourceClass('register')">Source</button>
+            <button id="sourceBtnPolicy" class="source-tab ${sourceClass === "policy" ? "active" : ""}" type="button" onclick="setSourceClass('policy')">Policy</button>
+            <button id="sourceBtnInternal" class="source-tab ${sourceClass === "internal" ? "active" : ""}" type="button" onclick="setSourceClass('internal')">Playbooks</button>
+          </div>
+        `;
+
+        const sourceText = {
+          resource: [
+            "<h3>Resource Index</h3>",
+            "<p>Use first for role, command level, output and visibility matching.</p>",
+            "<ul>",
+            "<li>Persona and role matrix</li>",
+            "<li>Command-level routing</li>",
+            "<li>Output template selection</li>",
+            "</ul>"
+          ].join(""),
+          register: [
+            "<h3>Source Register</h3>",
+            "<p>Authoritative citation and weighting list for Assurance Path outputs.</p>",
+            "<ul>",
+            "<li>Canonical PDF / source URL</li>",
+            "<li>Curated mirror URL where available</li>",
+            "<li>Weighting and timestamp</li>",
+            "<li>HITL if exact source confidence fails</li>",
+            "</ul>"
+          ].join(""),
+          policy: [
+            "<h3>Policy Abstracts</h3>",
+            "<p>Primary reasoning layer for PGB / IPC policy interpretation unless exact wording is requested.</p>",
+            "<ul>",
+            "<li>Policy abstracts first</li>",
+            "<li>Underlying PDFs for exact wording</li>",
+            "<li>No historic policy import unless current source says so</li>",
+            "</ul>"
+          ].join(""),
+          internal: [
+            "<h3>Internal Playbooks</h3>",
+            "<p>Operational protocols, plans, structures, recovery arrangements and role responsibilities.</p>",
+            "<ul>",
+            "<li>Internal plans</li>",
+            "<li>Operating structures</li>",
+            "<li>Role/persona matrices</li>",
+            "<li>Audit and version records</li>",
+            "</ul>"
+          ].join("")
+        };
+
+        panel.innerHTML = indexStatusHtml + sourceButtons + (sourceText[sourceClass] || sourceText.resource);
+        return;
+      }
+      if (rightTab === "audit") {
+        panel.innerHTML = `
+          <h3>Audit / Governance Snapshot</h3>
+          <p><strong>Build:</strong> ${escapeHtml(BUILD_ISO)}</p>
+          <p><strong>Access confirmed:</strong> ${accessConfirmed ? "Yes" : "No"}</p>
+          <p><strong>Access mode:</strong> ${escapeHtml(accessMode)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(gateEmailOne || "Not supplied")}</p>
+          <p><strong>Mode:</strong> ${escapeHtml(context.mode)}</p>
+          <p><strong>Command level:</strong> ${escapeHtml(context.level)}</p>
+          <p><strong>Persona:</strong> ${escapeHtml(context.persona)}</p>
+          <p><strong>Output:</strong> ${escapeHtml(context.output)}</p>
+          <p><strong>Questions:</strong> ${questions.length}</p>
+          <p><strong>Path:</strong> ${escapeHtml(document.getElementById("pathStatus").textContent)}</p>
+          <p><strong>RAG:</strong> ${escapeHtml(latestDashboard?.rag || "Not set")}</p>
+          <p><strong>Confidence:</strong> ${escapeHtml(document.getElementById("confidenceStatus").textContent)}</p>
+
+          <p><strong>Include transcript in email:</strong> ${document.getElementById("includeTranscriptToggle")?.checked !== false ? "Yes" : "No"}</p>
+        `;
+      }
+    }
+
+    function clearReplyPlaceholder() {
+      const replyArea = document.getElementById("replyArea");
+      if (replyArea.classList.contains("reply-placeholder")) {
+        replyArea.className = "";
+        replyArea.innerHTML = "";
+      }
+    }
+
+    function addMessage(type, title, bodyHtml) {
+      clearReplyPlaceholder();
+
+      const replyArea = document.getElementById("replyArea");
+      const div = document.createElement("div");
+
+      div.className = "message " + type;
+      div.innerHTML = `<strong>${escapeHtml(title)}</strong>${bodyHtml}`;
+
+      replyArea.appendChild(div);
+      replyArea.scrollTop = replyArea.scrollHeight;
+    }
+
+    function fallbackAnswer(question, path) {
+      const context = getContext();
+
+      return [
+        "## Executive Summary",
+        path === "ASSURANCE PATH"
+          ? "This has been treated as an Assurance Path request. The production system should require Source Register evidence before presenting this as assured."
+          : "This has been treated as a Fast Path operational request. The immediate priority is to clarify facts, identify people at risk, stabilise the situation and set a next action owner.",
+        "",
+        "## Options / Controls",
+        "- Confirm known facts and assumptions.",
+        "- Identify people at immediate risk.",
+        "- Set the next action owner.",
+        "- Agree the next update time.",
+        "- Record the decision and the reason for it.",
+        "",
+        "## Risk & Safety",
+        `- Mode: ${context.mode}`,
+        `- Command level: ${context.level}`,
+        "- Do not present uncertain information as confirmed.",
+        "",
+        "## Next Steps / Information Gaps",
+        "- Confirm exact location and time.",
+        "- Confirm who is affected and current welfare status.",
+        "- Confirm whether external authorities are involved.",
+        "- Confirm whether a formal source-cited assurance response is required."
+      ].join("\n");
+    }
+
+    async function askQuestion() {
+      if (!accessConfirmed) {
+        alert("Access has not been confirmed.");
+        return;
+      }
+
+      const input = document.getElementById("questionInput");
+      const sendButton = document.getElementById("sendButton");
+      let question = input.value.trim();
+      let clarificationRunHtml = "";
+      let questionTitleOverride = "";
+      let originalQuestion = "";
+      let clarificationAnswer = "";
+      let clarificationQuestion = "";
+      let revisedQuestion = "";
+
+      if (!question) {
+        return;
+      }
+
+      if (
+        window.CimaClarification &&
+        typeof window.CimaClarification.hasActiveSession === "function" &&
+        typeof window.CimaClarification.recordAnswer === "function" &&
+        typeof window.CimaClarification.isComplete === "function" &&
+        typeof window.CimaClarification.buildCombinedQuestion === "function" &&
+        window.CimaClarification.hasActiveSession()
+      ) {
+        clarificationAnswer = question;
+        clarificationQuestion =
+          typeof window.CimaClarification.getCurrentQuestion === "function"
+            ? window.CimaClarification.getCurrentQuestion()
+            : "";
+
+        window.CimaClarification.recordAnswer(question);
+
+        if (!window.CimaClarification.isComplete()) {
+          const nextQuestion = window.CimaClarification.getCurrentQuestion();
+
+          input.value = "";
+          input.placeholder = "Answer this clarification question...";
+
+          addMessage(
+            "agent",
+            "Clarification needed",
+            `
+              <p><strong>Please answer this next clarification question:</strong></p>
+              <p>${escapeHtml(nextQuestion)}</p>
+            `
+          );
+
+          document.getElementById("lastOutput").textContent =
+            "Answer the clarification question shown in the main reply area.";
+
+          return;
+        }
+
+        const combinedQuestion = window.CimaClarification.buildCombinedQuestion();
+        const combinedText = String(combinedQuestion || "");
+
+        originalQuestion = combinedText;
+        let sessionFactBase = "";
+
+        const originalLabel = "Original question:";
+        const sessionLabel = "Session fact base:";
+        const originalStart = combinedText.indexOf(originalLabel);
+        const sessionStart = combinedText.indexOf(sessionLabel);
+
+        if (originalStart !== -1 && sessionStart !== -1 && sessionStart > originalStart) {
+          originalQuestion = combinedText
+            .slice(originalStart + originalLabel.length, sessionStart)
+            .trim();
+
+          sessionFactBase = combinedText
+            .slice(sessionStart + sessionLabel.length)
+            .trim();
+        }
+
+        const sessionLines = sessionFactBase
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const answerLines = [];
+
+        for (const line of sessionLines) {
+          const answerMatch =
+            line.match(/^answer\s*\d*\s*:\s*(.+)$/i) ||
+            line.match(/^a\s*\d*\s*:\s*(.+)$/i) ||
+            line.match(/^clarification answer\s*\d*\s*:\s*(.+)$/i);
+
+          if (answerMatch && answerMatch[1]) {
+            answerLines.push(answerMatch[1].trim());
+          }
+        }
+
+        const combinedClarificationAnswers = answerLines.length
+          ? answerLines.join(" ")
+          : sessionFactBase;
+
+        clarificationAnswer = combinedClarificationAnswers || clarificationAnswer;
+
+        revisedQuestion = [originalQuestion, combinedClarificationAnswers]
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        question = revisedQuestion;
+        questionTitleOverride = "Question 1";
+
+        clarificationRunHtml = `
+          <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+          <p>${escapeHtml(originalQuestion)}</p>
+
+          <p><strong>Clarification needed</strong></p>
+          <p>${escapeHtml(clarificationQuestion)}</p>
+
+          <p><strong>Clarification answer</strong></p>
+          <p>${escapeHtml(clarificationAnswer)}</p>
+
+          <p><strong>Revised search question sent to CIMA</strong></p>
+          <p>${escapeHtml(revisedQuestion)}</p>
+        `;
+      }
+
+      activeReplyView = "standard";
+
+      const replyArea = document.getElementById("replyArea");
+      if (replyArea) {
+        replyArea.className = "";
+        replyArea.innerHTML = "";
+      }
+
+      questions.push(question);
+
+      const predictedPath = determinePath(question);
+      const context = getContext();
+
+      document.getElementById("questionCount").textContent = String(questions.length);
+      document.getElementById("pathStatus").textContent = predictedPath;
+      document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
+      document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
+
+      document.getElementById("processStepAccess").className = "process-step active";
+      document.getElementById("processStepContext").className = "process-step active";
+      document.getElementById("processStepQuestion").className = "process-step active";
+      document.getElementById("processStepResponse").className = "process-step active";
+      document.getElementById("processStepDelivery").className = "process-step muted";
+
+      updateContextFromControls();
+
+      document.getElementById("deliveryQuestionStatus").textContent = "Submitted";
+      document.getElementById("deliveryQuestionStatus").className = "";
+
+      document.getElementById("deliveryResponseStatus").textContent = "Preparing";
+      document.getElementById("deliveryResponseStatus").className = "pending";
+
+const questionMessageTitle = questionTitleOverride || `Question ${questions.length}`;
+
+const questionMessageBody = clarificationRunHtml || `
+  <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+  <p>${escapeHtml(question)}</p>
+`;
+
+if (questionTitleOverride) {
+  addMessage(
+    "user",
+    "Question 1 - clarified",
+    `
+      <p><strong>Original question:</strong></p>
+      <p>${escapeHtml(originalQuestion)}</p>
+
+      <p><strong>Clarification answer:</strong></p>
+      <p>${escapeHtml(clarificationAnswer)}</p>
+
+      <p><strong>Final question sent to CIMA:</strong></p>
+      <p>${escapeHtml(revisedQuestion)}</p>
+    `
+  );
+} else {
+  addMessage(
+    "user",
+    questionMessageTitle,
+    questionMessageBody
+  );
+}
+    input.value = "Searching the CIMA database and preparing the response...";
+    document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
+
+      let answer = "";
+      let finalPath = predictedPath;
+      let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
+      let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
+      let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
+
+      let debugStage = "before fetch";
+      let cimaPayload = null;
+
+      try {
+        sendButton.disabled = true;
+
+        debugStage = "fetch /cima-chat";
+
+          cimaPayload = {
+          question,
+          original_question: questionTitleOverride ? question : "",
+          clarification_follow_up: Boolean(questionTitleOverride),
+          clarification_complete: Boolean(questionTitleOverride),
+          context,
+          access: {
+            mode: accessMode,
+            email: gateEmailOne
+          },
+          terms: {
+            accepted: true,
+            accepted_at: new Date().toISOString()
+          },
+          session: {
+            question_count: questions.length,
+            include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false,
+            clarification_follow_up: Boolean(questionTitleOverride),
+            clarification_complete: Boolean(questionTitleOverride)
+          }
+        };
+
+        async function postCimaChatOnce() {
+            const response = await fetch("/cima-chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(cimaPayload)
+          });
+
+          const rawText = await response.text();
+
+          try {
+            return {
+              res: response,
+              data: JSON.parse(rawText)
+            };
+          } catch (parseError) {
+            throw new Error(
+              "Could not parse /cima-chat JSON. HTTP status: " +
+              response.status +
+              ". First response text: " +
+              String(rawText || "").slice(0, 300)
+            );
+          }
+        }
+
+        let res;
+        let data;
+
+        try {
+          debugStage = "fetch /cima-chat first attempt";
+          const firstAttempt = await postCimaChatOnce();
+          res = firstAttempt.res;
+          data = firstAttempt.data;
+        } catch (firstError) {
+          debugStage = "fetch /cima-chat retry after parse failure";
+          await new Promise((resolve) => setTimeout(resolve, 700));
+          const secondAttempt = await postCimaChatOnce();
+          res = secondAttempt.res;
+          data = secondAttempt.data;
+        }
+
+        debugStage = "validate /cima-chat json";
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Backend response failed.");
+        }
+
+                if (!data.answer) {
+          throw new Error(
+            "Backend returned ok:true but no answer field. Response keys: " +
+            Object.keys(data || {}).join(", ")
+          );
+        }
+
+        answer = data.answer;
+        finalPath = data.response_path || data.path || predictedPath;
+        hitl = data.hitl || data.human_in_the_loop || hitl;
+        confidence = data.confidence || confidence;
+        rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
+
+        const answerForRagCheck = String(answer || "").toUpperCase();
+        const questionForRagCheck = String(question || "").toUpperCase();
+
+        const isLiveConfirmedRisk =
+          (
+            questionForRagCheck.includes("LIVE") ||
+            questionForRagCheck.includes("CONFIRMED") ||
+            questionForRagCheck.includes("NOW")
+          ) &&
+          (
+            questionForRagCheck.includes("DRONE") ||
+            questionForRagCheck.includes("TERRORIST") ||
+            questionForRagCheck.includes("THREAT")
+          );
+
+        if (isLiveConfirmedRisk) {
+          rag = "RED";
+        } else if (
+          answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
+          questionForRagCheck.includes("UNCONFIRMED")
+        ) {
+          rag = "AMBER";
+        }
+
+        latestSources = data.sources || [];
+
+        if (
+          window.CimaClarification &&
+          typeof window.CimaClarification.extractQuestionsFromAnswer === "function" &&
+          typeof window.CimaClarification.start === "function"
+        ) {
+          const backendClarificationQuestions = Array.isArray(data.clarification_questions)
+            ? data.clarification_questions
+            : [];
+
+          const clarificationQuestions = backendClarificationQuestions.length > 0
+            ? backendClarificationQuestions
+            : window.CimaClarification.extractQuestionsFromAnswer(answer);
+
+          const answerTextForClarification = String(answer || "").toUpperCase();
+
+          if (
+            (
+              data.pending_clarification === true ||
+              answerTextForClarification.includes("CLARIFICATION REQUIRED")
+            ) &&
+            clarificationQuestions.length > 0
+          ) {
+            window.CimaClarification.start(question, context, clarificationQuestions);
+
+            const firstClarificationQuestion =
+              typeof window.CimaClarification.getCurrentQuestion === "function"
+                ? window.CimaClarification.getCurrentQuestion()
+                : clarificationQuestions[0];
+
+            const replyArea = document.getElementById("replyArea");
+            if (replyArea) {
+              replyArea.className = "";
+              replyArea.innerHTML = "";
+            }
+
+            addMessage(
+              "agent",
+              "Clarification needed",
+              `
+                <p><strong>Please answer this clarification question:</strong></p>
+                <p>${escapeHtml(firstClarificationQuestion)}</p>
+              `
+            );
+
+            input.value = "";
+            input.placeholder = "Answer this clarification question...";
+
+            document.getElementById("deliveryResponseStatus").textContent = "Clarification needed";
+            document.getElementById("deliveryResponseStatus").className = "pending";
+
+            document.getElementById("lastOutput").textContent =
+              "Answer the clarification question shown in the main reply area.";
+
+            return;
+          }
+        }
+      } catch (error) {
+        answer = [
+          "## Backend Connection Error",
+          "",
+          "CIMA did not receive a usable response from /cima-chat.",
+          "",
+          "## Error Detail",
+          "",
+          `- Stage: ${debugStage}`,
+          `- Error name: ${error.name || "Not supplied"}`,
+          `- Error message: ${error.message || "Not supplied"}`,
+          `- Browser page URL: ${window.location.href}`,
+          `- Backend URL: https://cima-7fj2.onrender.com/cima-chat`,
+          `- Payload length: ${JSON.stringify(cimaPayload).length}`,
+          `- Browser online: ${navigator.onLine ? "Yes" : "No"}`,
+          "",
+          "## What This Means",
+          "",
+          "The browser is using the frontend error path. The backend may not have redeployed, the browser may be hitting an old service, or the frontend may not be calling the same /cima-chat route tested successfully in Render Shell.",
+          "",
+          "## Safety Note",
+          "",
+          "CIMA has not generated an operational response for this question."
+        ].join("\n");
+
+        finalPath = "BACKEND CONNECTION ERROR";
+        rag = "AMBER";
+        hitl = "Required";
+        confidence = "Backend response not received";
+
+        latestSources = [
+          {
+            title: "Frontend error",
+            note: error.message
+          }
+        ];
+      } finally {
+        sendButton.disabled = false;
+      }
+
+      const universalHitlNotice = [
+        "",
+        "## Human in the loop required before reliance",
+        "All CIMA outputs are draft support only. An authorised human lead must review the output before operational use, onward communication, escalation, de-escalation, public statement or record entry."
+      ].join("\n");
+
+      if (!String(answer || "").includes("Human in the loop required before reliance")) {
+        answer = `${answer}${universalHitlNotice}`;
+      }
+
+      latestAnswer = answer;
+
+      const trainingModeBtn = document.getElementById("trainingModeBtn");
+      if (trainingModeBtn) {
+        trainingModeBtn.disabled = false;
+      }
+
+      document.getElementById("pathStatus").textContent = finalPath;
+      document.getElementById("hitlStatus").textContent = hitl;
+      document.getElementById("confidenceStatus").textContent = confidence;
+
+      updateResponseDashboard({
+        path: finalPath,
+        rag,
+        hitl,
+        confidence,
+        answer
+      });
+
+      latestStandardHtml = `
+        ${markdownToHtml(answer)}
+      `;
+
+      document.getElementById("cimaSearchNotice")?.remove();
+
+      addMessage(
+        "agent",
+        "CIMA Assistant",
+        latestStandardHtml
+      );
+      transcriptEntries.push({
+        at: new Date().toISOString(),
+        question,
+        path: finalPath,
+        rag,
+        hitl,
+        confidence,
+        answer
+      });
+
+      document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
+
+      document.getElementById("deliveryResponseStatus").textContent = "Complete";
+      document.getElementById("deliveryResponseStatus").className = "";
+
+      const humanReviewCheck = document.getElementById("humanReviewCheck");
+      if (humanReviewCheck) {
+        humanReviewCheck.disabled = false;
+      }
+
+      input.value = "";
+
+      renderSessionQa();
+      setRightTab("thread");
+    }
+
+    function renderSessionQa() {
+      const list = document.getElementById("sessionQaList");
+
+      const sessionHtml = transcriptEntries.length
+        ? transcriptEntries
+            .map((entry, index) => {
+              return `
+                <div class="qa-item">
+                  <div class="q">Q${index + 1}. ${escapeHtml(entry.question)}</div>
+                  <div class="a">${markdownToHtml(entry.answer)}</div>
+                </div>
+              `;
+            })
+            .join("")
+        : "No questions asked yet.";
+
+      if (list) {
+        list.innerHTML = sessionHtml;
+      }
+
+      if (rightTab === "session") {
+        renderRightView();
+      }
+    }
+
+    function toggleSessionQa() {
+      const panel = document.getElementById("sessionQaPanel");
+      const button = document.getElementById("showQaButton");
+
+      if (!panel) {
+        return;
+      }
+
+      const isOpen = panel.classList.toggle("on");
+
+      if (button) {
+        button.textContent = isOpen ? "Hide Q&A" : "Show Q&A";
+      }
+
+      renderSessionQa();
+    }
+
+
+    function buildEmailTranscriptEntries() {
+      if (transcriptEntries.length < 2) {
+        return transcriptEntries;
+      }
+
+      function extractClarificationQuestion(answerText = "") {
+        const text = String(answerText || "");
+
+        const directQuestionMatch = text.match(/Is this[^?\n]*\?/i);
+        if (directQuestionMatch && directQuestionMatch[0]) {
+          return directQuestionMatch[0].trim();
+        }
+
+        const lines = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        for (const line of lines) {
+          const numberedMatch = line.match(/^\d+\.\s+(.+)$/);
+          if (numberedMatch && numberedMatch[1]) {
+            return numberedMatch[1].trim();
+          }
+
+          const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+          if (bulletMatch && bulletMatch[1] && bulletMatch[1].includes("?")) {
+            return bulletMatch[1].trim();
+          }
+
+          if (line.includes("?")) {
+            return line.trim();
+          }
+        }
+
+        return "Clarification was requested before CIMA produced the final answer.";
+      }
+
+      function extractClarificationAnswer(originalQuestion = "", revisedQuestion = "") {
+        const original = String(originalQuestion || "").trim();
+        const revised = String(revisedQuestion || "").trim();
+
+        if (original && revised.startsWith(original)) {
+          return revised.slice(original.length).trim() || "Not supplied";
+        }
+
+        return "Not supplied";
+      }
+
+      const cleaned = [];
+      let index = 0;
+
+      while (index < transcriptEntries.length) {
+        const current = transcriptEntries[index];
+        const next = transcriptEntries[index + 1];
+
+        const currentQuestion = String(current?.question || "");
+        const currentAnswer = String(current?.answer || "");
+        const nextQuestion = String(next?.question || "");
+
+        const isClarificationEntry =
+          currentAnswer.toUpperCase().includes("CLARIFICATION REQUIRED") &&
+          next &&
+          nextQuestion.startsWith(currentQuestion);
+
+        if (isClarificationEntry) {
+          const clarificationQuestion = extractClarificationQuestion(currentAnswer);
+          const clarificationAnswer = extractClarificationAnswer(currentQuestion, nextQuestion);
+
+          cleaned.push({
+            at: next.at || current.at,
+            question: [
+              "ORIGINAL QUESTION:",
+              currentQuestion || "Not supplied",
+              "",
+              "CLARIFICATION REQUESTED:",
+              clarificationQuestion,
+              "",
+              "CLARIFICATION ANSWER:",
+              clarificationAnswer,
+              "",
+              "FINAL QUESTION SENT TO CIMA:",
+              nextQuestion || "Not supplied"
+            ].join("\n"),
+            path: next.path || current.path,
+            rag: next.rag || current.rag,
+            hitl: next.hitl || current.hitl,
+            confidence: next.confidence || current.confidence,
+            answer: next.answer || ""
+          });
+
+          index += 2;
+          continue;
+        }
+
+        cleaned.push(current);
+        index += 1;
+      }
+
+      return cleaned;
+    }
+
+    async function sendTranscriptEmail() {
+      const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+      const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+      const includeTranscript = document.getElementById("includeTranscriptToggle")?.checked !== false;
+
+      const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+      if (!emails.length) {
+        document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the transcript.";
+        return;
+      }
+
+      if (!transcriptEntries.length) {
+        document.getElementById("lastOutput").textContent = "No transcript entries to send yet.";
+        return;
+      }
+
+      const button = document.getElementById("sendTranscriptBtn");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Sending...";
+      }
+
+      try {
+        const res = await fetch("/send-transcript-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+            emails,
+            subject: "PGB CIMA transcript",
+            generated_at: new Date().toISOString(),
+            include_transcript_in_email: includeTranscript,
+            context: getContext(),
+            persona: getContext().persona || "N/A",
+            questions: includeTranscript ? buildEmailTranscriptEntries() : buildEmailTranscriptEntries().map((entry) => ({
+              at: entry.at,
+              question: entry.question,
+              path: entry.path,
+              rag: entry.rag,
+              hitl: entry.hitl,
+              confidence: entry.confidence
+            }))
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Transcript email failed.");
+        }
+
+        document.getElementById("lastOutput").textContent = `Transcript sent to ${emails.join(", ")}.`;
+
+        document.getElementById("deliveryEmailStatus").textContent = "Sent";
+        document.getElementById("deliveryEmailStatus").className = "";
+
+        document.getElementById("processStepAccess").className = "process-step active";
+        document.getElementById("processStepContext").className = "process-step active";
+        document.getElementById("processStepQuestion").className = "process-step active";
+        document.getElementById("processStepResponse").className = "process-step active";
+        document.getElementById("processStepDelivery").className = "process-step active";
+      
+      } catch (error) {
+        document.getElementById("lastOutput").textContent = `Transcript email failed: ${error.message}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Send CIMA Answer";
+        }
+      }
+    }
+
+function htmlToPlainText(value = "") {
+  const div = document.createElement("div");
+  div.innerHTML = String(value || "");
+  return String(div.innerText || div.textContent || "").trim();
+}
+
+async function sendTrainingSynopsisEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the training synopsis.";
+    return;
   }
-});
 
-app.post("/cima-training", async (req, res) => {
-  const question = String(req.body.question || "").trim();
+  if (!latestTrainingHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the training synopsis before sending it.";
+    return;
+  }
 
-  const context = req.body.context && typeof req.body.context === "object"
-    ? req.body.context
-    : {};
+  const button = document.getElementById("sendTrainingSynopsisEmailBtn");
 
-  const terms = req.body.terms && typeof req.body.terms === "object"
-    ? req.body.terms
-    : {};
-
-  const access = req.body.access && typeof req.body.access === "object"
-    ? req.body.access
-    : {};
-
-  const userEmail = String(
-    access.email ||
-    req.body.email ||
-    req.body.user_email ||
-    ""
-  ).trim();
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
 
   try {
-    if (!terms.accepted) {
-      await writeAuditEvent({
-        event_type: "cima_training_rejected",
-        route: "/cima-training",
-        success: false,
-        error: "Terms and Conditions not accepted.",
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: false,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainingHtml);
 
-      return res.status(403).json({
-        ok: false,
-        error: "Terms and Conditions must be confirmed before using the training agent.",
-        build_iso: BUILD_ISO
-      });
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Training Synopsis",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Training Synopsis",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No training synopsis text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Training synopsis email failed.");
     }
 
-    if (!question) {
-      await writeAuditEvent({
-        event_type: "cima_training_rejected",
-        route: "/cima-training",
-        success: false,
-        error: "Training question required.",
-        user_email: userEmail,
-        access_mode: access.mode || "",
-        terms_accepted: true,
-        question,
-        context_mode: context.mode || "",
-        command_level: context.level || "",
-        persona: context.persona || "",
-        requested_output: context.output || "",
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
-
-      return res.status(400).json({
-        ok: false,
-        error: "Training question required.",
-        build_iso: BUILD_ISO
-      });
+    document.getElementById("lastOutput").textContent = `Training synopsis sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Training synopsis email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Training Synopsis";
     }
-
-    const trainingOutput = buildCimaTrainingOutput({
-      question,
-      answer: req.body.answer || "",
-      context
-    });
-
-    await writeAuditEvent({
-      event_type: "cima_training_generated",
-      route: "/cima-training",
-      success: true,
-      user_email: userEmail,
-      access_mode: access.mode || "",
-      terms_accepted: true,
-      question,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      training_agent_build_iso: trainingOutput.training_agent_build_iso || trainingOutput.build_iso || "",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.json({
-      ok: true,
-      build_iso: BUILD_ISO,
-      generated_at: new Date().toISOString(),
-      training_agent_build_iso: trainingOutput.training_agent_build_iso || trainingOutput.build_iso || "",
-      training: trainingOutput
-    });
-  } catch (err) {
-    console.error("ERROR /cima-training failed:", err);
-
-    await writeAuditEvent({
-      event_type: "cima_training_failed",
-      route: "/cima-training",
-      success: false,
-      error: err.message,
-      user_email: userEmail,
-      access_mode: access.mode || "",
-      terms_accepted: terms.accepted === true,
-      question,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.status(500).json({
-      ok: false,
-      error: "CIMA training route failed.",
-      detail: err.message,
-      build_iso: BUILD_ISO
-    });
-  }
-});
-
-async function handleTranscriptEmail(req, res) {
-  const generatedAt = String(req.body.generated_at || new Date().toISOString());
-
-  let emails = [];
-  let context = {};
-  let humanReview = {};
-  let questions = [];
-  let subject = "PGB CIMA transcript";
-
-  try {
-    emails = normaliseEmailList(
-      req.body.emails ||
-      [req.body.toEmail, req.body.secondEmail]
-    );
-
-    if (!emails.length) {
-      await writeAuditEvent({
-        event_type: "transcript_email_failed",
-        route: "/send-transcript-email",
-        success: false,
-        error: "At least one recipient email is required.",
-        user_email: "",
-        transcript_sent: false,
-        email_recipients: [],
-        ip_address: req.ip,
-        user_agent: req.get("user-agent")
-      });
-
-      return res.status(400).json({
-        ok: false,
-        error: "At least one recipient email is required.",
-        build_iso: BUILD_ISO
-      });
-    }
-
-    context = req.body.context && typeof req.body.context === "object"
-      ? req.body.context
-      : {};
-
-    humanReview = req.body.human_review && typeof req.body.human_review === "object"
-      ? req.body.human_review
-      : {};
-
-    questions = Array.isArray(req.body.questions)
-      ? req.body.questions
-      : [];
-
-    subject = String(req.body.subject || "PGB CIMA transcript").trim();
-
-    const transcriptPackage = await buildTranscriptPackage({
-      transcript: req.body.transcript,
-      generatedAt,
-      context,
-      humanReview,
-      questions,
-      subject
-    });
-
-    const textPart = [
-      "PGB CIMA transcript attached.",
-      "",
-      `Generated at: ${generatedAt}`,
-      "",
-      "Attached files:",
-      `- ${transcriptPackage.pdfFilename}`,
-      `- ${transcriptPackage.docxFilename}`,
-      "",
-      "This transcript is a demo operational support output and requires human review before reliance.",
-      "",
-      "AIVS Software Limited copyright 2026. All rights reserved."
-    ].join("\n");
-
-    const htmlPart = [
-      '<div style="font-family:Arial,Helvetica,sans-serif;color:#14232B;line-height:1.5;">',
-      '<h2 style="margin-bottom:4px;">PGB CIMA transcript attached</h2>',
-      `<p><strong>Generated at:</strong> ${escapeHtml(generatedAt)}</p>`,
-      "<p>The Word and PDF transcript files are attached.</p>",
-      '<p style="font-size:12px;color:#4A5F6C;">',
-      "This transcript is a demo operational support output and requires human review before reliance.",
-      "</p>",
-      '<p style="font-size:12px;color:#4A5F6C;">',
-      "AIVS Software Limited copyright 2026. All rights reserved.",
-      "</p>",
-      "</div>"
-    ].join("");
-
-    const result = await sendTranscriptEmail({
-      toEmails: emails,
-      subject,
-      bodyText: textPart,
-      htmlPart,
-      pdfBuffer: transcriptPackage.pdfBuffer,
-      pdfFilename: transcriptPackage.pdfFilename,
-      docxBuffer: transcriptPackage.docxBuffer,
-      docxFilename: transcriptPackage.docxFilename
-    });
-
-    await writeAuditEvent({
-      event_type: "transcript_email_sent",
-      route: "/send-transcript-email",
-      success: true,
-      user_email: emails[0] || "",
-      transcript_sent: true,
-      email_recipients: emails,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      human_review_confirmed: humanReview.confirmed === true,
-      human_review_confirmed_at: humanReview.confirmed_at || "",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.json({
-      ok: true,
-      build_iso: BUILD_ISO,
-      transcript_agent_build_iso: transcriptPackage.transcript_agent_build_iso,
-      sent_at: new Date().toISOString(),
-      email_sent: true,
-      provider: result.provider,
-      status: result.status,
-      to: result.to,
-      email_agent_build_iso: result.email_agent_build_iso,
-      pdfFilename: transcriptPackage.pdfFilename,
-      docxFilename: transcriptPackage.docxFilename,
-      attachment_bytes: transcriptPackage.attachment_bytes
-    });
-  } catch (err) {
-    console.error("ERROR transcript email failed:", err);
-
-    await writeAuditEvent({
-      event_type: "transcript_email_failed",
-      route: "/send-transcript-email",
-      success: false,
-      error: err.message,
-      user_email: emails[0] || "",
-      transcript_sent: false,
-      email_recipients: emails,
-      context_mode: context.mode || "",
-      command_level: context.level || "",
-      persona: context.persona || "",
-      requested_output: context.output || "",
-      human_review_confirmed: humanReview.confirmed === true,
-      human_review_confirmed_at: humanReview.confirmed_at || "",
-      ip_address: req.ip,
-      user_agent: req.get("user-agent")
-    });
-
-    return res.status(500).json({
-      ok: false,
-      error: "Transcript email failed.",
-      detail: err.message,
-      build_iso: BUILD_ISO
-    });
   }
 }
 
-app.post("/send-transcript-email", handleTranscriptEmail);
-app.post("/send-cima-transcript-email", handleTranscriptEmail);
+async function sendTrainingQuestionsEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
 
-/* -------------------------- START -------------------------- */
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the training questions.";
+    return;
+  }
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`AIVS / PGB CIMA demo backend running on port ${PORT}`);
-});
+  if (!latestTrainingQuestionsHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the training questions before sending them.";
+    return;
+  }
+
+  const button = document.getElementById("sendTrainingQuestionsEmailBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainingQuestionsHtml);
+
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Training Questions",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        transcript: outputText || "No training questions text returned.",
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Training Questions",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No training questions text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Training questions email failed.");
+    }
+
+    document.getElementById("lastOutput").textContent = `Training questions sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Training questions email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Training Questions";
+    }
+  }
+}
+
+async function sendTrainingQaEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the training questions and answers.";
+    return;
+  }
+
+  if (!latestTrainingQaHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the training questions and answers before sending them.";
+    return;
+  }
+
+  const button = document.getElementById("sendTrainingQaEmailBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainingQaHtml);
+
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Training Questions and Answers",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        transcript: outputText || "No training questions and answers text returned.",
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Training Questions and Answers",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No training questions and answers text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Training questions and answers email failed.");
+    }
+
+    document.getElementById("lastOutput").textContent = `Training questions and answers sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Training questions and answers email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Training Questions and Answers";
+    }
+  }
+}
+
+async function sendTrainerNotesEmail() {
+  const emailOne = document.getElementById("emailOne")?.value.trim() || "";
+  const emailTwo = document.getElementById("emailTwo")?.value.trim() || "";
+  const emails = [emailOne, emailTwo].filter((email) => email.includes("@"));
+
+  if (!emails.length) {
+    document.getElementById("lastOutput").textContent = "Enter at least one valid email address for the trainer notes.";
+    return;
+  }
+
+  if (!latestTrainerNotesHtml) {
+    document.getElementById("lastOutput").textContent = "Generate the trainer notes before sending them.";
+    return;
+  }
+
+  const button = document.getElementById("sendTrainerNotesEmailBtn");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const generatedAt = new Date().toISOString();
+    const context = getContext();
+    const outputText = htmlToPlainText(latestTrainerNotesHtml);
+
+    const res = await fetch("/send-transcript-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        emails,
+        subject: "PGB CIMA Trainer Notes",
+        generated_at: generatedAt,
+        include_transcript_in_email: true,
+        transcript: outputText || "No trainer notes text returned.",
+        context,
+        persona: context.persona || "N/A",
+        questions: [
+          {
+            at: generatedAt,
+            timestamp: generatedAt,
+            persona: context.persona || "N/A",
+            question: "Trainer Notes",
+            path: document.getElementById("pathStatus").textContent || "FAST PATH",
+            rag: latestDashboard?.rag || "Not set",
+            hitl: document.getElementById("hitlStatus").textContent || "Not triggered",
+            confidence: document.getElementById("confidenceStatus").textContent || "Provisional",
+            answer: outputText || "No trainer notes text returned."
+          }
+        ]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Trainer notes email failed.");
+    }
+
+    document.getElementById("lastOutput").textContent = `Trainer notes sent to ${emails.join(", ")}.`;
+  } catch (error) {
+    document.getElementById("lastOutput").textContent = `Trainer notes email failed: ${error.message}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send Trainer Notes";
+    }
+  }
+}
+
+    function clearSession() {
+      if (window.CimaClarification && typeof window.CimaClarification.reset === "function") {
+        window.CimaClarification.reset();
+      }
+
+      questions = [];
+      transcriptEntries = [];
+
+      latestAnswer = "";
+      latestStandardHtml = "";
+      latestTrainingHtml = "";
+      activeReplyView = "standard";
+
+      const trainingModeBtn = document.getElementById("trainingModeBtn");
+      if (trainingModeBtn) {
+        trainingModeBtn.disabled = true;
+      }
+
+      latestSources = [];
+      latestDashboard = null;
+
+      document.getElementById("questionInput").value = "";
+      document.getElementById("questionCount").textContent = "0";
+      document.getElementById("pathStatus").textContent = "FAST PATH";
+      document.getElementById("hitlStatus").textContent = "Not triggered";
+      document.getElementById("confidenceStatus").textContent = "Provisional";
+
+      document.getElementById("lastOutput").textContent = "CIMA session reset. Ask a question.";
+      document.getElementById("threadTitle").textContent = "CIMA Incident Thread";
+
+      document.getElementById("processStepAccess").className = "process-step active";
+      document.getElementById("processStepContext").className = "process-step active";
+      document.getElementById("processStepQuestion").className = "process-step active";
+      document.getElementById("processStepResponse").className = "process-step active";
+      document.getElementById("processStepDelivery").className = "process-step active";
+      document.getElementById("deliveryContextStatus").textContent = "Pending";
+      document.getElementById("deliveryContextStatus").className = "pending";
+
+      document.getElementById("deliveryQuestionStatus").textContent = "Not started";
+      document.getElementById("deliveryQuestionStatus").className = "not-started";
+
+      document.getElementById("deliveryResponseStatus").textContent = "Not started";
+      document.getElementById("deliveryResponseStatus").className = "not-started";
+
+      document.getElementById("deliveryEmailStatus").textContent = "Not sent";
+      document.getElementById("deliveryEmailStatus").className = "not-started";
+
+      document.getElementById("deliveryTrainingSynopsisStatus").textContent = "Not generated";
+      document.getElementById("deliveryTrainingSynopsisStatus").className = "not-started";
+
+      document.getElementById("deliveryTrainingQuestionsStatus").textContent = "Not generated";
+      document.getElementById("deliveryTrainingQuestionsStatus").className = "not-started";
+
+      document.getElementById("deliveryTrainingQaStatus").textContent = "Not generated";
+      document.getElementById("deliveryTrainingQaStatus").className = "not-started";
+      
+      document.getElementById("deliveryReviewStatus").textContent = "Required";
+      document.getElementById("deliveryReviewStatus").className = "pending";
+
+      const humanReviewCheck = document.getElementById("humanReviewCheck");
+      if (humanReviewCheck) {
+        humanReviewCheck.checked = false;
+        humanReviewCheck.disabled = true;
+      }
+
+      document.getElementById("processStepReview").className = "process-step muted";
+
+      const replyArea = document.getElementById("replyArea");
+      replyArea.className = "reply-placeholder";
+      replyArea.textContent = "Ask a question. CIMA’s response and dashboard will appear here.";
+
+      document.getElementById("responseDashboard").classList.remove("on");
+
+      document.getElementById("dashPath").textContent = "FAST PATH";
+      document.getElementById("dashRag").textContent = "Not set";
+      document.getElementById("dashRag").className = "dash-value rag-grey";
+
+      updateRagDial("AMBER");
+
+      document.getElementById("dashHitl").textContent = "Not triggered";
+      document.getElementById("dashConfidence").textContent = "Provisional";
+      document.getElementById("dashReview").textContent = "Human review";
+      document.getElementById("dashActions").innerHTML = "<strong>Top actions:</strong> Not generated yet.";
+
+      renderSessionQa();
+      updateContextFromControls();
+      renderRightView();
+    }
+
+    async function loadMeta() {
+      try {
+        const res = await fetch("/meta");
+        const data = await res.json();
+
+        metaState = data;
+
+        if (data.ok) {
+          setGateNote(
+            `Backend ready. Build: ${data.build_iso || "not returned"}. Access: ${data.access_ready ? "configured" : "not configured"}.`,
+            data.access_ready ? "good" : ""
+          );
+        }
+      } catch (error) {
+        setGateNote("Backend status unavailable. You may still use demo mode.", "bad");
+      }
+    }
+
+        function openSensitiveContextModal() {
+        const overlay = document.getElementById("sensitiveContextOverlay");
+
+        if (!overlay) {
+          return;
+        }
+
+        overlay.hidden = false;
+
+        const status = document.getElementById("sensitiveContextStatus");
+        if (status) {
+          status.textContent = "";
+        }
+      }
+
+      function closeSensitiveContextModal() {
+        const overlay = document.getElementById("sensitiveContextOverlay");
+
+        if (!overlay) {
+          return;
+        }
+
+        overlay.hidden = true;
+      }
+
+      function getSensitiveContextFieldValue(id) {
+        const el = document.getElementById(id);
+        return el ? String(el.value || "").trim() : "";
+      }
+
+      function clearSensitiveContextFields() {
+        const fieldIds = [
+          "incidentPlace",
+          "incidentTime",
+          "peopleInvolved",
+          "vulnerablePersons",
+          "injuries",
+          "emergencyServicesInvolved",
+          "securityContacts",
+          "sensitiveOperationalNotes"
+        ];
+
+        fieldIds.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.value = "";
+          }
+        });
+
+        const status = document.getElementById("sensitiveContextStatus");
+        if (status) {
+          status.textContent = "Confidential details cleared.";
+        }
+      }
+
+      async function saveSensitiveContextToJsonl() {
+        const status = document.getElementById("sensitiveContextStatus");
+        const button = document.getElementById("saveSensitiveContextBtn");
+
+        const payload = {
+          session_id: "frontend_session_" + Date.now().toString(36),
+          query_id: questions.length ? "question_" + String(questions.length) : "pre_question_context",
+          user_email: gateEmailOne || "",
+          access_mode: accessMode || "",
+          ai_processing_route: document.getElementById("aiProcessingRoute")?.value || "",
+
+          incident_place: getSensitiveContextFieldValue("incidentPlace"),
+          incident_time: getSensitiveContextFieldValue("incidentTime"),
+          people_involved: getSensitiveContextFieldValue("peopleInvolved"),
+          vulnerable_persons: getSensitiveContextFieldValue("vulnerablePersons"),
+          injuries: getSensitiveContextFieldValue("injuries"),
+          emergency_services_involved: getSensitiveContextFieldValue("emergencyServicesInvolved"),
+          security_contacts: getSensitiveContextFieldValue("securityContacts"),
+          sensitive_operational_notes: getSensitiveContextFieldValue("sensitiveOperationalNotes"),
+
+          created_from: "cima_frontend_popup"
+        };
+
+        const hasAnySensitiveDetail = [
+          payload.incident_place,
+          payload.incident_time,
+          payload.people_involved,
+          payload.vulnerable_persons,
+          payload.injuries,
+          payload.emergency_services_involved,
+          payload.security_contacts,
+          payload.sensitive_operational_notes
+        ].some((value) => String(value || "").trim());
+
+        if (!hasAnySensitiveDetail) {
+          if (status) {
+            status.textContent = "Enter at least one confidential detail before saving.";
+          }
+          return;
+        }
+
+        try {
+          if (button) {
+            button.disabled = true;
+            button.textContent = "Saving...";
+          }
+
+          if (status) {
+            status.textContent = "Saving confidential details to secure record...";
+          }
+
+          const res = await fetch("/cima-confidential-context", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Confidential context save failed.");
+          }
+
+          if (status) {
+            status.textContent = "Confidential details saved to secure record.";
+          }
+        } catch (error) {
+          if (status) {
+            status.textContent = "Save failed: " + error.message;
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "Save confidential details to secure record";
+          }
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const currentYear = Number(document.getElementById("isoTime").textContent.slice(0, 4));
+
+        document.getElementById("fromYear").max = String(currentYear);
+        document.getElementById("toYear").max = String(currentYear);
+        document.getElementById("toYear").value = String(currentYear);
+        
+        document.getElementById("toYearLabel").textContent = String(currentYear);
+        document.getElementById("evidenceRangeText").textContent =
+          document.getElementById("fromYear").value + " to " + String(currentYear);
+
+        const openSensitiveContextBtn = document.getElementById("openSensitiveContextBtn");
+        if (openSensitiveContextBtn) {
+          openSensitiveContextBtn.addEventListener("click", openSensitiveContextModal);
+        }
+
+        const closeSensitiveContextBtn = document.getElementById("closeSensitiveContextBtn");
+        if (closeSensitiveContextBtn) {
+          closeSensitiveContextBtn.addEventListener("click", closeSensitiveContextModal);
+        }
+
+        const saveSensitiveContextBtn = document.getElementById("saveSensitiveContextBtn");
+        if (saveSensitiveContextBtn) {
+          saveSensitiveContextBtn.addEventListener("click", saveSensitiveContextToJsonl);
+        }
+
+        const clearSensitiveContextBtn = document.getElementById("clearSensitiveContextBtn");
+        if (clearSensitiveContextBtn) {
+          clearSensitiveContextBtn.addEventListener("click", clearSensitiveContextFields);
+        }
+
+        const sensitiveContextOverlay = document.getElementById("sensitiveContextOverlay");
+        if (sensitiveContextOverlay) {
+          sensitiveContextOverlay.addEventListener("click", (event) => {
+            if (event.target === sensitiveContextOverlay) {
+              closeSensitiveContextModal();
+            }
+          });
+        }
+
+        loadStoredGateEmails();
+        syncGateState();
+        loadMeta();
+        updateContextFromControls();
+        setRightTab("thread");
+        renderSessionQa();
+        updateRagDial("AMBER");
+      });
+  </script>
+
+  <script src="/clarification_session_agent.js"></script>
+</body>
+</html>
