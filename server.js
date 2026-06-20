@@ -510,7 +510,11 @@ app.post("/cima-chat", async (req, res) => {
     req.body.user_email ||
     ""
   ).trim();
-
+  const sessionId = String(
+    req.body.session_id ||
+    req.body.session?.session_id ||
+    ""
+  ).trim();
   try {
     if (!terms.accepted) {
       await writeAuditEvent({
