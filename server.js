@@ -959,6 +959,7 @@ app.post("/cima-chat", async (req, res) => {
       event_type: "cima_question_submitted",
       route: "/cima-chat",
       success: true,
+      session_id: sessionId,
       user_email: userEmail,
       access_mode: access.mode || "",
       terms_accepted: true,
