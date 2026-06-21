@@ -392,7 +392,7 @@ function buildTerroristThreatResponse(input = {}) {
     "",
     sourceStatus,
     "",
-    "Approved CIMA sources should be searched before this output is treated as source-supported.",
+    "Approved CIMA sources have been searched and supplied to this agent. Human review remains required before operational reliance.",
     "External search is not authorised unless the user gives explicit permission after the approved source search is insufficient.",
     "",
     "## Suggested Approved-Source Search Plan",
