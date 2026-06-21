@@ -105,6 +105,10 @@ import {
 } from "./operational/data_centre_agent.js";
 
 import {
+  buildStadiumResponse
+} from "./operational/stadium_agent.js";
+
+import {
   registerConfidentialContextJsonlRoute
 } from "./confidential_context_jsonl_agent.js";
 
