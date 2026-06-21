@@ -56,6 +56,12 @@ const LOCATION_WORDS = [
   "public place",
   "office",
   "campus",
+  "network",
+  "system",
+  "systems",
+  "it system",
+  "it systems",
+  "cyber",
   "data centre",
   "critical infrastructure"
 ];
@@ -100,6 +106,20 @@ const SPECIALIST_TRIGGER_GROUPS = [
     ]
   },
   {
+    type: "Cyber",
+    agent: "cyber_agent",
+    words: [
+      "cyber",
+      "ransomware",
+      "malware",
+      "phishing",
+      "data breach",
+      "ddos",
+      "network attack",
+      "system compromise"
+    ]
+  },
+  {
     type: "Terrorism / hostile activity",
     agent: "terrorist_threat_agent",
     words: [
@@ -119,20 +139,6 @@ const SPECIALIST_TRIGGER_GROUPS = [
       "mtfa",
       "attack",
       "suspicious behaviour"
-    ]
-  },
-  {
-    type: "Cyber",
-    agent: "cyber_agent",
-    words: [
-      "cyber",
-      "ransomware",
-      "malware",
-      "phishing",
-      "data breach",
-      "ddos",
-      "network attack",
-      "system compromise"
     ]
   },
   {
