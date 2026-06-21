@@ -928,7 +928,7 @@ const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_a
           "resilience",
           "national infrastructure"
         ]
-    : intakeResult.specialist_trigger.agent === "data_centre_agent"
+        : intakeResult.specialist_trigger.agent === "data_centre_agent"
       ? [
           "data centre",
           "datacentre",
@@ -951,6 +951,24 @@ const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_a
           "power and cooling",
           "server infrastructure",
           "cloud infrastructure"
+        ]
+    : intakeResult.specialist_trigger.agent === "stadium_agent"
+      ? [
+          "stadium",
+          "venue",
+          "sports ground",
+          "spectator",
+          "crowd safety",
+          "crowd management",
+          "event safety",
+          "evacuation",
+          "major venue",
+          "match day",
+          "public assembly",
+          "turnstile",
+          "stewarding",
+          "safety officer",
+          "Silver command stadium"
         ]
       : [];
       if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
