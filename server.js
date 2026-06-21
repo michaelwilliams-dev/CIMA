@@ -101,6 +101,10 @@ import {
 } from "./operational/critical_infrastructure_agent.js";
 
 import {
+  buildDataCentreResponse
+} from "./operational/data_centre_agent.js";
+
+import {
   registerConfidentialContextJsonlRoute
 } from "./confidential_context_jsonl_agent.js";
 
@@ -827,18 +831,30 @@ app.post("/cima-chat", async (req, res) => {
           "security control room terrorist incident"
         ]
       : []),
-    ...(intakeResult.specialist_trigger.agent === "critical_infrastructure_agent"
-      ? [
-          "critical infrastructure incident management",
-          "CNI resilience command response",
-          "essential services disruption",
-          "critical infrastructure business continuity",
-          "critical infrastructure public safety",
-          "Silver command critical infrastructure incident",
-          "infrastructure threat communications"
-        ]
-      : [])
-  ].join(" ");
+...(intakeResult.specialist_trigger.agent === "critical_infrastructure_agent"
+  ? [
+      "critical infrastructure incident management",
+      "CNI resilience command response",
+      "essential services disruption",
+      "critical infrastructure business continuity",
+      "critical infrastructure public safety",
+      "Silver command critical infrastructure incident",
+      "infrastructure threat communications"
+    ]
+  : []),
+  ...(intakeResult.specialist_trigger.agent === "data_centre_agent"
+    ? [
+        "data centre incident management",
+        "data centre resilience command response",
+        "digital infrastructure continuity",
+        "cloud outage business continuity",
+        "critical digital infrastructure public safety",
+        "Silver command data centre incident",
+        "data centre communications incident",
+        "power cooling network data centre incident"
+      ]
+    : [])
+    ].join(" ");
 
       try {
         specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(specialistSearchQuestion, {
@@ -894,7 +910,30 @@ const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_a
           "resilience",
           "national infrastructure"
         ]
-      : [];
+      : intakeResult.specialist_trigger.agent === "data_centre_agent"
+        ? [
+            "data centre",
+            "datacentre",
+            "data center",
+            "cloud facility",
+            "server room",
+            "server hall",
+            "digital infrastructure",
+            "critical digital infrastructure",
+            "data infrastructure",
+            "colocation",
+            "hosting facility",
+            "power",
+            "cooling",
+            "network",
+            "cloud outage",
+            "service outage",
+            "business continuity",
+            "continuity",
+            "resilience",
+            "communications"
+          ]
+        : [];
 
       if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
       
@@ -978,6 +1017,17 @@ return specialistFilterTerms.some((term) => searchableText.includes(term));
           knowledgeSearch: specialistKnowledgeSearch
         });
       }
+
+      if (intakeResult.specialist_trigger.agent === "data_centre_agent") {
+        specialistResponse = buildDataCentreResponse({
+          question,
+          context,
+          intake: intakeResult,
+          knowledgeSearch: specialistKnowledgeSearch
+        });
+      }
+
+      
       
       if (specialistResponse) {
         await writeAuditEvent({
