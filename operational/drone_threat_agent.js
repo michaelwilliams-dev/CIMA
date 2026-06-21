@@ -69,7 +69,113 @@ function buildDroneThreatResponse(input = {}) {
   const question = normaliseText(input.question || input.message || input.text || "");
   const context = input.context || {};
   const triggerDecision = input.triggerDecision || input.trigger_decision || {};
-    const questionLower = question.toLowerCase();
+  const knowledgeSearch = input.knowledgeSearch && typeof input.knowledgeSearch === "object"
+    ? input.knowledgeSearch
+    : null;
+
+  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
+    ? knowledgeSearch.results
+    : [];
+
+  const approvedSourceCount = approvedSourceResults.length;
+  const questionLower = question.toLowerCase();
+
+  function extractSourceUrl(item = {}) {
+    const directUrl = safeString(item.source_url || item.url || "").trim();
+
+    if (directUrl) {
+      return directUrl;
+    }
+
+    const text = safeString(item.text || item.snippet || "");
+    const match = text.match(/SOURCE_URL:\s*([^\s]+)/i);
+
+    return match && match[1] ? match[1].trim() : "";
+  }
+
+  function extractIndexedSourceFile(item = {}) {
+    const sourceFile = safeString(item.source_file || "").trim();
+
+    if (sourceFile) {
+      return sourceFile;
+    }
+
+    const text = safeString(item.text || item.snippet || "");
+    const match = text.match(/SOURCE_FILE:\s*([^\n]+)/i);
+
+    return match && match[1] ? match[1].trim() : "Indexed source file not supplied";
+  }
+
+  function extractChunkId(item = {}) {
+    return safeString(item.chunk_id || "").trim();
+  }
+
+  function extractChunkIndex(item = {}) {
+    if (item.chunk_index !== null && item.chunk_index !== undefined) {
+      return safeString(item.chunk_index).trim();
+    }
+
+    const text = safeString(item.text || item.snippet || "");
+    const match = text.match(/CHUNK_INDEX:\s*([^\n]+)/i);
+
+    return match && match[1] ? match[1].trim() : "";
+  }
+
+  function buildApprovedSourceReviewLines(results = []) {
+    if (!Array.isArray(results) || results.length === 0) {
+      return [
+        "Approved source records returned: 0",
+        "No indexed source records were supplied to this agent."
+      ];
+    }
+
+    const lines = [
+      `Approved source records returned: ${results.length}`
+    ];
+
+    results.slice(0, 5).forEach((item, index) => {
+      const indexedFile = extractIndexedSourceFile(item);
+      const sourceUrl = extractSourceUrl(item);
+      const chunkId = extractChunkId(item);
+      const chunkIndex = extractChunkIndex(item);
+      const score = item.score;
+      const matchedTerms = Array.isArray(item.matched_terms)
+        ? item.matched_terms.filter(Boolean).map((term) => safeString(term).trim()).filter(Boolean)
+        : [];
+
+      lines.push("");
+      lines.push(`Source ${index + 1}:`);
+      lines.push(`Indexed file: ${indexedFile}`);
+
+      if (chunkId) {
+        lines.push(`Chunk ID: ${chunkId}`);
+      }
+
+      if (chunkIndex) {
+        lines.push(`Chunk index: ${chunkIndex}`);
+      }
+
+      if (typeof score === "number") {
+        lines.push(`Retrieval score: ${score}`);
+      }
+
+      if (matchedTerms.length > 0) {
+        lines.push(`Matched terms: ${matchedTerms.join(", ")}`);
+      }
+
+      if (sourceUrl) {
+        lines.push(`Source URL found in indexed chunk: ${sourceUrl}`);
+      }
+    });
+
+    return lines;
+  }
+
+  const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
+
+  const sourceStatus = knowledgeSearch
+    ? "Approved CIMA source search has been supplied to this agent for review."
+    : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const isLiveIncident = Boolean(
     input.isLiveIncident ||
@@ -191,6 +297,9 @@ function buildDroneThreatResponse(input = {}) {
     "User question",
     question || "Not supplied",
     "",
+    "Approved source review",
+    approvedSourceReviewLines.join("\n"),
+    "",
     "Immediate priorities",
     buildNumberedList(immediatePriorities),
     "",
@@ -226,7 +335,7 @@ function buildDroneThreatResponse(input = {}) {
     rag_status: isLiveIncident ? "RED" : "AMBER",
     hitl: "Required before operational reliance",
     confidence: "Provisional",
-    source_mode: "Approved CIMA source search has not yet been supplied to this agent.",
+    source_mode: sourceStatus,
     requires_human_review: true,
     requires_escalation_check: true,
     safety_notice: SAFETY_NOTICE,
@@ -246,7 +355,7 @@ function buildDroneThreatResponse(input = {}) {
       ]
     },
     answer: responseText,
-    sources: []
+    sources: approvedSourceResults
       };
     }
 
