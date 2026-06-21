@@ -109,6 +109,10 @@ import {
 } from "./operational/stadium_agent.js";
 
 import {
+  buildCyberResponse
+} from "./operational/cyber_agent.js";
+
+import {
   registerConfidentialContextJsonlRoute
 } from "./confidential_context_jsonl_agent.js";
 
@@ -871,7 +875,19 @@ app.post("/cima-chat", async (req, res) => {
         "major venue emergency response",
         "event safety crowd management"
       ]
-    : [])
+    : []),
+    ...(intakeResult.specialist_trigger.agent === "cyber_agent"
+      ? [
+          "cyber incident management",
+          "ransomware incident response",
+          "data breach command response",
+          "network compromise incident management",
+          "system compromise business continuity",
+          "phishing incident response",
+          "DDoS incident management",
+          "Silver command cyber incident"
+        ]
+      : [])
     ].join(" ");
 
       try {
@@ -969,6 +985,23 @@ const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_a
           "stewarding",
           "safety officer",
           "Silver command stadium"
+        ]
+    : intakeResult.specialist_trigger.agent === "cyber_agent"
+      ? [
+          "cyber",
+          "ransomware",
+          "malware",
+          "phishing",
+          "data breach",
+          "ddos",
+          "network attack",
+          "system compromise",
+          "incident response",
+          "business continuity",
+          "information security",
+          "security incident",
+          "network compromise",
+          "Silver command cyber"
         ]
       : [];
       if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
@@ -1072,6 +1105,15 @@ return specialistFilterTerms.some((term) => searchableText.includes(term));
         });
       }
       
+      if (intakeResult.specialist_trigger.agent === "cyber_agent") {
+        specialistResponse = buildCyberResponse({
+          question,
+          context,
+          intake: intakeResult,
+          knowledgeSearch: specialistKnowledgeSearch
+        });
+      }
+
       if (specialistResponse) {
         await writeAuditEvent({
           event_type: "cima_specialist_answer_generated",
