@@ -97,6 +97,10 @@ import {
 } from "./specialist_trigger_agent.js";
 
 import {
+  buildCriticalInfrastructureResponse
+} from "./operational/critical_infrastructure_agent.js";
+
+import {
   registerConfidentialContextJsonlRoute
 } from "./confidential_context_jsonl_agent.js";
 
