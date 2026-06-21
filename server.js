@@ -860,6 +860,9 @@ app.post("/cima-chat", async (req, res) => {
           : [];
 
       if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
+      
+        const beforeFilterCount = specialistKnowledgeSearch.results.length;
+
         specialistKnowledgeSearch = {
           ...specialistKnowledgeSearch,
           results: specialistKnowledgeSearch.results.filter((item) => {
@@ -876,6 +879,16 @@ app.post("/cima-chat", async (req, res) => {
             return specialistFilterTerms.some((term) => searchableText.includes(term));
           })
         };
+
+        console.log("SPECIALIST SOURCE FILTER:", {
+          agent: intakeResult.specialist_trigger.agent,
+          beforeFilterCount,
+          afterFilterCount: specialistKnowledgeSearch.results.length,
+          filterTerms: specialistFilterTerms,
+          firstResultFile: beforeFilterCount > 0
+            ? specialistKnowledgeSearch.results[0]?.source_file || ""
+            : ""
+        });
       }
 
       if (intakeResult.specialist_trigger.agent === "drone_agent") {
