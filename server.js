@@ -804,30 +804,41 @@ app.post("/cima-chat", async (req, res) => {
       let specialistResponse = null;
       let specialistKnowledgeSearch = null;
 
-      const specialistSearchQuestion = [
-        question,
-        ...(intakeResult.specialist_trigger.agent === "drone_agent"
-          ? [
-              "drone sighting venue response",
-              "unmanned aircraft public venue",
-              "hostile reconnaissance drone",
-              "Silver command drone incident",
-              "event control drone report",
-              "public safety drone incident"
-            ]
-          : []),
-        ...(intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
-          ? [
-              "terrorism public venue incident management",
-              "hostile activity command response",
-              "marauding terrorist attack protective security",
-              "hostile reconnaissance public venue",
-              "Silver command terrorism incident",
-              "public safety hostile activity",
-              "security control room terrorist incident"
-            ]
-          : [])
-      ].join(" ");
+    const specialistSearchQuestion = [
+    question,
+    ...(intakeResult.specialist_trigger.agent === "drone_agent"
+      ? [
+          "drone sighting venue response",
+          "unmanned aircraft public venue",
+          "hostile reconnaissance drone",
+          "Silver command drone incident",
+          "event control drone report",
+          "public safety drone incident"
+        ]
+      : []),
+    ...(intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
+      ? [
+          "terrorism public venue incident management",
+          "hostile activity command response",
+          "marauding terrorist attack protective security",
+          "hostile reconnaissance public venue",
+          "Silver command terrorism incident",
+          "public safety hostile activity",
+          "security control room terrorist incident"
+        ]
+      : []),
+    ...(intakeResult.specialist_trigger.agent === "critical_infrastructure_agent"
+      ? [
+          "critical infrastructure incident management",
+          "CNI resilience command response",
+          "essential services disruption",
+          "critical infrastructure business continuity",
+          "critical infrastructure public safety",
+          "Silver command critical infrastructure incident",
+          "infrastructure threat communications"
+        ]
+      : [])
+  ].join(" ");
 
       try {
         specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(specialistSearchQuestion, {
@@ -895,6 +906,7 @@ app.post("/cima-chat", async (req, res) => {
         });
       }
 
+     
       if (intakeResult.specialist_trigger.agent === "drone_agent") {
         const {
           buildDroneThreatResponse
@@ -907,6 +919,7 @@ app.post("/cima-chat", async (req, res) => {
           knowledgeSearch: specialistKnowledgeSearch
         });
       }
+
       if (intakeResult.specialist_trigger.agent === "terrorist_threat_agent") {
         const {
           buildTerroristThreatResponse
@@ -920,6 +933,15 @@ app.post("/cima-chat", async (req, res) => {
         });
       }
 
+      if (intakeResult.specialist_trigger.agent === "critical_infrastructure_agent") {
+        specialistResponse = buildCriticalInfrastructureResponse({
+          question,
+          context,
+          intake: intakeResult,
+          knowledgeSearch: specialistKnowledgeSearch
+        });
+      }
+      
       if (specialistResponse) {
         await writeAuditEvent({
           event_type: "cima_specialist_answer_generated",
