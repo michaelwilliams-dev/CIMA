@@ -268,7 +268,12 @@ function buildSourcesFromKnowledgeSearch(knowledgeSearch = null) {
 
 function appendSourceEvidenceToAnswer(answer = "", sources = []) {
   if (!Array.isArray(sources) || sources.length === 0) {
-    return answer;
+    return [
+      answer,
+      "",
+      "## Evidence Basis",
+      "No indexed source records were returned for this response. This answer is based on the CIMA response agent structure, the user question, the selected context and the current session payload only. It must still be reviewed by an authorised human before reliance."
+    ].join("\n");
   }
 
   function extractUrl(text = "") {
@@ -276,11 +281,9 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     return match ? match[1].trim() : "";
   }
 
-  function normaliseUrl(url = "") {
-    return String(url || "")
-      .replace(/^https?:\/\//i, "")
-      .replace(/^www\./i, "")
-      .replace(/\/$/, "")
+  function cleanText(value = "") {
+    return String(value || "")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -312,30 +315,19 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     return blockedExtensions.some((extension) => combined.includes(extension));
   }
 
-  function cleanSourceTitle(source = {}, url = "") {
-    const rawFile = String(source.source_file || source.title || "").trim();
+  function getIndexedFileName(source = {}) {
+    const sourceFile = cleanText(source.source_file);
+    const title = cleanText(source.title);
 
-    if (url.includes("npsa.gov.uk")) {
-      return "NPSA terrorist incident response guidance";
+    if (sourceFile) {
+      return sourceFile;
     }
 
-    if (url.includes("gov.uk")) {
-      return "GOV.UK vulnerable people in emergencies guidance";
+    if (title && !title.toLowerCase().startsWith("retrieved source")) {
+      return title;
     }
 
-    if (url.includes("ukresilienceacademy.org")) {
-      return "UK Resilience Academy material";
-    }
-
-    if (!rawFile) {
-      return "Retrieved CIMA document";
-    }
-
-    const fileName = rawFile.split("/").pop() || rawFile;
-    return fileName
-      .replace(/_/g, " ")
-      .replace(/\.txt$/i, "")
-      .trim();
+    return "Indexed source file name not supplied";
   }
 
   const seen = new Set();
@@ -348,18 +340,30 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       continue;
     }
 
-    const key = normaliseUrl(url) || source.source_file || source.chunk_id || "";
+    const indexedFile = getIndexedFileName(source);
+    const chunkId = cleanText(source.chunk_id);
+    const score = source.score;
+    const matchedTerms = Array.isArray(source.matched_terms)
+      ? source.matched_terms.filter(Boolean).map(cleanText).filter(Boolean)
+      : [];
 
-    if (key && seen.has(key)) {
+    const key = [
+      indexedFile,
+      chunkId,
+      url
+    ].join("|");
+
+    if (seen.has(key)) {
       continue;
     }
 
-    if (key) {
-      seen.add(key);
-    }
+    seen.add(key);
 
     cleanSources.push({
-      title: cleanSourceTitle(source, url),
+      indexed_file: indexedFile,
+      chunk_id: chunkId,
+      score,
+      matched_terms: matchedTerms,
       url
     });
 
@@ -369,23 +373,40 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
   }
 
   if (cleanSources.length === 0) {
-    return answer;
+    return [
+      answer,
+      "",
+      "## Evidence Basis",
+      "No usable indexed source records were returned for this response after filtering out non-document assets. This answer is based on the CIMA response agent structure, the user question, the selected context and the current session payload only. It must still be reviewed by an authorised human before reliance."
+    ].join("\n");
   }
 
   const sourceSections = [];
 
   sourceSections.push("");
-  sourceSections.push("## Documents Referenced");
+  sourceSections.push("## Indexed Evidence Returned for Review");
   sourceSections.push(
-    "CIMA identified the following documents as supporting material from the indexed knowledge base. These references are provided for human review."
+    "CIMA returned the following indexed evidence records from the knowledge store. This section is generated from retrieval metadata only. It does not rename, summarise or infer document titles from public website domains. The records must be checked by an authorised human before operational, legal, public or assurance use."
   );
 
   cleanSources.forEach((source, index) => {
     sourceSections.push("");
-    sourceSections.push(`- ${index + 1}. ${source.title}`);
+    sourceSections.push(`- ${index + 1}. Indexed file: ${source.indexed_file}`);
+
+    if (source.chunk_id) {
+      sourceSections.push(`  Chunk ID: ${source.chunk_id}`);
+    }
+
+    if (typeof source.score === "number") {
+      sourceSections.push(`  Retrieval score: ${source.score}`);
+    }
+
+    if (source.matched_terms.length > 0) {
+      sourceSections.push(`  Matched terms: ${source.matched_terms.join(", ")}`);
+    }
 
     if (source.url) {
-      sourceSections.push(`  Public source: ${source.url}`);
+      sourceSections.push(`  Source URL found in indexed chunk: ${source.url}`);
     }
   });
 
