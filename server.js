@@ -843,6 +843,7 @@ app.post("/cima-chat", async (req, res) => {
     ]
   : []),
   ...(intakeResult.specialist_trigger.agent === "data_centre_agent"
+
     ? [
         "data centre incident management",
         "data centre resilience command response",
@@ -853,6 +854,7 @@ app.post("/cima-chat", async (req, res) => {
         "data centre communications incident",
         "power cooling network data centre incident"
       ]
+
     : [])
     ].join(" ");
 
