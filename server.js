@@ -910,31 +910,31 @@ const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_a
           "resilience",
           "national infrastructure"
         ]
-      : intakeResult.specialist_trigger.agent === "data_centre_agent"
-        ? [
-            "data centre",
-            "datacentre",
-            "data center",
-            "cloud facility",
-            "server room",
-            "server hall",
-            "digital infrastructure",
-            "critical digital infrastructure",
-            "data infrastructure",
-            "colocation",
-            "hosting facility",
-            "power",
-            "cooling",
-            "network",
-            "cloud outage",
-            "service outage",
-            "business continuity",
-            "continuity",
-            "resilience",
-            "communications"
-          ]
-        : [];
-
+    : intakeResult.specialist_trigger.agent === "data_centre_agent"
+      ? [
+          "data centre",
+          "datacentre",
+          "data center",
+          "cloud facility",
+          "server room",
+          "server hall",
+          "digital infrastructure",
+          "critical digital infrastructure",
+          "data infrastructure",
+          "colocation",
+          "hosting facility",
+          "cloud outage",
+          "data centre incident",
+          "data centre resilience",
+          "data centre continuity",
+          "data centre communications",
+          "data centre power",
+          "data centre cooling",
+          "power and cooling",
+          "server infrastructure",
+          "cloud infrastructure"
+        ]
+      : [];
       if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
       
         const beforeFilterCount = specialistKnowledgeSearch.results.length;
