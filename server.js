@@ -846,7 +846,7 @@ app.post("/cima-chat", async (req, res) => {
       "infrastructure threat communications"
     ]
   : []),
-  ...(intakeResult.specialist_trigger.agent === "data_centre_agent"
+   ...(intakeResult.specialist_trigger.agent === "data_centre_agent"
 
     ? [
         "data centre incident management",
@@ -859,6 +859,18 @@ app.post("/cima-chat", async (req, res) => {
         "power cooling network data centre incident"
       ]
 
+    : []),
+  ...(intakeResult.specialist_trigger.agent === "stadium_agent"
+    ? [
+        "stadium incident management",
+        "venue evacuation command response",
+        "crowd safety stadium incident",
+        "sports ground safety incident",
+        "spectator safety command",
+        "Silver command stadium incident",
+        "major venue emergency response",
+        "event safety crowd management"
+      ]
     : [])
     ].join(" ");
 
