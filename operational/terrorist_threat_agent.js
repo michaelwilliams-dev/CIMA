@@ -186,7 +186,7 @@ function buildTerroristThreatResponse(input = {}) {
     : [];
 
   const approvedSourceCount = approvedSourceResults.length;
-  const firstApprovedSource = approvedSourceResults[0] || null;
+
 
   function extractSourceUrl(item = {}) {
     const directUrl = safeString(item.source_url || item.url || "").trim();
@@ -201,31 +201,85 @@ function buildTerroristThreatResponse(input = {}) {
     return match && match[1] ? match[1].trim() : "";
   }
 
-  function extractSourceLabel(item = {}) {
-    const title = safeString(item.source_title || item.title || "").trim();
-
-    if (title) {
-      return title;
-    }
-
-    const sourceUrl = extractSourceUrl(item);
-
-    if (sourceUrl) {
-      return sourceUrl;
-    }
-
+  function extractIndexedSourceFile(item = {}) {
     const sourceFile = safeString(item.source_file || "").trim();
 
     if (sourceFile) {
-      return sourceFile.split("/").pop();
+      return sourceFile;
     }
 
-    return "Not supplied";
+    const text = safeString(item.text || item.snippet || "");
+    const match = text.match(/SOURCE_FILE:\s*([^\n]+)/i);
+
+    return match && match[1] ? match[1].trim() : "Indexed source file not supplied";
   }
 
-  const primarySource = firstApprovedSource
-    ? extractSourceLabel(firstApprovedSource)
-    : "None retained after specialist filtering";
+  function extractChunkId(item = {}) {
+    return safeString(item.chunk_id || "").trim();
+  }
+
+  function extractChunkIndex(item = {}) {
+    if (item.chunk_index !== null && item.chunk_index !== undefined) {
+      return safeString(item.chunk_index).trim();
+    }
+
+    const text = safeString(item.text || item.snippet || "");
+    const match = text.match(/CHUNK_INDEX:\s*([^\n]+)/i);
+
+    return match && match[1] ? match[1].trim() : "";
+  }
+
+  function buildApprovedSourceReviewLines(results = []) {
+    if (!Array.isArray(results) || results.length === 0) {
+      return [
+        "Approved source records returned: 0",
+        "No indexed source records were retained after specialist filtering."
+      ];
+    }
+
+    const lines = [
+      `Approved source records returned: ${results.length}`
+    ];
+
+    results.slice(0, 5).forEach((item, index) => {
+      const indexedFile = extractIndexedSourceFile(item);
+      const sourceUrl = extractSourceUrl(item);
+      const chunkId = extractChunkId(item);
+      const chunkIndex = extractChunkIndex(item);
+      const score = item.score;
+      const matchedTerms = Array.isArray(item.matched_terms)
+        ? item.matched_terms.filter(Boolean).map((term) => safeString(term).trim()).filter(Boolean)
+        : [];
+
+      lines.push("");
+      lines.push(`Source ${index + 1}:`);
+      lines.push(`Indexed file: ${indexedFile}`);
+
+      if (chunkId) {
+        lines.push(`Chunk ID: ${chunkId}`);
+      }
+
+      if (chunkIndex) {
+        lines.push(`Chunk index: ${chunkIndex}`);
+      }
+
+      if (typeof score === "number") {
+        lines.push(`Retrieval score: ${score}`);
+      }
+
+      if (matchedTerms.length > 0) {
+        lines.push(`Matched terms: ${matchedTerms.join(", ")}`);
+      }
+
+      if (sourceUrl) {
+        lines.push(`Source URL found in indexed chunk: ${sourceUrl}`);
+      }
+    });
+
+    return lines;
+  }
+
+  const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
 
   const sourceSupportStatus = !knowledgeSearch
     ? "No approved CIMA source search was supplied to this agent."
@@ -300,8 +354,8 @@ function buildTerroristThreatResponse(input = {}) {
     "",
     "## Approved Source Review",
     "",
-    `Approved sources reviewed: ${approvedSourceCount}`,
-    `Primary source: ${primarySource}`,
+    ...approvedSourceReviewLines,
+    "",
     `Source support status: ${sourceSupportStatus}`,
     "External search used: No",
     "",
