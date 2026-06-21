@@ -853,26 +853,48 @@ app.post("/cima-chat", async (req, res) => {
         };
       }
 
-      const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_agent"
-        ? [
-            "drone",
-            "uav",
-            "unmanned",
-            "uas",
-            "remotely piloted",
-            "hostile reconnaissance"
-          ]
-        : intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
-          ? [
-              "terror",
-              "terrorist",
-              "hostile activity",
-              "marauding",
-              "attack",
-              "protective security",
-              "security control room"
-            ]
-          : [];
+const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_agent"
+  ? [
+      "drone",
+      "uav",
+      "unmanned",
+      "uas",
+      "remotely piloted",
+      "hostile reconnaissance"
+    ]
+  : intakeResult.specialist_trigger.agent === "terrorist_threat_agent"
+    ? [
+        "terror",
+        "terrorist",
+        "hostile activity",
+        "marauding",
+        "attack",
+        "protective security",
+        "security control room"
+      ]
+    : intakeResult.specialist_trigger.agent === "critical_infrastructure_agent"
+      ? [
+          "critical infrastructure",
+          "critical national infrastructure",
+          "cni",
+          "essential services",
+          "essential service",
+          "power",
+          "substation",
+          "electricity",
+          "energy",
+          "water",
+          "telecom",
+          "communications",
+          "data infrastructure",
+          "emergency incident management",
+          "incident management",
+          "business continuity",
+          "continuity",
+          "resilience",
+          "national infrastructure"
+        ]
+      : [];
 
       if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
       
@@ -891,7 +913,22 @@ app.post("/cima-chat", async (req, res) => {
               item.title
             ].join(" ").toLowerCase();
 
-            return specialistFilterTerms.some((term) => searchableText.includes(term));
+const sourceFileText = String(item.source_file || "").toLowerCase();
+const sourceUrlText = String(item.source_url || item.url || item.snippet || "").toLowerCase();
+
+const isCssOrBundleFile =
+  sourceFileText.includes(".css") ||
+  sourceUrlText.includes(".css") ||
+  sourceFileText.includes("main_bundle_css") ||
+  sourceUrlText.includes("main_bundle_css") ||
+  sourceFileText.includes("bundle.css") ||
+  sourceUrlText.includes("bundle.css");
+
+if (isCssOrBundleFile) {
+  return false;
+}
+
+return specialistFilterTerms.some((term) => searchableText.includes(term));
           })
         };
 
