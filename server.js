@@ -827,8 +827,8 @@ app.post("/cima-chat", async (req, res) => {
 
       try {
         specialistKnowledgeSearch = await searchFaissKnowledgeByKeyword(specialistSearchQuestion, {
-          maxResults: 3,
-          maxLines: 1000
+          maxResults: 10,
+          maxLines: 5000
         });
       } catch (searchErr) {
         specialistKnowledgeSearch = {
