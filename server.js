@@ -1063,7 +1063,14 @@ return specialistFilterTerms.some((term) => searchableText.includes(term));
         });
       }
 
-      
+            if (intakeResult.specialist_trigger.agent === "stadium_agent") {
+        specialistResponse = buildStadiumResponse({
+          question,
+          context,
+          intake: intakeResult,
+          knowledgeSearch: specialistKnowledgeSearch
+        });
+      }
       
       if (specialistResponse) {
         await writeAuditEvent({
