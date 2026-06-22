@@ -1004,53 +1004,15 @@ const specialistFilterTerms = intakeResult.specialist_trigger.agent === "drone_a
           "Silver command cyber"
         ]
       : [];
-      if (Array.isArray(specialistKnowledgeSearch?.results) && specialistFilterTerms.length) {
-      
-        const beforeFilterCount = specialistKnowledgeSearch.results.length;
+      if (Array.isArray(specialistKnowledgeSearch?.results)) {
+        const sourceResultCount = specialistKnowledgeSearch.results.length;
 
-        specialistKnowledgeSearch = {
-          ...specialistKnowledgeSearch,
-          results: specialistKnowledgeSearch.results.filter((item) => {
-            const searchableText = [
-              item.text,
-              item.snippet,
-              item.source_file,
-              item.source_type,
-              item.source_collection,
-              item.source_title,
-              item.title
-            ].join(" ").toLowerCase();
-
-const sourceFileText = String(item.source_file || "").toLowerCase();
-const sourceUrlText = String(item.source_url || item.url || item.snippet || "").toLowerCase();
-
-const isCssOrBundleFile =
-  sourceFileText.includes(".css") ||
-  sourceUrlText.includes(".css") ||
-  sourceFileText.includes("main_bundle_css") ||
-  sourceUrlText.includes("main_bundle_css") ||
-  sourceFileText.includes("bundle.css") ||
-  sourceUrlText.includes("bundle.css");
-
-if (isCssOrBundleFile) {
-  return false;
-}
-
-return specialistFilterTerms.some((term) => searchableText.includes(term));
-          })
-        };
-
-        console.log("SPECIALIST SOURCE FILTER:", {
+        console.log("SPECIALIST SOURCE FILTER BYPASSED:", {
           agent: intakeResult.specialist_trigger.agent,
-          beforeFilterCount,
-          afterFilterCount: specialistKnowledgeSearch.results.length,
-          filterTerms: specialistFilterTerms,
-          firstResultFile: beforeFilterCount > 0
-            ? specialistKnowledgeSearch.results[0]?.source_file || ""
-            : ""
+          sourceResultCount,
+          reason: "Emergency rollback: keep all approved retrieved source records for specialist agents."
         });
       }
-
      
       if (intakeResult.specialist_trigger.agent === "drone_agent") {
         const {
