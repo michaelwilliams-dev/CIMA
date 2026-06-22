@@ -1,12 +1,18 @@
 /**
  * AIVS / PGB CIMA - Cyber Agent
  * File: operational/cyber_agent.js
- * ISO Timestamp: 2026-06-21T08:00:00+01:00
+ * ISO Timestamp: 2026-06-22T11:45:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for cyber incident, digital disruption and information-security questions.
  * - Supports incident management, command, escalation, continuity, communications, training and audit.
  * - Works after question_intake_agent.js or specialist routing has identified a cyber trigger.
+ *
+ * Change Log:
+ * - v0.1.0: existing cyber specialist response agent.
+ * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
+ * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
+ * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -23,7 +29,7 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const CYBER_AGENT_BUILD_ISO = "2026-06-21T08:00:00+01:00";
+const CYBER_AGENT_BUILD_ISO = "2026-06-22T11:45:00+01:00";
 
 const CYBER_AGENT_NAME = "cyber_agent";
 
@@ -190,6 +196,30 @@ function buildCyberSearchPlan(input = {}) {
   };
 }
 
+function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
+  if (knowledgeSearch && Array.isArray(knowledgeSearch.results)) {
+    return knowledgeSearch.results;
+  }
+
+  if (Array.isArray(input.sources)) {
+    return input.sources;
+  }
+
+  if (Array.isArray(input.approvedSources)) {
+    return input.approvedSources;
+  }
+
+  if (Array.isArray(input.sourceRecords)) {
+    return input.sourceRecords;
+  }
+
+  if (Array.isArray(input.retrievalResults)) {
+    return input.retrievalResults;
+  }
+
+  return [];
+}
+
 function buildCyberResponse(input = {}) {
   const question = safeString(input.question || "");
   const context = input.context && typeof input.context === "object"
@@ -204,10 +234,7 @@ function buildCyberResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
-  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
-    ? knowledgeSearch.results
-    : [];
-
+  const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
   function extractSourceUrl(item = {}) {
@@ -255,7 +282,7 @@ function buildCyberResponse(input = {}) {
     if (!Array.isArray(results) || results.length === 0) {
       return [
         "Approved source records returned: 0",
-        "No indexed source records were retained after specialist filtering."
+        "No indexed source records were supplied to this specialist agent."
       ];
     }
 
@@ -303,11 +330,11 @@ function buildCyberResponse(input = {}) {
 
   const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
 
-  const sourceSupportStatus = !knowledgeSearch
-    ? "No approved CIMA source search was supplied to this agent."
+  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
+    ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
       ? "Source-supported for defensive cyber incident management, command, continuity or training context only. Human review remains required."
-      : "No relevant approved source was retained after specialist filtering. The answer remains provisional and should not be treated as source-supported.";
+      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
 
   const hasCyberTerm = hasAnyTerm(question, CYBER_TRIGGER_TERMS);
 
@@ -346,8 +373,8 @@ function buildCyberResponse(input = {}) {
     intake
   });
 
-  const sourceStatus = knowledgeSearch
-    ? "Approved CIMA source search has been supplied to this agent for review."
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const answer = [
@@ -373,13 +400,6 @@ function buildCyberResponse(input = {}) {
         ? "A cyber incident or digital disruption term has been detected. CIMA should treat this as a specialist defensive-support training question subject to human review."
         : "A cyber incident or digital disruption term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
       : "No cyber incident or digital disruption term was detected in the supplied question. Review whether this agent has been called correctly.",
-    "",
-    "## Approved Source Review",
-    "",
-    ...approvedSourceReviewLines,
-    "",
-    `Source support status: ${sourceSupportStatus}`,
-    "External search used: No",
     "",
     "## Known Evidence",
     "",
@@ -432,6 +452,13 @@ function buildCyberResponse(input = {}) {
     "- It should test whether the decision log records time, source, uncertainty, action owner and review point.",
     "- It should test whether communications remain controlled, factual and non-speculative.",
     "- It should test whether escalation thresholds are recognised without giving unsafe technical detail.",
+    "",
+    "## Approved Source Review",
+    "",
+    ...approvedSourceReviewLines,
+    "",
+    `Source support status: ${sourceSupportStatus}`,
+    "External search used: No",
     "",
     "## Audit Record",
     "",
