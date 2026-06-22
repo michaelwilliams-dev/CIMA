@@ -295,21 +295,7 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       source.snippet
     ].join(" ").toLowerCase();
 
-    const blockedTerms = [
-      "accessibility",
-      "accessibility_statement",
-      "privacy",
-      "privacy_notice",
-      "cookie",
-      "cookies",
-      "terms",
-      "terms_of_use",
-      "contact",
-      "about_npsa",
-      "about-us",
-      "about_us",
-      "sitemap"
-    ];
+
 
     const blockedExtensions = [
       ".css",
@@ -328,10 +314,7 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       ".map"
     ];
 
-    return (
-      blockedTerms.some((term) => combined.includes(term)) ||
-      blockedExtensions.some((extension) => combined.includes(extension))
-    );
+    return blockedExtensions.some((extension) => combined.includes(extension));
   }
 
   const seen = new Set();
@@ -379,13 +362,13 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     );
   } else {
     sourceStatus.push(
-      "Approved sources were checked, but no usable operational source record remained after filtering out non-operational material."
+      "Approved sources were checked, but no usable indexed source record remained after filtering out technical website asset records."
     );
   }
 
   if (excludedSources.length > 0) {
     sourceStatus.push(
-      `${excludedSources.length} non-operational source record${excludedSources.length === 1 ? " was" : "s were"} excluded from reliance because it appeared to relate to website, accessibility, privacy, contact, asset or other non-operational material.`
+    `${excludedSources.length} technical asset source record${excludedSources.length === 1 ? " was" : "s were"} excluded from reliance because it appeared to relate to website files such as scripts, images, fonts or style assets.`
     );
   }
 
