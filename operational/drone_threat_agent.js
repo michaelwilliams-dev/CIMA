@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Drone Threat Agent
  * File: drone_threat_agent.js
- * ISO Timestamp: 2026-06-14T06:55:00+01:00
+ * ISO Timestamp: 2026-06-22T11:55:00+01:00
  *
  * Purpose:
  * - Builds defensive CIMA support responses for drone-related incidents, exercises and training prompts.
@@ -10,6 +10,8 @@
  *
  * Change Log:
  * - v0.1.0: created standalone drone threat response agent.
+ * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
+ * - v0.1.1: moved Approved source review to the bottom immediately before Audit record.
  *
  * ISO Control Notes:
  * - This agent must provide defensive incident-management support only.
@@ -20,7 +22,7 @@
  * - All outputs remain subject to human review and local emergency procedures.
  */
 
-const DRONE_THREAT_AGENT_BUILD_ISO = "2026-06-14T06:55:00+01:00";
+const DRONE_THREAT_AGENT_BUILD_ISO = "2026-06-22T11:55:00+01:00";
 
 const SAFETY_NOTICE =
   "CIMA can provide defensive incident-management, command, escalation, communications, training and audit support only. It must not provide attack methods, evasion advice, weaponisation advice, targeting advice or instructions that could assist hostile activity.";
@@ -65,6 +67,30 @@ function buildNumberedList(items = []) {
     .join("\n");
 }
 
+function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
+  if (knowledgeSearch && Array.isArray(knowledgeSearch.results)) {
+    return knowledgeSearch.results;
+  }
+
+  if (Array.isArray(input.sources)) {
+    return input.sources;
+  }
+
+  if (Array.isArray(input.approvedSources)) {
+    return input.approvedSources;
+  }
+
+  if (Array.isArray(input.sourceRecords)) {
+    return input.sourceRecords;
+  }
+
+  if (Array.isArray(input.retrievalResults)) {
+    return input.retrievalResults;
+  }
+
+  return [];
+}
+
 function buildDroneThreatResponse(input = {}) {
   const question = normaliseText(input.question || input.message || input.text || "");
   const context = input.context || {};
@@ -73,10 +99,7 @@ function buildDroneThreatResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
-  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
-    ? knowledgeSearch.results
-    : [];
-
+  const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
   const questionLower = question.toLowerCase();
 
@@ -173,8 +196,8 @@ function buildDroneThreatResponse(input = {}) {
 
   const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
 
-  const sourceStatus = knowledgeSearch
-    ? "Approved CIMA source search has been supplied to this agent for review."
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const isLiveIncident = Boolean(
@@ -190,7 +213,7 @@ function buildDroneThreatResponse(input = {}) {
     questionLower.includes("ongoing") ||
     questionLower.includes("now")
   );
-  
+
   const isClearTrainingExercise =
     !isLiveIncident &&
     (
@@ -297,9 +320,6 @@ function buildDroneThreatResponse(input = {}) {
     "User question",
     question || "Not supplied",
     "",
-    "Approved source review",
-    approvedSourceReviewLines.join("\n"),
-    "",
     "Immediate priorities",
     buildNumberedList(immediatePriorities),
     "",
@@ -321,11 +341,24 @@ function buildDroneThreatResponse(input = {}) {
     "Human review and escalation flags",
     buildNumberedList(humanReviewFlags),
     "",
+    "Source status",
+    sourceStatus,
+    "",
+    "Approved source review",
+    approvedSourceReviewLines.join("\n"),
+    "",
+    "Audit record",
+    `Agent: drone_threat_agent`,
+    `Build ISO: ${DRONE_THREAT_AGENT_BUILD_ISO}`,
+    "External search used: No",
+    "FAISS searched directly by this agent: No",
+    "Human review required: Yes",
+    "",
     "Safety boundary",
     SAFETY_NOTICE
   ]);
 
- return {
+  return {
     ok: true,
     agent: "drone_threat_agent",
     build_iso: DRONE_THREAT_AGENT_BUILD_ISO,
@@ -356,10 +389,10 @@ function buildDroneThreatResponse(input = {}) {
     },
     answer: responseText,
     sources: approvedSourceResults
-      };
-    }
+  };
+}
 
-    function getDroneThreatAgentStatus() {
+function getDroneThreatAgentStatus() {
   return {
     ok: true,
     agent: "drone_threat_agent",
