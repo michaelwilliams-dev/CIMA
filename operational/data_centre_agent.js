@@ -1,12 +1,18 @@
 /**
  * AIVS / PGB CIMA - Data Centre Agent
  * File: operational/data_centre_agent.js
- * ISO Timestamp: 2026-06-21T07:50:00+01:00
+ * ISO Timestamp: 2026-06-22T11:35:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for data centre, cloud facility and digital infrastructure questions.
  * - Supports incident management, command, escalation, continuity, communications, training and audit.
  * - Works after question_intake_agent.js or specialist routing has identified a data centre trigger.
+ *
+ * Change Log:
+ * - v0.1.0: existing data centre specialist response agent.
+ * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
+ * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
+ * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -22,7 +28,7 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const DATA_CENTRE_AGENT_BUILD_ISO = "2026-06-21T07:50:00+01:00";
+const DATA_CENTRE_AGENT_BUILD_ISO = "2026-06-22T11:35:00+01:00";
 
 const DATA_CENTRE_AGENT_NAME = "data_centre_agent";
 
@@ -182,6 +188,30 @@ function buildDataCentreSearchPlan(input = {}) {
   };
 }
 
+function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
+  if (knowledgeSearch && Array.isArray(knowledgeSearch.results)) {
+    return knowledgeSearch.results;
+  }
+
+  if (Array.isArray(input.sources)) {
+    return input.sources;
+  }
+
+  if (Array.isArray(input.approvedSources)) {
+    return input.approvedSources;
+  }
+
+  if (Array.isArray(input.sourceRecords)) {
+    return input.sourceRecords;
+  }
+
+  if (Array.isArray(input.retrievalResults)) {
+    return input.retrievalResults;
+  }
+
+  return [];
+}
+
 function buildDataCentreResponse(input = {}) {
   const question = safeString(input.question || "");
   const context = input.context && typeof input.context === "object"
@@ -196,10 +226,7 @@ function buildDataCentreResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
-  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
-    ? knowledgeSearch.results
-    : [];
-
+  const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
   function extractSourceUrl(item = {}) {
@@ -247,7 +274,7 @@ function buildDataCentreResponse(input = {}) {
     if (!Array.isArray(results) || results.length === 0) {
       return [
         "Approved source records returned: 0",
-        "No indexed source records were retained after specialist filtering."
+        "No indexed source records were supplied to this specialist agent."
       ];
     }
 
@@ -295,11 +322,11 @@ function buildDataCentreResponse(input = {}) {
 
   const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
 
-  const sourceSupportStatus = !knowledgeSearch
-    ? "No approved CIMA source search was supplied to this agent."
+  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
+    ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
       ? "Source-supported for defensive command, continuity, incident management or training context only. Human review remains required."
-      : "No relevant approved source was retained after specialist filtering. The answer remains provisional and should not be treated as source-supported.";
+      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
 
   const hasDataCentreTerm = hasAnyTerm(question, DATA_CENTRE_TRIGGER_TERMS);
 
@@ -338,8 +365,8 @@ function buildDataCentreResponse(input = {}) {
     intake
   });
 
-  const sourceStatus = knowledgeSearch
-    ? "Approved CIMA source search has been supplied to this agent for review."
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const answer = [
@@ -365,13 +392,6 @@ function buildDataCentreResponse(input = {}) {
         ? "A data centre, cloud facility or digital infrastructure term has been detected. CIMA should treat this as a specialist defensive-support training question subject to human review."
         : "A data centre, cloud facility or digital infrastructure term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
       : "No data centre or digital infrastructure term was detected in the supplied question. Review whether this agent has been called correctly.",
-    "",
-    "## Approved Source Review",
-    "",
-    ...approvedSourceReviewLines,
-    "",
-    `Source support status: ${sourceSupportStatus}`,
-    "External search used: No",
     "",
     "## Known Evidence",
     "",
@@ -425,6 +445,13 @@ function buildDataCentreResponse(input = {}) {
     "- It should test whether the decision log records time, source, uncertainty, action owner and review point.",
     "- It should test whether communications remain controlled, factual and non-speculative.",
     "- It should test whether escalation thresholds are recognised without giving unsafe operational detail.",
+    "",
+    "## Approved Source Review",
+    "",
+    ...approvedSourceReviewLines,
+    "",
+    `Source support status: ${sourceSupportStatus}`,
+    "External search used: No",
     "",
     "## Audit Record",
     "",
