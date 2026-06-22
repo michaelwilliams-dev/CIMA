@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Data Centre Agent
  * File: operational/data_centre_agent.js
- * ISO Timestamp: 2026-06-22T12:55:00+01:00
+ * ISO Timestamp: 2026-06-22T14:15:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for data centre, cloud facility and digital infrastructure questions.
@@ -14,6 +14,7 @@
  * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
  * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
  * - v0.1.2: uses shared source_review_formatter.js for clean Approved Source Review output.
+ * - v0.1.3: removed visible Source Status section; Approved Source Review now carries readable source evidence.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -33,7 +34,7 @@ import {
   buildApprovedSourceReviewLines
 } from "./source_review_formatter.js";
 
-const DATA_CENTRE_AGENT_BUILD_ISO = "2026-06-22T12:55:00+01:00";
+const DATA_CENTRE_AGENT_BUILD_ISO = "2026-06-22T14:15:00+01:00";
 
 const DATA_CENTRE_AGENT_NAME = "data_centre_agent";
 
@@ -234,16 +235,8 @@ function buildDataCentreResponse(input = {}) {
   const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
-  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
-    ? "No approved CIMA source search or source records were supplied to this agent."
-    : approvedSourceCount > 0
-      ? "Source-supported for defensive command, continuity, incident management or training context only. Human review remains required."
-      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
-
   const approvedSourceReviewLines = buildApprovedSourceReviewLines({
-    results: approvedSourceResults,
-    sourceSupportStatus,
-    externalSearchUsed: "No"
+    results: approvedSourceResults
   });
 
   const hasDataCentreTerm = hasAnyTerm(question, DATA_CENTRE_TRIGGER_TERMS);
@@ -343,13 +336,6 @@ function buildDataCentreResponse(input = {}) {
     "- Escalate where there is a suspected hostile, cyber, sabotage, insider, drone, terrorism or coordinated threat element.",
     "- Escalate if media interest, customer communications, political sensitivity or reputational exposure may arise.",
     "- Escalate if authority, ownership, dependency, supplier responsibility or command lead is unclear.",
-    "",
-    "## Source Status",
-    "",
-    sourceStatus,
-    "",
-    "Approved CIMA sources have been searched and supplied to this agent where available. Human review remains required before operational reliance.",
-    "External search is not authorised unless the user gives explicit permission after the approved source search is insufficient.",
     "",
     "## Suggested Approved-Source Search Plan",
     "",
