@@ -1,12 +1,17 @@
 /**
  * AIVS / PGB CIMA - Stadium Agent
  * File: operational/stadium_agent.js
- * ISO Timestamp: 2026-06-21T07:55:00+01:00
+ * ISO Timestamp: 2026-06-22T11:15:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for stadium, arena, venue, event and crowd-safety questions.
  * - Supports incident management, command, escalation, communications, crowd safety, welfare, training and audit.
  * - Works after question_intake_agent.js or specialist routing has identified a stadium, venue or event trigger.
+ *
+ * Change Log:
+ * - v0.1.0: existing stadium specialist response agent.
+ * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
+ * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -21,7 +26,7 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const STADIUM_AGENT_BUILD_ISO = "2026-06-21T07:55:00+01:00";
+const STADIUM_AGENT_BUILD_ISO = "2026-06-22T11:15:00+01:00";
 
 const STADIUM_AGENT_NAME = "stadium_agent";
 
@@ -182,6 +187,30 @@ function buildStadiumSearchPlan(input = {}) {
   };
 }
 
+function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
+  if (knowledgeSearch && Array.isArray(knowledgeSearch.results)) {
+    return knowledgeSearch.results;
+  }
+
+  if (Array.isArray(input.sources)) {
+    return input.sources;
+  }
+
+  if (Array.isArray(input.approvedSources)) {
+    return input.approvedSources;
+  }
+
+  if (Array.isArray(input.sourceRecords)) {
+    return input.sourceRecords;
+  }
+
+  if (Array.isArray(input.retrievalResults)) {
+    return input.retrievalResults;
+  }
+
+  return [];
+}
+
 function buildStadiumResponse(input = {}) {
   const question = safeString(input.question || "");
   const context = input.context && typeof input.context === "object"
@@ -196,10 +225,7 @@ function buildStadiumResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
-  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
-    ? knowledgeSearch.results
-    : [];
-
+  const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
   function extractSourceUrl(item = {}) {
@@ -247,7 +273,7 @@ function buildStadiumResponse(input = {}) {
     if (!Array.isArray(results) || results.length === 0) {
       return [
         "Approved source records returned: 0",
-        "No indexed source records were retained after specialist filtering."
+        "No indexed source records were supplied to this specialist agent."
       ];
     }
 
@@ -295,11 +321,11 @@ function buildStadiumResponse(input = {}) {
 
   const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
 
-  const sourceSupportStatus = !knowledgeSearch
-    ? "No approved CIMA source search was supplied to this agent."
+  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
+    ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
       ? "Source-supported for defensive command, crowd-safety, incident management or training context only. Human review remains required."
-      : "No relevant approved source was retained after specialist filtering. The answer remains provisional and should not be treated as source-supported.";
+      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
 
   const hasStadiumTerm = hasAnyTerm(question, STADIUM_TRIGGER_TERMS);
 
@@ -338,8 +364,8 @@ function buildStadiumResponse(input = {}) {
     intake
   });
 
-  const sourceStatus = knowledgeSearch
-    ? "Approved CIMA source search has been supplied to this agent for review."
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const answer = [
