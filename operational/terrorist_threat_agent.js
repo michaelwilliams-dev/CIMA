@@ -1,17 +1,24 @@
 /**
- * AIVS / PGB CIMA - Terrorist Threat Agent
- * File: operational/terrorist_threat_agent.js
- * ISO Timestamp: 2026-06-14T13:20:00+01:00
+ * AIVS / PGB CIMA - Data Centre Agent
+ * File: operational/data_centre_agent.js
+ * ISO Timestamp: 2026-06-22T11:35:00+01:00
  *
  * Purpose:
- * - Provides defensive CIMA support for terrorism, hostile activity and high-consequence threat questions.
- * - Supports incident management, command, escalation, communications, training and audit.
- * - Works after question_intake_agent.js has identified a terrorism or hostile-activity trigger.
+ * - Provides defensive CIMA support for data centre, cloud facility and digital infrastructure questions.
+ * - Supports incident management, command, escalation, continuity, communications, training and audit.
+ * - Works after question_intake_agent.js or specialist routing has identified a data centre trigger.
+ *
+ * Change Log:
+ * - v0.1.0: existing data centre specialist response agent.
+ * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
+ * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
+ * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
  * - This agent must not provide evasion advice.
- * - This agent must not provide weaponisation advice.
+ * - This agent must not provide sabotage advice.
+ * - This agent must not provide cyber-offensive advice.
  * - This agent must not provide targeting advice.
  * - This agent must not provide instructions that could assist hostile activity.
  * - This agent must not advise users to confront suspected hostile actors.
@@ -21,35 +28,45 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const TERRORIST_THREAT_AGENT_BUILD_ISO = "2026-06-14T13:20:00+01:00";
+const DATA_CENTRE_AGENT_BUILD_ISO = "2026-06-22T11:35:00+01:00";
 
-const TERRORIST_THREAT_AGENT_NAME = "terrorist_threat_agent";
+const DATA_CENTRE_AGENT_NAME = "data_centre_agent";
 
-const TERRORIST_TRIGGER_TERMS = [
-  "terror",
-  "terrorism",
-  "terrorist",
-  "terror attack",
-  "terrorist threat",
-  "hostile activity",
-  "hostile actor",
-  "hostile threat",
-  "hostile-threat",
-  "hostile threat exercise",
-  "hostile-threat exercise",
-  "hostile reconnaissance",
-  "marauding",
-  "mtfa",
-  "attack",
-  "attack threat",
-  "suspicious behaviour",
-  "suspicious activity",
-  "public disorder",
-  "critical infrastructure threat"
+const DATA_CENTRE_TRIGGER_TERMS = [
+  "data centre",
+  "datacentre",
+  "data center",
+  "cloud facility",
+  "server room",
+  "server hall",
+  "colocation",
+  "colo",
+  "hosting facility",
+  "digital infrastructure",
+  "critical digital infrastructure",
+  "availability zone",
+  "backup site",
+  "disaster recovery site",
+  "dr site",
+  "network operations centre",
+  "noc",
+  "power failure",
+  "cooling failure",
+  "generator",
+  "ups",
+  "fire suppression",
+  "physical security",
+  "access control",
+  "site outage",
+  "service outage",
+  "network outage",
+  "cloud outage",
+  "resilience",
+  "business continuity"
 ];
 
-const TERRORIST_THREAT_AGENT_LIMITATION =
-  "CIMA can provide defensive incident-management, command, escalation, communications, training and audit support only. It must not provide attack methods, evasion advice, weaponisation advice, targeting advice or instructions that could assist hostile activity.";
+const DATA_CENTRE_AGENT_LIMITATION =
+  "CIMA can provide defensive incident-management, command, escalation, communications, continuity, training and audit support only. It must not provide attack methods, evasion advice, sabotage advice, cyber-offensive advice, targeting advice or instructions that could assist hostile activity.";
 
 function safeString(value = "") {
   if (value === null || value === undefined) {
@@ -78,7 +95,7 @@ function valueOrDefault(value = "", fallback = "Not supplied") {
   return text || fallback;
 }
 
-function buildTerroristThreatClarificationQuestions(input = {}) {
+function buildDataCentreClarificationQuestions(input = {}) {
   const question = safeString(input.question || "");
   const context = input.context && typeof input.context === "object"
     ? input.context
@@ -108,17 +125,19 @@ function buildTerroristThreatClarificationQuestions(input = {}) {
   }
 
   if (
-    !text.includes("venue") &&
-    !text.includes("site") &&
-    !text.includes("stadium") &&
-    !text.includes("arena") &&
-    !text.includes("public") &&
-    !text.includes("office") &&
-    !text.includes("transport") &&
     !text.includes("data centre") &&
-    !text.includes("critical infrastructure")
+    !text.includes("datacentre") &&
+    !text.includes("data center") &&
+    !text.includes("server room") &&
+    !text.includes("server hall") &&
+    !text.includes("cloud") &&
+    !text.includes("colocation") &&
+    !text.includes("hosting") &&
+    !text.includes("network") &&
+    !text.includes("backup") &&
+    !text.includes("disaster recovery")
   ) {
-    questions.push("What type of location is involved?");
+    questions.push("What type of data centre, cloud facility, server room or digital infrastructure is involved?");
   }
 
   if (
@@ -127,24 +146,27 @@ function buildTerroristThreatClarificationQuestions(input = {}) {
     !text.includes("bronze") &&
     !text.includes("security") &&
     !text.includes("communications") &&
-    !text.includes("trainer") &&
-    !text.includes("loggist") &&
-    !text.includes("safeguarding")
+    !text.includes("continuity") &&
+    !text.includes("operations") &&
+    !text.includes("facilities") &&
+    !text.includes("it") &&
+    !text.includes("loggist")
   ) {
-    questions.push("Which role needs the answer: Gold, Silver, Bronze, security, communications, safeguarding, trainer or loggist?");
+    questions.push("Which role needs the answer: Gold, Silver, Bronze, operations, facilities, IT, security, continuity, communications or loggist?");
   }
 
-  questions.push("What has actually been seen, heard, reported or confirmed?");
-  questions.push("What is confirmed fact, what is only reported, and what is still unknown?");
-  questions.push("Is there any immediate risk to life, crowd safety, public safety, safeguarding or critical services?");
-  questions.push("Are people injured, trapped, missing, vulnerable or unable to leave safely?");
-  questions.push("Have police, emergency services, venue security or command leads already been informed?");
-  questions.push("Is the user asking for immediate actions, a command briefing, communications wording, a decision log or training material?");
+  questions.push("What service, site, system, customer group or dependency is affected?");
+  questions.push("What is confirmed fact, what is reported, and what is still unknown?");
+  questions.push("Is there any immediate risk to life, staff safety, public safety, critical services or vulnerable people?");
+  questions.push("Is the impact local, customer-specific, regional, national or cross-sector?");
+  questions.push("Are power, cooling, network, access control, fire, security or supplier dependencies affected?");
+  questions.push("Have site leads, facilities teams, IT operations, security, customers, regulators or command leads already been informed?");
+  questions.push("Is the user asking for immediate actions, a command briefing, continuity actions, communications wording, a decision log or training material?");
 
   return questions;
 }
 
-function buildTerroristThreatSearchPlan(input = {}) {
+function buildDataCentreSearchPlan(input = {}) {
   const context = input.context && typeof input.context === "object"
     ? input.context
     : {};
@@ -154,20 +176,43 @@ function buildTerroristThreatSearchPlan(input = {}) {
     external_search_allowed: false,
     external_search_note: "External search must not be used unless the user gives explicit permission after approved CIMA sources have been checked.",
     suggested_internal_search_terms: [
-      "terrorism public venue incident management",
-      "hostile activity command response",
-      "marauding terrorist attack protective security",
-      "hostile reconnaissance public venue",
-      "Silver command terrorism incident",
-      "public safety hostile activity",
-      "communications hostile activity incident",
+      "data centre incident management",
+      "data centre resilience command response",
+      "digital infrastructure continuity",
+      "cloud outage business continuity",
+      "critical digital infrastructure public safety",
+      "Silver command data centre incident",
+      "data centre communications incident",
       valueOrDefault(context.persona, "Silver / Tactical Lead")
     ]
   };
 }
 
+function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
+  if (knowledgeSearch && Array.isArray(knowledgeSearch.results)) {
+    return knowledgeSearch.results;
+  }
 
-function buildTerroristThreatResponse(input = {}) {
+  if (Array.isArray(input.sources)) {
+    return input.sources;
+  }
+
+  if (Array.isArray(input.approvedSources)) {
+    return input.approvedSources;
+  }
+
+  if (Array.isArray(input.sourceRecords)) {
+    return input.sourceRecords;
+  }
+
+  if (Array.isArray(input.retrievalResults)) {
+    return input.retrievalResults;
+  }
+
+  return [];
+}
+
+function buildDataCentreResponse(input = {}) {
   const question = safeString(input.question || "");
   const context = input.context && typeof input.context === "object"
     ? input.context
@@ -181,12 +226,8 @@ function buildTerroristThreatResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
-  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
-    ? knowledgeSearch.results
-    : [];
-
+  const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
-
 
   function extractSourceUrl(item = {}) {
     const directUrl = safeString(item.source_url || item.url || "").trim();
@@ -233,7 +274,7 @@ function buildTerroristThreatResponse(input = {}) {
     if (!Array.isArray(results) || results.length === 0) {
       return [
         "Approved source records returned: 0",
-        "No indexed source records were retained after specialist filtering."
+        "No indexed source records were supplied to this specialist agent."
       ];
     }
 
@@ -281,22 +322,13 @@ function buildTerroristThreatResponse(input = {}) {
 
   const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
 
-  const sourceSupportStatus = !knowledgeSearch
-    ? "No approved CIMA source search was supplied to this agent."
+  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
+    ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
-      ? "Source-supported for defensive command, control, incident management or training context only. Human review remains required."
-      : "No relevant approved source was retained after specialist filtering. The answer remains provisional and should not be treated as source-supported.";
+      ? "Source-supported for defensive command, continuity, incident management or training context only. Human review remains required."
+      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
 
-  const hasThreatTerm = hasAnyTerm(question, TERRORIST_TRIGGER_TERMS);
-
-  const exerciseSetupChecks = [
-    "Confirm the exercise is classroom, tabletop or training-only before delivery.",
-    "Confirm the audience, role level and learning objective.",
-    "Confirm that the scenario is defensive and does not include attack methods, evasion advice, weaponisation advice or targeting detail.",
-    "Confirm the training focus: observation reporting, escalation, logging, communications and human review.",
-    "Confirm how participant decisions, assumptions and learning points will be recorded.",
-    "Confirm who will review the training output before reuse or wider circulation."
-  ];
+  const hasDataCentreTerm = hasAnyTerm(question, DATA_CENTRE_TRIGGER_TERMS);
 
   const questionLower = normaliseText(question);
 
@@ -312,30 +344,39 @@ function buildTerroristThreatResponse(input = {}) {
       questionLower.includes("simulated")
     );
 
-  const clarificationQuestions = buildTerroristThreatClarificationQuestions({
+  const exerciseSetupChecks = [
+    "Confirm the exercise is classroom, tabletop or training-only before delivery.",
+    "Confirm the affected facility, service, audience, role level and learning objective.",
+    "Confirm that the scenario is defensive and does not include attack methods, evasion advice, sabotage advice, cyber-offensive advice or targeting detail.",
+    "Confirm the training focus: service continuity, escalation, logging, communications, welfare and human review.",
+    "Confirm how participant decisions, assumptions and learning points will be recorded.",
+    "Confirm who will review the training output before reuse or wider circulation."
+  ];
+
+  const clarificationQuestions = buildDataCentreClarificationQuestions({
     question,
     context,
     intake
   });
 
-  const searchPlan = buildTerroristThreatSearchPlan({
+  const searchPlan = buildDataCentreSearchPlan({
     question,
     context,
     intake
   });
 
-  const sourceStatus = knowledgeSearch
-    ? "Approved CIMA source search has been supplied to this agent for review."
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const answer = [
-    "## Terrorist Threat Agent",
+    "## Data Centre Agent",
     "",
-    "This response is limited to defensive incident-management, command, escalation, communications, training and audit support.",
+    "This response is limited to defensive incident-management, command, escalation, communications, continuity, training and audit support.",
     "",
     "## Safety and Use Limitation",
     "",
-    TERRORIST_THREAT_AGENT_LIMITATION,
+    DATA_CENTRE_AGENT_LIMITATION,
     "",
     "## Situation Summary",
     "",
@@ -346,22 +387,15 @@ function buildTerroristThreatResponse(input = {}) {
     "",
     "## Initial Assessment",
     "",
-    hasThreatTerm
+    hasDataCentreTerm
       ? isClearTrainingExercise
-        ? "A terrorism, hostile-activity or high-consequence threat term has been detected. CIMA should treat this as a specialist defensive-support training question subject to human review."
-        : "A terrorism, hostile-activity or high-consequence threat term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
-      : "No terrorism or hostile-activity term was detected in the supplied question. Review whether this agent has been called correctly.",
-    "",
-    "## Approved Source Review",
-    "",
-    ...approvedSourceReviewLines,
-    "",
-    `Source support status: ${sourceSupportStatus}`,
-    "External search used: No",
+        ? "A data centre, cloud facility or digital infrastructure term has been detected. CIMA should treat this as a specialist defensive-support training question subject to human review."
+        : "A data centre, cloud facility or digital infrastructure term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
+      : "No data centre or digital infrastructure term was detected in the supplied question. Review whether this agent has been called correctly.",
     "",
     "## Known Evidence",
     "",
-    "- The user has raised a terrorism, hostile-activity or high-consequence threat concern or scenario.",
+    "- The user has raised a data centre, cloud facility, server room or digital infrastructure concern or scenario.",
     "- The available facts must be separated from assumptions, reports and unknowns.",
     "- Any operational use of this output requires human review, local procedures and command judgement.",
     "",
@@ -373,26 +407,30 @@ function buildTerroristThreatResponse(input = {}) {
     "",
     "- Establish whether this is a live incident, an exercise, a training scenario or a planning question.",
     "- Confirm who has command responsibility and who is maintaining the decision log.",
+    "- Confirm the affected facility, service, customer group, supplier, system or dependency.",
     "- Confirm what is known, what is reported, what is suspected and what remains unknown.",
-    "- Identify whether there is immediate risk to life, crowd safety, public safety, safeguarding or critical services.",
-    "- Notify the appropriate venue, site, security, safeguarding, communications or command lead in line with local procedures.",
-    "- Consider whether police or emergency services need to be informed under local procedures.",
+    "- Identify whether there is immediate risk to life, staff safety, public safety, vulnerable people or essential services.",
+    "- Identify whether the incident affects power, cooling, network connectivity, access control, fire systems, security, suppliers or customer services.",
+    "- Identify whether the impact is local, customer-specific, regional, national or cross-sector.",
+    "- Notify the appropriate site, operations, facilities, IT, security, continuity, communications or command lead in line with local procedures.",
+    "- Consider whether emergency services, regulators, customers, suppliers or sector bodies need to be informed under local procedures.",
     "- Maintain controlled internal communications and avoid speculation.",
     "- Preserve a timed decision log recording decisions, uncertainty, action owners and review points.",
     "",
     "## Escalation Requirements",
     "",
-    "- Escalate to the responsible human command lead where hostile activity, terrorism, life-safety risk or public-safety risk is possible.",
-    "- Escalate immediately where there are injuries, trapped people, missing people, vulnerable people or uncontrolled crowd movement.",
-    "- Escalate if the situation may require evacuation, invacuation, lockdown, protected space use or public communications.",
-    "- Escalate if there is possible hostile reconnaissance or a wider hostile activity pattern.",
-    "- Escalate if staff, visitors, residents, public communications or critical operations may be affected.",
+    "- Escalate to the responsible human command lead where life safety, staff safety, public safety, essential services or critical digital infrastructure may be affected.",
+    "- Escalate immediately where there are injuries, trapped people, missing people, fire, smoke, electrical risk, flooding or uncontrolled site access.",
+    "- Escalate where disruption may affect power, cooling, communications, cloud services, customer systems, healthcare, transport, public services or other essential services.",
+    "- Escalate where there is a suspected hostile, cyber, sabotage, insider, drone, terrorism or coordinated threat element.",
+    "- Escalate if media interest, customer communications, political sensitivity or reputational exposure may arise.",
+    "- Escalate if authority, ownership, dependency, supplier responsibility or command lead is unclear.",
     "",
     "## Source Status",
     "",
     sourceStatus,
     "",
-    "Approved CIMA sources have been searched and supplied to this agent. Human review remains required before operational reliance.",
+    "Approved CIMA sources have been searched and supplied to this agent where available. Human review remains required before operational reliance.",
     "External search is not authorised unless the user gives explicit permission after the approved source search is insufficient.",
     "",
     "## Suggested Approved-Source Search Plan",
@@ -403,14 +441,22 @@ function buildTerroristThreatResponse(input = {}) {
     "",
     "- This scenario should test whether users separate facts from assumptions.",
     "- It should test whether Gold, Silver and Bronze command roles are clear.",
+    "- It should test whether service impact, dependencies and supplier responsibilities are identified.",
     "- It should test whether the decision log records time, source, uncertainty, action owner and review point.",
     "- It should test whether communications remain controlled, factual and non-speculative.",
     "- It should test whether escalation thresholds are recognised without giving unsafe operational detail.",
     "",
+    "## Approved Source Review",
+    "",
+    ...approvedSourceReviewLines,
+    "",
+    `Source support status: ${sourceSupportStatus}`,
+    "External search used: No",
+    "",
     "## Audit Record",
     "",
-    `Agent: ${TERRORIST_THREAT_AGENT_NAME}`,
-    `Build ISO: ${TERRORIST_THREAT_AGENT_BUILD_ISO}`,
+    `Agent: ${DATA_CENTRE_AGENT_NAME}`,
+    `Build ISO: ${DATA_CENTRE_AGENT_BUILD_ISO}`,
     "External search used: No",
     "FAISS searched directly by this agent: No",
     "Human review required: Yes"
@@ -418,40 +464,41 @@ function buildTerroristThreatResponse(input = {}) {
 
   return {
     ok: true,
-    agent: TERRORIST_THREAT_AGENT_NAME,
-    build_iso: TERRORIST_THREAT_AGENT_BUILD_ISO,
-    response_path: "TERRORIST THREAT AGENT",
-    path: "TERRORIST THREAT AGENT",
+    agent: DATA_CENTRE_AGENT_NAME,
+    build_iso: DATA_CENTRE_AGENT_BUILD_ISO,
+    response_path: "DATA CENTRE AGENT",
+    path: "DATA CENTRE AGENT",
     rag: "AMBER",
     rag_status: "AMBER",
     hitl: "Required before operational reliance",
     confidence: "Provisional",
     source_mode: sourceStatus,
-    safety_notice: TERRORIST_THREAT_AGENT_LIMITATION,
+    safety_notice: DATA_CENTRE_AGENT_LIMITATION,
     clarification_questions: clarificationQuestions,
     search_plan: searchPlan,
     answer,
     sources: approvedSourceResults
   };
 }
-function getTerroristThreatAgentStatus() {
+
+function getDataCentreAgentStatus() {
   return {
     ok: true,
-    agent: TERRORIST_THREAT_AGENT_NAME,
-    build_iso: TERRORIST_THREAT_AGENT_BUILD_ISO,
+    agent: DATA_CENTRE_AGENT_NAME,
+    build_iso: DATA_CENTRE_AGENT_BUILD_ISO,
     direct_faiss_search: false,
     external_search: false,
     defensive_support_only: true,
-    trigger_terms: TERRORIST_TRIGGER_TERMS
+    trigger_terms: DATA_CENTRE_TRIGGER_TERMS
   };
 }
 
 export {
-  buildTerroristThreatResponse,
-  getTerroristThreatAgentStatus
+  buildDataCentreResponse,
+  getDataCentreAgentStatus
 };
 
 export default {
-  buildTerroristThreatResponse,
-  getTerroristThreatAgentStatus
+  buildDataCentreResponse,
+  getDataCentreAgentStatus
 };
