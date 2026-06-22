@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Cyber Agent
  * File: operational/cyber_agent.js
- * ISO Timestamp: 2026-06-22T13:20:00+01:00
+ * ISO Timestamp: 2026-06-22T14:30:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for cyber incident, digital disruption and information-security questions.
@@ -14,6 +14,7 @@
  * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
  * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
  * - v0.1.2: uses shared source_review_formatter.js for clean Approved Source Review output.
+ * - v0.1.3: removed visible Source Status section; Approved Source Review now carries readable source evidence.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -34,7 +35,7 @@ import {
   buildApprovedSourceReviewLines
 } from "./source_review_formatter.js";
 
-const CYBER_AGENT_BUILD_ISO = "2026-06-22T13:20:00+01:00";
+const CYBER_AGENT_BUILD_ISO = "2026-06-22T14:30:00+01:00";
 
 const CYBER_AGENT_NAME = "cyber_agent";
 
@@ -242,16 +243,8 @@ function buildCyberResponse(input = {}) {
   const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
-  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
-    ? "No approved CIMA source search or source records were supplied to this agent."
-    : approvedSourceCount > 0
-      ? "Source-supported for defensive cyber incident management, command, continuity or training context only. Human review remains required."
-      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
-
   const approvedSourceReviewLines = buildApprovedSourceReviewLines({
-    results: approvedSourceResults,
-    sourceSupportStatus,
-    externalSearchUsed: "No"
+    results: approvedSourceResults
   });
 
   const hasCyberTerm = hasAnyTerm(question, CYBER_TRIGGER_TERMS);
@@ -350,13 +343,6 @@ function buildCyberResponse(input = {}) {
     "- Escalate where there is a suspected hostile, insider, coordinated, criminal or state-linked threat element.",
     "- Escalate if media interest, customer communications, political sensitivity or reputational exposure may arise.",
     "- Escalate if authority, ownership, supplier responsibility, data-protection responsibility or command lead is unclear.",
-    "",
-    "## Source Status",
-    "",
-    sourceStatus,
-    "",
-    "Approved CIMA sources have been searched and supplied to this agent where available. Human review remains required before operational reliance.",
-    "External search is not authorised unless the user gives explicit permission after the approved source search is insufficient.",
     "",
     "## Suggested Approved-Source Search Plan",
     "",
