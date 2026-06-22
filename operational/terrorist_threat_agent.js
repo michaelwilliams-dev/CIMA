@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Terrorist Threat Agent
  * File: operational/terrorist_threat_agent.js
- * ISO Timestamp: 2026-06-22T13:15:00+01:00
+ * ISO Timestamp: 2026-06-22T14:25:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for terrorist-threat, hostile-actor and serious public-safety threat questions.
@@ -12,6 +12,7 @@
  * - v0.1.0: created terrorist threat specialist response agent.
  * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
  * - v0.1.2: uses shared source_review_formatter.js for clean Approved Source Review output.
+ * - v0.1.3: Approved Source Review now carries readable source evidence; visible Source Status text removed.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -30,7 +31,7 @@ import {
   buildApprovedSourceReviewLines
 } from "./source_review_formatter.js";
 
-const TERRORIST_THREAT_AGENT_BUILD_ISO = "2026-06-22T13:15:00+01:00";
+const TERRORIST_THREAT_AGENT_BUILD_ISO = "2026-06-22T14:25:00+01:00";
 
 const TERRORIST_THREAT_AGENT_NAME = "terrorist_threat_agent";
 
@@ -131,16 +132,8 @@ function buildTerroristThreatResponse(input = {}) {
     ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
-  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
-    ? "No approved CIMA source search or source records were supplied to this agent."
-    : approvedSourceCount > 0
-      ? "Source-supported for defensive command, public-safety, incident management or training context only. Human review remains required."
-      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
-
   const approvedSourceReviewLines = buildApprovedSourceReviewLines({
-    results: approvedSourceResults,
-    sourceSupportStatus,
-    externalSearchUsed: "No"
+    results: approvedSourceResults
   });
 
   const isLiveIncident = Boolean(
@@ -273,9 +266,6 @@ function buildTerroristThreatResponse(input = {}) {
     "",
     "Human review and escalation flags",
     buildNumberedList(humanReviewFlags),
-    "",
-    "Source status",
-    sourceStatus,
     "",
     "Approved Source Review",
     approvedSourceReviewLines.join("\n"),
