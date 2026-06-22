@@ -1,16 +1,18 @@
 /**
  * AIVS / PGB CIMA - Source Review Formatter
  * File: operational/source_review_formatter.js
- * ISO Timestamp: 2026-06-22T12:55:00+01:00
+ * ISO Timestamp: 2026-06-22T14:05:00+01:00
  *
  * Purpose:
  * - Provides one shared user-facing formatter for approved source review output.
+ * - Shows useful source names and URLs.
  * - Hides raw retrieval internals from the main CIMA answer.
  * - Keeps file paths, chunk IDs, scores and matched terms out of the visible report.
  *
  * Change Log:
  * - v0.1.0: created shared approved-source review formatter.
  * - v0.1.1: simplified visible Approved Source Review wording.
+ * - v0.1.2: restored source names and URLs while keeping technical retrieval metadata hidden.
  *
  * Control Notes:
  * - This formatter does not perform retrieval.
@@ -18,7 +20,7 @@
  * - This formatter only controls visible source-review wording.
  */
 
-const SOURCE_REVIEW_FORMATTER_BUILD_ISO = "2026-06-22T12:55:00+01:00";
+const SOURCE_REVIEW_FORMATTER_BUILD_ISO = "2026-06-22T14:05:00+01:00";
 
 function safeString(value = "") {
   if (value === null || value === undefined) {
@@ -60,6 +62,38 @@ function extractIndexedSourceFile(item = {}) {
   return match && match[1] ? match[1].trim() : "";
 }
 
+function normaliseSourceKey(label = "", url = "") {
+  return `${cleanText(label).toLowerCase()}|${cleanText(url).toLowerCase()}`;
+}
+
+function titleFromFileName(fileName = "") {
+  const baseName = safeString(fileName)
+    .split("/")
+    .pop()
+    .replace(/\.txt$/i, "")
+    .replace(/\.md$/i, "")
+    .replace(/\.html$/i, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!baseName) {
+    return "";
+  }
+
+  return baseName
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => {
+      if (word.length <= 3) {
+        return word.toUpperCase();
+      }
+
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
 function buildReadableSourceLabel(item = {}) {
   const url = extractSourceUrl(item);
   const indexedFile = extractIndexedSourceFile(item);
@@ -86,10 +120,6 @@ function buildReadableSourceLabel(item = {}) {
     return "JESIP: JESIP App";
   }
 
-  if (combined.includes("sitemap")) {
-    return "General navigation or sitemap record";
-  }
-
   if (combined.includes("npsa") && combined.includes("venues")) {
     return "NPSA: Venues and Public Spaces Guidance";
   }
@@ -102,63 +132,58 @@ function buildReadableSourceLabel(item = {}) {
     return url;
   }
 
-  if (indexedFile) {
-    return indexedFile.split("/").pop();
+  const fileLabel = titleFromFileName(indexedFile);
+
+  if (fileLabel) {
+    return fileLabel;
   }
 
   return "Approved indexed source record";
 }
 
 function buildApprovedSourceReviewLines({
-  results = [],
-  sourceSupportStatus = "",
-  externalSearchUsed = "No"
+  results = []
 } = {}) {
   if (!Array.isArray(results) || results.length === 0) {
     return [
       "Approved source records returned: 0",
       "",
       "No approved indexed source records were supplied to this specialist agent.",
-      "CIMA should not treat this response as source-supported until approved source material has been supplied and reviewed.",
       "",
-      `External search used: ${externalSearchUsed}`,
-      "Human review remains required before operational reliance."
+      "Technical retrieval metadata is retained for audit but not shown in the main answer."
     ];
   }
 
-  const labels = [];
+  const sourceRows = [];
+  const seen = new Set();
 
-  results.slice(0, 5).forEach((item) => {
+  results.slice(0, 8).forEach((item) => {
     const label = buildReadableSourceLabel(item);
+    const url = extractSourceUrl(item);
+    const key = normaliseSourceKey(label, url);
 
-    if (label && !labels.includes(label)) {
-      labels.push(label);
+    if (!seen.has(key)) {
+      seen.add(key);
+      sourceRows.push({ label, url });
     }
   });
 
   const lines = [
     `Approved source records returned: ${results.length}`,
     "",
-    "Approved indexed source material was found and supplied to this specialist agent.",
-    "This supports the response for defensive command, incident-management, planning, training and audit context only.",
-    "",
-    "Sources identified:"
+    "Sources used:"
   ];
 
-  labels.forEach((label) => {
-    lines.push(`- ${label}`);
+  sourceRows.forEach((source) => {
+    lines.push(`- ${source.label}`);
+
+    if (source.url) {
+      lines.push(`  ${source.url}`);
+    }
   });
 
   lines.push("");
-  lines.push("Detailed retrieval metadata is retained for audit and technical review but is not shown in the main user-facing answer.");
-
-  if (sourceSupportStatus) {
-    lines.push("");
-    lines.push(`Source support status: ${sourceSupportStatus}`);
-  }
-
-  lines.push(`External search used: ${externalSearchUsed}`);
-  lines.push("Human review remains required before operational reliance.");
+  lines.push("Technical retrieval metadata is retained for audit but not shown in the main answer.");
 
   return lines;
 }
