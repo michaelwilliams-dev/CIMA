@@ -1,24 +1,22 @@
 /**
- * AIVS / PGB CIMA - Data Centre Agent
- * File: operational/data_centre_agent.js
- * ISO Timestamp: 2026-06-22T11:35:00+01:00
+ * AIVS / PGB CIMA - Terrorist Threat Agent
+ * File: operational/terrorist_threat_agent.js
+ * ISO Timestamp: 2026-06-22T13:15:00+01:00
  *
  * Purpose:
- * - Provides defensive CIMA support for data centre, cloud facility and digital infrastructure questions.
- * - Supports incident management, command, escalation, continuity, communications, training and audit.
- * - Works after question_intake_agent.js or specialist routing has identified a data centre trigger.
+ * - Provides defensive CIMA support for terrorist-threat, hostile-actor and serious public-safety threat questions.
+ * - Supports incident management, command, escalation, communications, public safety, welfare, training and audit.
+ * - Works after question_intake_agent.js or specialist routing has identified a terrorist-threat trigger.
  *
  * Change Log:
- * - v0.1.0: existing data centre specialist response agent.
+ * - v0.1.0: created terrorist threat specialist response agent.
  * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
- * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
- * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
+ * - v0.1.2: uses shared source_review_formatter.js for clean Approved Source Review output.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
  * - This agent must not provide evasion advice.
- * - This agent must not provide sabotage advice.
- * - This agent must not provide cyber-offensive advice.
+ * - This agent must not provide weaponisation advice.
  * - This agent must not provide targeting advice.
  * - This agent must not provide instructions that could assist hostile activity.
  * - This agent must not advise users to confront suspected hostile actors.
@@ -28,45 +26,26 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const DATA_CENTRE_AGENT_BUILD_ISO = "2026-06-22T11:35:00+01:00";
+import {
+  buildApprovedSourceReviewLines
+} from "./source_review_formatter.js";
 
-const DATA_CENTRE_AGENT_NAME = "data_centre_agent";
+const TERRORIST_THREAT_AGENT_BUILD_ISO = "2026-06-22T13:15:00+01:00";
 
-const DATA_CENTRE_TRIGGER_TERMS = [
-  "data centre",
-  "datacentre",
-  "data center",
-  "cloud facility",
-  "server room",
-  "server hall",
-  "colocation",
-  "colo",
-  "hosting facility",
-  "digital infrastructure",
-  "critical digital infrastructure",
-  "availability zone",
-  "backup site",
-  "disaster recovery site",
-  "dr site",
-  "network operations centre",
-  "noc",
-  "power failure",
-  "cooling failure",
-  "generator",
-  "ups",
-  "fire suppression",
-  "physical security",
-  "access control",
-  "site outage",
-  "service outage",
-  "network outage",
-  "cloud outage",
-  "resilience",
-  "business continuity"
+const TERRORIST_THREAT_AGENT_NAME = "terrorist_threat_agent";
+
+const TERRORIST_THREAT_LIMITATION =
+  "CIMA can provide defensive incident-management, command, escalation, communications, public-safety, welfare, training and audit support only. It must not provide attack methods, evasion advice, weaponisation advice, targeting advice or instructions that could assist hostile activity.";
+
+const DEFAULT_CLARIFICATION_QUESTIONS = [
+  "Is this a live incident, an exercise, a training scenario or a planning question?",
+  "What exactly has been reported or observed?",
+  "Where is the reported threat in relation to the site, venue, event, people or asset?",
+  "What is confirmed fact, what is reported, and what is still unknown?",
+  "Is there any immediate risk to life, public safety, crowd safety, staff safety or vulnerable people?",
+  "Have police, emergency services, security, site leads or command leads already been informed?",
+  "Which role needs the answer: Gold, Silver, Bronze, security, communications, welfare, loggist or another role?"
 ];
-
-const DATA_CENTRE_AGENT_LIMITATION =
-  "CIMA can provide defensive incident-management, command, escalation, communications, continuity, training and audit support only. It must not provide attack methods, evasion advice, sabotage advice, cyber-offensive advice, targeting advice or instructions that could assist hostile activity.";
 
 function safeString(value = "") {
   if (value === null || value === undefined) {
@@ -78,114 +57,29 @@ function safeString(value = "") {
 
 function normaliseText(value = "") {
   return safeString(value)
-    .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function hasAnyTerm(text = "", terms = []) {
-  const cleanText = normaliseText(text);
-
-  return terms.some((term) => cleanText.includes(term));
+function normaliseLower(value = "") {
+  return normaliseText(value).toLowerCase();
 }
 
-function valueOrDefault(value = "", fallback = "Not supplied") {
-  const text = safeString(value).trim();
-
-  return text || fallback;
+function hasMeaningfulText(value = "") {
+  return normaliseText(value).length > 0;
 }
 
-function buildDataCentreClarificationQuestions(input = {}) {
-  const question = safeString(input.question || "");
-  const context = input.context && typeof input.context === "object"
-    ? input.context
-    : {};
-
-  const text = normaliseText([
-    question,
-    context.mode || "",
-    context.level || "",
-    context.persona || "",
-    context.output || ""
-  ].join(" "));
-
-  const questions = [];
-
-  if (
-    !text.includes("live") &&
-    !text.includes("exercise") &&
-    !text.includes("training") &&
-    !text.includes("planning") &&
-    !text.includes("reported") &&
-    !text.includes("confirmed") &&
-    !text.includes("suspected") &&
-    !text.includes("possible")
-  ) {
-    questions.push("Is this a live incident, an exercise, a training scenario or a planning question?");
-  }
-
-  if (
-    !text.includes("data centre") &&
-    !text.includes("datacentre") &&
-    !text.includes("data center") &&
-    !text.includes("server room") &&
-    !text.includes("server hall") &&
-    !text.includes("cloud") &&
-    !text.includes("colocation") &&
-    !text.includes("hosting") &&
-    !text.includes("network") &&
-    !text.includes("backup") &&
-    !text.includes("disaster recovery")
-  ) {
-    questions.push("What type of data centre, cloud facility, server room or digital infrastructure is involved?");
-  }
-
-  if (
-    !text.includes("gold") &&
-    !text.includes("silver") &&
-    !text.includes("bronze") &&
-    !text.includes("security") &&
-    !text.includes("communications") &&
-    !text.includes("continuity") &&
-    !text.includes("operations") &&
-    !text.includes("facilities") &&
-    !text.includes("it") &&
-    !text.includes("loggist")
-  ) {
-    questions.push("Which role needs the answer: Gold, Silver, Bronze, operations, facilities, IT, security, continuity, communications or loggist?");
-  }
-
-  questions.push("What service, site, system, customer group or dependency is affected?");
-  questions.push("What is confirmed fact, what is reported, and what is still unknown?");
-  questions.push("Is there any immediate risk to life, staff safety, public safety, critical services or vulnerable people?");
-  questions.push("Is the impact local, customer-specific, regional, national or cross-sector?");
-  questions.push("Are power, cooling, network, access control, fire, security or supplier dependencies affected?");
-  questions.push("Have site leads, facilities teams, IT operations, security, customers, regulators or command leads already been informed?");
-  questions.push("Is the user asking for immediate actions, a command briefing, continuity actions, communications wording, a decision log or training material?");
-
-  return questions;
+function joinLines(lines = []) {
+  return lines
+    .filter((line) => hasMeaningfulText(line))
+    .join("\n");
 }
 
-function buildDataCentreSearchPlan(input = {}) {
-  const context = input.context && typeof input.context === "object"
-    ? input.context
-    : {};
-
-  return {
-    approved_sources_first: true,
-    external_search_allowed: false,
-    external_search_note: "External search must not be used unless the user gives explicit permission after approved CIMA sources have been checked.",
-    suggested_internal_search_terms: [
-      "data centre incident management",
-      "data centre resilience command response",
-      "digital infrastructure continuity",
-      "cloud outage business continuity",
-      "critical digital infrastructure public safety",
-      "Silver command data centre incident",
-      "data centre communications incident",
-      valueOrDefault(context.persona, "Silver / Tactical Lead")
-    ]
-  };
+function buildNumberedList(items = []) {
+  return items
+    .filter((item) => hasMeaningfulText(item))
+    .map((item, index) => `${index + 1}. ${normaliseText(item)}`)
+    .join("\n");
 }
 
 function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
@@ -212,8 +106,8 @@ function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
   return [];
 }
 
-function buildDataCentreResponse(input = {}) {
-  const question = safeString(input.question || "");
+function buildTerroristThreatResponse(input = {}) {
+  const question = normaliseText(input.question || input.message || input.text || "");
   const context = input.context && typeof input.context === "object"
     ? input.context
     : {};
@@ -222,6 +116,8 @@ function buildDataCentreResponse(input = {}) {
     ? input.intake
     : {};
 
+  const triggerDecision = input.triggerDecision || input.trigger_decision || intake.specialist_trigger || {};
+
   const knowledgeSearch = input.knowledgeSearch && typeof input.knowledgeSearch === "object"
     ? input.knowledgeSearch
     : null;
@@ -229,111 +125,40 @@ function buildDataCentreResponse(input = {}) {
   const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
-  function extractSourceUrl(item = {}) {
-    const directUrl = safeString(item.source_url || item.url || "").trim();
+  const questionLower = normaliseLower(question);
 
-    if (directUrl) {
-      return directUrl;
-    }
-
-    const text = safeString(item.text || item.snippet || "");
-    const match = text.match(/SOURCE_URL:\s*([^\s]+)/i);
-
-    return match && match[1] ? match[1].trim() : "";
-  }
-
-  function extractIndexedSourceFile(item = {}) {
-    const sourceFile = safeString(item.source_file || "").trim();
-
-    if (sourceFile) {
-      return sourceFile;
-    }
-
-    const text = safeString(item.text || item.snippet || "");
-    const match = text.match(/SOURCE_FILE:\s*([^\n]+)/i);
-
-    return match && match[1] ? match[1].trim() : "Indexed source file not supplied";
-  }
-
-  function extractChunkId(item = {}) {
-    return safeString(item.chunk_id || "").trim();
-  }
-
-  function extractChunkIndex(item = {}) {
-    if (item.chunk_index !== null && item.chunk_index !== undefined) {
-      return safeString(item.chunk_index).trim();
-    }
-
-    const text = safeString(item.text || item.snippet || "");
-    const match = text.match(/CHUNK_INDEX:\s*([^\n]+)/i);
-
-    return match && match[1] ? match[1].trim() : "";
-  }
-
-  function buildApprovedSourceReviewLines(results = []) {
-    if (!Array.isArray(results) || results.length === 0) {
-      return [
-        "Approved source records returned: 0",
-        "No indexed source records were supplied to this specialist agent."
-      ];
-    }
-
-    const lines = [
-      `Approved source records returned: ${results.length}`
-    ];
-
-    results.slice(0, 5).forEach((item, index) => {
-      const indexedFile = extractIndexedSourceFile(item);
-      const sourceUrl = extractSourceUrl(item);
-      const chunkId = extractChunkId(item);
-      const chunkIndex = extractChunkIndex(item);
-      const score = item.score;
-      const matchedTerms = Array.isArray(item.matched_terms)
-        ? item.matched_terms.filter(Boolean).map((term) => safeString(term).trim()).filter(Boolean)
-        : [];
-
-      lines.push("");
-      lines.push(`Source ${index + 1}:`);
-      lines.push(`Indexed file: ${indexedFile}`);
-
-      if (chunkId) {
-        lines.push(`Chunk ID: ${chunkId}`);
-      }
-
-      if (chunkIndex) {
-        lines.push(`Chunk index: ${chunkIndex}`);
-      }
-
-      if (typeof score === "number") {
-        lines.push(`Retrieval score: ${score}`);
-      }
-
-      if (matchedTerms.length > 0) {
-        lines.push(`Matched terms: ${matchedTerms.join(", ")}`);
-      }
-
-      if (sourceUrl) {
-        lines.push(`Source URL found in indexed chunk: ${sourceUrl}`);
-      }
-    });
-
-    return lines;
-  }
-
-  const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
+    : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
     ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
-      ? "Source-supported for defensive command, continuity, incident management or training context only. Human review remains required."
+      ? "Source-supported for defensive command, public-safety, incident management or training context only. Human review remains required."
       : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
 
-  const hasDataCentreTerm = hasAnyTerm(question, DATA_CENTRE_TRIGGER_TERMS);
+  const approvedSourceReviewLines = buildApprovedSourceReviewLines({
+    results: approvedSourceResults,
+    sourceSupportStatus,
+    externalSearchUsed: "No"
+  });
 
-  const questionLower = normaliseText(question);
+  const isLiveIncident = Boolean(
+    input.isLiveIncident ||
+    input.live ||
+    context.live_incident ||
+    questionLower.includes("live") ||
+    questionLower.includes("confirmed") ||
+    questionLower.includes("current") ||
+    questionLower.includes("active") ||
+    questionLower.includes("immediate") ||
+    questionLower.includes("emergency") ||
+    questionLower.includes("ongoing") ||
+    questionLower.includes("now")
+  );
 
   const isClearTrainingExercise =
-    !questionLower.includes("live") &&
+    !isLiveIncident &&
     (
       questionLower.includes("classroom") ||
       questionLower.includes("tabletop") ||
@@ -344,161 +169,175 @@ function buildDataCentreResponse(input = {}) {
       questionLower.includes("simulated")
     );
 
+  const selectedMode = normaliseText(context.mode || input.mode || "Not supplied");
+  const selectedPersona = normaliseText(context.persona || input.persona || "Not supplied");
+  const selectedCommandLevel = normaliseText(context.command_level || context.commandLevel || input.command_level || "Not supplied");
+
+  const clarificationQuestions =
+    Array.isArray(triggerDecision.clarity_questions) && triggerDecision.clarity_questions.length > 0
+      ? triggerDecision.clarity_questions
+      : DEFAULT_CLARIFICATION_QUESTIONS;
+
   const exerciseSetupChecks = [
     "Confirm the exercise is classroom, tabletop or training-only before delivery.",
-    "Confirm the affected facility, service, audience, role level and learning objective.",
-    "Confirm that the scenario is defensive and does not include attack methods, evasion advice, sabotage advice, cyber-offensive advice or targeting detail.",
-    "Confirm the training focus: service continuity, escalation, logging, communications, welfare and human review.",
+    "Confirm the audience, role level and learning objective.",
+    "Confirm that the scenario is defensive and does not include attack methods, evasion advice, weaponisation advice, targeting detail or hostile-use instructions.",
+    "Confirm the training focus: safety, escalation, logging, communications, welfare, public protection and human review.",
     "Confirm how participant decisions, assumptions and learning points will be recorded.",
     "Confirm who will review the training output before reuse or wider circulation."
   ];
 
-  const clarificationQuestions = buildDataCentreClarificationQuestions({
-    question,
-    context,
-    intake
-  });
+  const immediatePriorities = [
+    "Protect life and safety first.",
+    "Do not confront, approach, challenge, follow or attempt to detain a suspected hostile actor.",
+    "Escalate immediately through local emergency, security and command procedures where there may be risk to life or public safety.",
+    "Move people away from obvious risk areas only if safe to do so and in line with local procedures.",
+    "Establish a single command and communications route.",
+    "Start a timed decision log recording facts, reports, assumptions, uncertainty, decisions, actions and owners."
+  ];
 
-  const searchPlan = buildDataCentreSearchPlan({
-    question,
-    context,
-    intake
-  });
+  const commandActions = [
+    "Confirm whether this is a live incident, recent report, intelligence concern, planning question or training scenario.",
+    "Separate confirmed facts from unverified reports and assumptions.",
+    "Confirm the affected location, people, service, route, venue area or asset.",
+    "Identify whether there is immediate risk to life, public safety, crowd safety, staff safety, safeguarding or vulnerable people.",
+    "Notify the appropriate police, emergency-service, site, venue, security, operations, communications or command lead through local procedures.",
+    "Maintain controlled communications and avoid speculation.",
+    "Agree review points and decision ownership for the next operational period."
+  ];
 
-  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
-    ? "Approved CIMA source search or source records have been supplied to this agent for review."
-    : "Approved CIMA source search has not yet been supplied to this agent.";
+  const informationToCapture = [
+    "Time first reported and source of the report.",
+    "Exact location or area affected.",
+    "What was seen, heard, received or reported.",
+    "What is confirmed, what is unconfirmed and what remains unknown.",
+    "People, services, routes, venues or assets potentially affected.",
+    "Actions already taken and who authorised them.",
+    "Who has been informed and when.",
+    "Any immediate welfare, medical, safeguarding or public-safety concerns."
+  ];
 
-  const answer = [
-    "## Data Centre Agent",
+  const communicationsGuidance = [
+    "Use calm factual language.",
+    "Separate confirmed facts from unconfirmed reports.",
+    "Avoid naming motive, capability, identity or cause unless formally confirmed by the responsible authority.",
+    "Tell staff who to report to, what action to take and what not to do.",
+    "Do not circulate sensitive operational detail through public or informal channels.",
+    "Prepare short internal holding lines for staff, command leads and communications teams where needed."
+  ];
+
+  const humanReviewFlags = [
+    "Any immediate risk to life or public safety.",
+    "Any suspected hostile, terrorist, weapon, explosive, vehicle, cyber, drone or coordinated element.",
+    "Any need for evacuation, invacuation, lockdown, shelter, transport disruption or public communications.",
+    "Any vulnerable people, missing people, trapped people, injured people or safeguarding concerns.",
+    "Any media interest, public concern, reputational exposure or political sensitivity.",
+    "Any unclear authority, unclear command lead or conflicting instruction."
+  ];
+
+  const liveIncidentLine = isLiveIncident
+    ? "This appears to be a live or potentially live incident. Escalate through local emergency, security and command procedures immediately."
+    : "This can be handled as a defensive planning, training or command-support prompt unless the user confirms it is live.";
+
+  const responseText = joinLines([
+    "CIMA Terrorist Threat Agent",
     "",
-    "This response is limited to defensive incident-management, command, escalation, communications, continuity, training and audit support.",
+    "Safety and use limitation",
+    TERRORIST_THREAT_LIMITATION,
     "",
-    "## Safety and Use Limitation",
+    "Status",
+    liveIncidentLine,
     "",
-    DATA_CENTRE_AGENT_LIMITATION,
+    "Selected context",
+    `Mode: ${selectedMode}`,
+    `Persona: ${selectedPersona}`,
+    `Command level: ${selectedCommandLevel}`,
     "",
-    "## Situation Summary",
+    "User question",
+    question || "Not supplied",
     "",
-    `Question: ${valueOrDefault(question)}`,
-    `Persona: ${valueOrDefault(context.persona)}`,
-    `Mode: ${valueOrDefault(context.mode)}`,
-    `Command level: ${valueOrDefault(context.command_level || context.commandLevel || context.level)}`,
+    "Immediate priorities",
+    buildNumberedList(immediatePriorities),
     "",
-    "## Initial Assessment",
+    "Command actions",
+    buildNumberedList(commandActions),
     "",
-    hasDataCentreTerm
-      ? isClearTrainingExercise
-        ? "A data centre, cloud facility or digital infrastructure term has been detected. CIMA should treat this as a specialist defensive-support training question subject to human review."
-        : "A data centre, cloud facility or digital infrastructure term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
-      : "No data centre or digital infrastructure term was detected in the supplied question. Review whether this agent has been called correctly.",
+    "Information to capture in the incident log",
+    buildNumberedList(informationToCapture),
     "",
-    "## Known Evidence",
+    "Communications guidance",
+    buildNumberedList(communicationsGuidance),
     "",
-    "- The user has raised a data centre, cloud facility, server room or digital infrastructure concern or scenario.",
-    "- The available facts must be separated from assumptions, reports and unknowns.",
-    "- Any operational use of this output requires human review, local procedures and command judgement.",
+    isClearTrainingExercise ? "Exercise setup checks" : "Clarifying questions",
+    buildNumberedList(isClearTrainingExercise ? exerciseSetupChecks : clarificationQuestions),
     "",
-    isClearTrainingExercise ? "## Exercise Setup Checks" : "## Information Gaps",
+    "Human review and escalation flags",
+    buildNumberedList(humanReviewFlags),
     "",
-    ...(isClearTrainingExercise ? exerciseSetupChecks : clarificationQuestions).map((item) => `- ${item}`),
-    "",
-    "## Defensive Recommended Actions",
-    "",
-    "- Establish whether this is a live incident, an exercise, a training scenario or a planning question.",
-    "- Confirm who has command responsibility and who is maintaining the decision log.",
-    "- Confirm the affected facility, service, customer group, supplier, system or dependency.",
-    "- Confirm what is known, what is reported, what is suspected and what remains unknown.",
-    "- Identify whether there is immediate risk to life, staff safety, public safety, vulnerable people or essential services.",
-    "- Identify whether the incident affects power, cooling, network connectivity, access control, fire systems, security, suppliers or customer services.",
-    "- Identify whether the impact is local, customer-specific, regional, national or cross-sector.",
-    "- Notify the appropriate site, operations, facilities, IT, security, continuity, communications or command lead in line with local procedures.",
-    "- Consider whether emergency services, regulators, customers, suppliers or sector bodies need to be informed under local procedures.",
-    "- Maintain controlled internal communications and avoid speculation.",
-    "- Preserve a timed decision log recording decisions, uncertainty, action owners and review points.",
-    "",
-    "## Escalation Requirements",
-    "",
-    "- Escalate to the responsible human command lead where life safety, staff safety, public safety, essential services or critical digital infrastructure may be affected.",
-    "- Escalate immediately where there are injuries, trapped people, missing people, fire, smoke, electrical risk, flooding or uncontrolled site access.",
-    "- Escalate where disruption may affect power, cooling, communications, cloud services, customer systems, healthcare, transport, public services or other essential services.",
-    "- Escalate where there is a suspected hostile, cyber, sabotage, insider, drone, terrorism or coordinated threat element.",
-    "- Escalate if media interest, customer communications, political sensitivity or reputational exposure may arise.",
-    "- Escalate if authority, ownership, dependency, supplier responsibility or command lead is unclear.",
-    "",
-    "## Source Status",
-    "",
+    "Source status",
     sourceStatus,
     "",
-    "Approved CIMA sources have been searched and supplied to this agent where available. Human review remains required before operational reliance.",
-    "External search is not authorised unless the user gives explicit permission after the approved source search is insufficient.",
+    "Approved Source Review",
+    approvedSourceReviewLines.join("\n"),
     "",
-    "## Suggested Approved-Source Search Plan",
-    "",
-    ...searchPlan.suggested_internal_search_terms.map((item) => `- ${item}`),
-    "",
-    "## Training Notes",
-    "",
-    "- This scenario should test whether users separate facts from assumptions.",
-    "- It should test whether Gold, Silver and Bronze command roles are clear.",
-    "- It should test whether service impact, dependencies and supplier responsibilities are identified.",
-    "- It should test whether the decision log records time, source, uncertainty, action owner and review point.",
-    "- It should test whether communications remain controlled, factual and non-speculative.",
-    "- It should test whether escalation thresholds are recognised without giving unsafe operational detail.",
-    "",
-    "## Approved Source Review",
-    "",
-    ...approvedSourceReviewLines,
-    "",
-    `Source support status: ${sourceSupportStatus}`,
-    "External search used: No",
-    "",
-    "## Audit Record",
-    "",
-    `Agent: ${DATA_CENTRE_AGENT_NAME}`,
-    `Build ISO: ${DATA_CENTRE_AGENT_BUILD_ISO}`,
+    "Audit record",
+    `Agent: ${TERRORIST_THREAT_AGENT_NAME}`,
+    `Build ISO: ${TERRORIST_THREAT_AGENT_BUILD_ISO}`,
     "External search used: No",
     "FAISS searched directly by this agent: No",
     "Human review required: Yes"
-  ].join("\n");
+  ]);
 
   return {
     ok: true,
-    agent: DATA_CENTRE_AGENT_NAME,
-    build_iso: DATA_CENTRE_AGENT_BUILD_ISO,
-    response_path: "DATA CENTRE AGENT",
-    path: "DATA CENTRE AGENT",
-    rag: "AMBER",
-    rag_status: "AMBER",
+    agent: TERRORIST_THREAT_AGENT_NAME,
+    build_iso: TERRORIST_THREAT_AGENT_BUILD_ISO,
+    response_path: "TERRORIST THREAT AGENT",
+    path: "TERRORIST THREAT AGENT",
+    rag: isLiveIncident ? "RED" : "AMBER",
+    rag_status: isLiveIncident ? "RED" : "AMBER",
     hitl: "Required before operational reliance",
     confidence: "Provisional",
     source_mode: sourceStatus,
-    safety_notice: DATA_CENTRE_AGENT_LIMITATION,
+    requires_human_review: true,
+    requires_escalation_check: true,
+    safety_notice: TERRORIST_THREAT_LIMITATION,
+    clarity_questions: clarificationQuestions,
     clarification_questions: clarificationQuestions,
-    search_plan: searchPlan,
-    answer,
+    search_plan: {
+      approved_sources_first: true,
+      external_search_allowed: false,
+      external_search_note: "External search must not be used unless the user gives explicit permission after approved CIMA sources have been checked.",
+      suggested_internal_search_terms: [
+        "terrorist threat incident management",
+        "public safety command response",
+        "hostile actor emergency planning",
+        "protective security incident management",
+        "Silver command terrorist threat",
+        "venue public safety terrorist threat"
+      ]
+    },
+    answer: responseText,
     sources: approvedSourceResults
   };
 }
 
-function getDataCentreAgentStatus() {
+function getTerroristThreatAgentStatus() {
   return {
     ok: true,
-    agent: DATA_CENTRE_AGENT_NAME,
-    build_iso: DATA_CENTRE_AGENT_BUILD_ISO,
-    direct_faiss_search: false,
-    external_search: false,
-    defensive_support_only: true,
-    trigger_terms: DATA_CENTRE_TRIGGER_TERMS
+    agent: TERRORIST_THREAT_AGENT_NAME,
+    build_iso: TERRORIST_THREAT_AGENT_BUILD_ISO,
+    response_path: "TERRORIST THREAT AGENT",
+    safety_notice: TERRORIST_THREAT_LIMITATION
   };
 }
 
 export {
-  buildDataCentreResponse,
-  getDataCentreAgentStatus
+  buildTerroristThreatResponse,
+  getTerroristThreatAgentStatus
 };
 
 export default {
-  buildDataCentreResponse,
-  getDataCentreAgentStatus
+  buildTerroristThreatResponse,
+  getTerroristThreatAgentStatus
 };
