@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Stadium Agent
  * File: operational/stadium_agent.js
- * ISO Timestamp: 2026-06-22T12:30:00+01:00
+ * ISO Timestamp: 2026-06-22T14:10:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for stadium, arena, venue, event and crowd-safety questions.
@@ -13,6 +13,7 @@
  * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
  * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
  * - v0.1.2: uses shared source_review_formatter.js for clean Approved Source Review output.
+ * - v0.1.3: removed visible Source Status section; Approved Source Review now carries readable source evidence.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -31,7 +32,7 @@ import {
   buildApprovedSourceReviewLines
 } from "./source_review_formatter.js";
 
-const STADIUM_AGENT_BUILD_ISO = "2026-06-22T12:30:00+01:00";
+const STADIUM_AGENT_BUILD_ISO = "2026-06-22T14:10:00+01:00";
 
 const STADIUM_AGENT_NAME = "stadium_agent";
 
@@ -233,16 +234,8 @@ function buildStadiumResponse(input = {}) {
   const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
-  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
-    ? "No approved CIMA source search or source records were supplied to this agent."
-    : approvedSourceCount > 0
-      ? "Source-supported for defensive command, crowd-safety, incident management or training context only. Human review remains required."
-      : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
-
   const approvedSourceReviewLines = buildApprovedSourceReviewLines({
-    results: approvedSourceResults,
-    sourceSupportStatus,
-    externalSearchUsed: "No"
+    results: approvedSourceResults
   });
 
   const hasStadiumTerm = hasAnyTerm(question, STADIUM_TRIGGER_TERMS);
@@ -341,13 +334,6 @@ function buildStadiumResponse(input = {}) {
     "- Escalate where there is a suspected hostile, cyber, sabotage, insider, drone, terrorism or coordinated threat element.",
     "- Escalate if media interest, public communications, political sensitivity or reputational exposure may arise.",
     "- Escalate if authority, command lead, venue responsibility or emergency-service liaison is unclear.",
-    "",
-    "## Source Status",
-    "",
-    sourceStatus,
-    "",
-    "Approved CIMA sources have been searched and supplied to this agent where available. Human review remains required before operational reliance.",
-    "External search is not authorised unless the user gives explicit permission after the approved source search is insufficient.",
     "",
     "## Suggested Approved-Source Search Plan",
     "",
