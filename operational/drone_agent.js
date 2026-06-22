@@ -1,12 +1,18 @@
 /**
  * AIVS / PGB CIMA - Drone Threat Agent
  * File: operational/drone_agent.js
- * ISO Timestamp: 2026-06-14T13:05:00+01:00
+ * ISO Timestamp: 2026-06-22T12:00:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for drone, UAV and unmanned aircraft questions.
  * - Supports incident management, command, escalation, communications, training and audit.
  * - Works after question_intake_agent.js has identified a drone-related trigger.
+ *
+ * Change Log:
+ * - v0.1.0: existing drone specialist response agent.
+ * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
+ * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
+ * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -21,7 +27,7 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const DRONE_AGENT_BUILD_ISO = "2026-06-14T13:05:00+01:00";
+const DRONE_AGENT_BUILD_ISO = "2026-06-22T12:00:00+01:00";
 
 const DRONE_AGENT_NAME = "drone_agent";
 
@@ -152,6 +158,30 @@ function buildDroneSearchPlan(input = {}) {
   };
 }
 
+function getApprovedSourceResults(input = {}, knowledgeSearch = null) {
+  if (knowledgeSearch && Array.isArray(knowledgeSearch.results)) {
+    return knowledgeSearch.results;
+  }
+
+  if (Array.isArray(input.sources)) {
+    return input.sources;
+  }
+
+  if (Array.isArray(input.approvedSources)) {
+    return input.approvedSources;
+  }
+
+  if (Array.isArray(input.sourceRecords)) {
+    return input.sourceRecords;
+  }
+
+  if (Array.isArray(input.retrievalResults)) {
+    return input.retrievalResults;
+  }
+
+  return [];
+}
+
 function buildDroneResponse(input = {}) {
   const question = safeString(input.question || "");
   const context = input.context && typeof input.context === "object"
@@ -166,10 +196,7 @@ function buildDroneResponse(input = {}) {
     ? input.knowledgeSearch
     : null;
 
-  const approvedSourceResults = knowledgeSearch && Array.isArray(knowledgeSearch.results)
-    ? knowledgeSearch.results
-    : [];
-
+  const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
   const firstApprovedSource = approvedSourceResults[0] || null;
 
@@ -210,13 +237,13 @@ function buildDroneResponse(input = {}) {
 
   const primarySource = firstApprovedSource
     ? extractSourceLabel(firstApprovedSource)
-    : "None retained after specialist filtering";
+    : "No approved source supplied";
 
-  const sourceSupportStatus = !knowledgeSearch
-    ? "No approved CIMA source search was supplied to this agent."
+  const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
+    ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
       ? "Source-supported for defensive drone-related incident management or training context only. Human review remains required."
-      : "No relevant approved drone source was retained after specialist filtering. The answer remains provisional and should not be treated as source-supported.";
+      : "No relevant approved drone source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
 
   const hasDroneTerm = hasAnyTerm(question, DRONE_TRIGGER_TERMS);
 
@@ -232,8 +259,8 @@ function buildDroneResponse(input = {}) {
     intake
   });
 
-  const sourceStatus = knowledgeSearch
-    ? "Approved CIMA source search has been supplied to this agent for review."
+  const sourceStatus = knowledgeSearch || approvedSourceCount > 0
+    ? "Approved CIMA source search or source records have been supplied to this agent for review."
     : "Approved CIMA source search has not yet been supplied to this agent.";
 
   const answer = [
@@ -257,13 +284,6 @@ function buildDroneResponse(input = {}) {
     hasDroneTerm
       ? "A drone or UAV-related term has been detected. CIMA should treat this as a specialist defensive-support question until clarified."
       : "No drone term was detected in the supplied question. Review whether this agent has been called correctly.",
-    "",
-    "## Approved Source Review",
-    "",
-    `Approved sources reviewed: ${approvedSourceCount}`,
-    `Primary source: ${primarySource}`,
-    `Source support status: ${sourceSupportStatus}`,
-    "External search used: No",
     "",
     "## Known Evidence",
     "",
@@ -310,6 +330,13 @@ function buildDroneResponse(input = {}) {
     "- It should test whether Gold, Silver and Bronze roles are clear.",
     "- It should test whether the decision log records time, source, uncertainty, owner and review point.",
     "- It should test whether communications remain controlled and factual.",
+    "",
+    "## Approved Source Review",
+    "",
+    `Approved sources reviewed: ${approvedSourceCount}`,
+    `Primary source: ${primarySource}`,
+    `Source support status: ${sourceSupportStatus}`,
+    "External search used: No",
     "",
     "## Audit Record",
     "",
