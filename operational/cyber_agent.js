@@ -1,7 +1,7 @@
 /**
  * AIVS / PGB CIMA - Cyber Agent
  * File: operational/cyber_agent.js
- * ISO Timestamp: 2026-06-22T11:45:00+01:00
+ * ISO Timestamp: 2026-06-22T13:20:00+01:00
  *
  * Purpose:
  * - Provides defensive CIMA support for cyber incident, digital disruption and information-security questions.
@@ -13,6 +13,7 @@
  * - v0.1.1: corrected approved-source intake so the agent can read source records from multiple supplied payload fields.
  * - v0.1.1: removed misleading "specialist filtering" wording from source-review output.
  * - v0.1.1: moved Approved Source Review to the bottom immediately before Audit Record.
+ * - v0.1.2: uses shared source_review_formatter.js for clean Approved Source Review output.
  *
  * Control Notes:
  * - This agent must not provide attack methods.
@@ -29,7 +30,11 @@
  * - Outputs are draft support only and require authorised human review.
  */
 
-const CYBER_AGENT_BUILD_ISO = "2026-06-22T11:45:00+01:00";
+import {
+  buildApprovedSourceReviewLines
+} from "./source_review_formatter.js";
+
+const CYBER_AGENT_BUILD_ISO = "2026-06-22T13:20:00+01:00";
 
 const CYBER_AGENT_NAME = "cyber_agent";
 
@@ -237,104 +242,17 @@ function buildCyberResponse(input = {}) {
   const approvedSourceResults = getApprovedSourceResults(input, knowledgeSearch);
   const approvedSourceCount = approvedSourceResults.length;
 
-  function extractSourceUrl(item = {}) {
-    const directUrl = safeString(item.source_url || item.url || "").trim();
-
-    if (directUrl) {
-      return directUrl;
-    }
-
-    const text = safeString(item.text || item.snippet || "");
-    const match = text.match(/SOURCE_URL:\s*([^\s]+)/i);
-
-    return match && match[1] ? match[1].trim() : "";
-  }
-
-  function extractIndexedSourceFile(item = {}) {
-    const sourceFile = safeString(item.source_file || "").trim();
-
-    if (sourceFile) {
-      return sourceFile;
-    }
-
-    const text = safeString(item.text || item.snippet || "");
-    const match = text.match(/SOURCE_FILE:\s*([^\n]+)/i);
-
-    return match && match[1] ? match[1].trim() : "Indexed source file not supplied";
-  }
-
-  function extractChunkId(item = {}) {
-    return safeString(item.chunk_id || "").trim();
-  }
-
-  function extractChunkIndex(item = {}) {
-    if (item.chunk_index !== null && item.chunk_index !== undefined) {
-      return safeString(item.chunk_index).trim();
-    }
-
-    const text = safeString(item.text || item.snippet || "");
-    const match = text.match(/CHUNK_INDEX:\s*([^\n]+)/i);
-
-    return match && match[1] ? match[1].trim() : "";
-  }
-
-  function buildApprovedSourceReviewLines(results = []) {
-    if (!Array.isArray(results) || results.length === 0) {
-      return [
-        "Approved source records returned: 0",
-        "No indexed source records were supplied to this specialist agent."
-      ];
-    }
-
-    const lines = [
-      `Approved source records returned: ${results.length}`
-    ];
-
-    results.slice(0, 5).forEach((item, index) => {
-      const indexedFile = extractIndexedSourceFile(item);
-      const sourceUrl = extractSourceUrl(item);
-      const chunkId = extractChunkId(item);
-      const chunkIndex = extractChunkIndex(item);
-      const score = item.score;
-      const matchedTerms = Array.isArray(item.matched_terms)
-        ? item.matched_terms.filter(Boolean).map((term) => safeString(term).trim()).filter(Boolean)
-        : [];
-
-      lines.push("");
-      lines.push(`Source ${index + 1}:`);
-      lines.push(`Indexed file: ${indexedFile}`);
-
-      if (chunkId) {
-        lines.push(`Chunk ID: ${chunkId}`);
-      }
-
-      if (chunkIndex) {
-        lines.push(`Chunk index: ${chunkIndex}`);
-      }
-
-      if (typeof score === "number") {
-        lines.push(`Retrieval score: ${score}`);
-      }
-
-      if (matchedTerms.length > 0) {
-        lines.push(`Matched terms: ${matchedTerms.join(", ")}`);
-      }
-
-      if (sourceUrl) {
-        lines.push(`Source URL found in indexed chunk: ${sourceUrl}`);
-      }
-    });
-
-    return lines;
-  }
-
-  const approvedSourceReviewLines = buildApprovedSourceReviewLines(approvedSourceResults);
-
   const sourceSupportStatus = !knowledgeSearch && approvedSourceCount === 0
     ? "No approved CIMA source search or source records were supplied to this agent."
     : approvedSourceCount > 0
       ? "Source-supported for defensive cyber incident management, command, continuity or training context only. Human review remains required."
       : "No relevant approved source was supplied to this specialist agent. The answer remains provisional and should not be treated as source-supported.";
+
+  const approvedSourceReviewLines = buildApprovedSourceReviewLines({
+    results: approvedSourceResults,
+    sourceSupportStatus,
+    externalSearchUsed: "No"
+  });
 
   const hasCyberTerm = hasAnyTerm(question, CYBER_TRIGGER_TERMS);
 
@@ -456,9 +374,6 @@ function buildCyberResponse(input = {}) {
     "## Approved Source Review",
     "",
     ...approvedSourceReviewLines,
-    "",
-    `Source support status: ${sourceSupportStatus}`,
-    "External search used: No",
     "",
     "## Audit Record",
     "",
