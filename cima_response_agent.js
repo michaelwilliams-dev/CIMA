@@ -271,8 +271,8 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
     return [
       answer,
       "",
-      "## Evidence Basis",
-      "No indexed source records were returned for this response. This answer is based on the CIMA response agent structure, the user question, the selected context and the current session payload only. It must still be reviewed by an authorised human before reliance."
+      "## Source Status",
+      "Approved sources were checked, but no indexed source records were returned for this response. The answer is based on the CIMA response agent structure, the user question, the selected context and the current session payload only. Human review remains required before operational use."
     ].join("\n");
   }
 
@@ -287,13 +287,29 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       .trim();
   }
 
-  function isAssetSource(source = {}, url = "") {
+  function isNonOperationalSource(source = {}, url = "") {
     const combined = [
       url,
       source.source_file,
       source.title,
       source.snippet
     ].join(" ").toLowerCase();
+
+    const blockedTerms = [
+      "accessibility",
+      "accessibility_statement",
+      "privacy",
+      "privacy_notice",
+      "cookie",
+      "cookies",
+      "terms",
+      "terms_of_use",
+      "contact",
+      "about_npsa",
+      "about-us",
+      "about_us",
+      "sitemap"
+    ];
 
     const blockedExtensions = [
       ".css",
@@ -312,44 +328,23 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
       ".map"
     ];
 
-    return blockedExtensions.some((extension) => combined.includes(extension));
-  }
-
-  function getIndexedFileName(source = {}) {
-    const sourceFile = cleanText(source.source_file);
-    const title = cleanText(source.title);
-
-    if (sourceFile) {
-      return sourceFile;
-    }
-
-    if (title && !title.toLowerCase().startsWith("retrieved source")) {
-      return title;
-    }
-
-    return "Indexed source file name not supplied";
+    return (
+      blockedTerms.some((term) => combined.includes(term)) ||
+      blockedExtensions.some((extension) => combined.includes(extension))
+    );
   }
 
   const seen = new Set();
-  const cleanSources = [];
+  const usableSources = [];
+  const excludedSources = [];
 
   for (const source of sources) {
     const url = extractUrl(source.snippet || "");
-
-    if (isAssetSource(source, url)) {
-      continue;
-    }
-
-    const indexedFile = getIndexedFileName(source);
-    const chunkId = cleanText(source.chunk_id);
-    const score = source.score;
-    const matchedTerms = Array.isArray(source.matched_terms)
-      ? source.matched_terms.filter(Boolean).map(cleanText).filter(Boolean)
-      : [];
+    const sourceName = cleanText(source.source_file || source.title || "");
 
     const key = [
-      indexedFile,
-      chunkId,
+      sourceName,
+      cleanText(source.chunk_id || ""),
       url
     ].join("|");
 
@@ -359,58 +354,50 @@ function appendSourceEvidenceToAnswer(answer = "", sources = []) {
 
     seen.add(key);
 
-    cleanSources.push({
-      indexed_file: indexedFile,
-      chunk_id: chunkId,
-      score,
-      matched_terms: matchedTerms,
+    if (isNonOperationalSource(source, url)) {
+      excludedSources.push({
+        source_name: sourceName || "Non-operational indexed source",
+        url
+      });
+      continue;
+    }
+
+    usableSources.push({
+      source_name: sourceName || "Approved indexed source",
       url
     });
-
-    if (cleanSources.length >= 5) {
-      break;
-    }
   }
 
-  if (cleanSources.length === 0) {
-    return [
-      answer,
-      "",
-      "## Evidence Basis",
-      "No usable indexed source records were returned for this response after filtering out non-document assets. This answer is based on the CIMA response agent structure, the user question, the selected context and the current session payload only. It must still be reviewed by an authorised human before reliance."
-    ].join("\n");
+  const sourceStatus = [];
+
+  sourceStatus.push("");
+  sourceStatus.push("## Source Status");
+
+  if (usableSources.length > 0) {
+    sourceStatus.push(
+      `Approved sources were checked. ${usableSources.length} relevant indexed source record${usableSources.length === 1 ? " was" : "s were"} identified from the CIMA knowledge store.`
+    );
+  } else {
+    sourceStatus.push(
+      "Approved sources were checked, but no usable operational source record remained after filtering out non-operational material."
+    );
   }
 
-  const sourceSections = [];
+  if (excludedSources.length > 0) {
+    sourceStatus.push(
+      `${excludedSources.length} non-operational source record${excludedSources.length === 1 ? " was" : "s were"} excluded from reliance because it appeared to relate to website, accessibility, privacy, contact, asset or other non-operational material.`
+    );
+  }
 
-  sourceSections.push("");
-  sourceSections.push("## Indexed Evidence Returned for Review");
-  sourceSections.push(
-    "CIMA returned the following indexed evidence records from the knowledge store. This section is generated from retrieval metadata only. It does not rename, summarise or infer document titles from public website domains. The records must be checked by an authorised human before operational, legal, public or assurance use."
+  sourceStatus.push(
+    "Detailed retrieval metadata, including file paths, chunk IDs, retrieval scores, matched terms and source URLs, should remain available for audit and technical review, but is not shown in the main user-facing answer."
   );
 
-  cleanSources.forEach((source, index) => {
-    sourceSections.push("");
-    sourceSections.push(`- ${index + 1}. Indexed file: ${source.indexed_file}`);
+  sourceStatus.push(
+    "Human review remains required before operational, legal, public, assurance or safety-critical use."
+  );
 
-    if (source.chunk_id) {
-      sourceSections.push(`  Chunk ID: ${source.chunk_id}`);
-    }
-
-    if (typeof source.score === "number") {
-      sourceSections.push(`  Retrieval score: ${source.score}`);
-    }
-
-    if (source.matched_terms.length > 0) {
-      sourceSections.push(`  Matched terms: ${source.matched_terms.join(", ")}`);
-    }
-
-    if (source.url) {
-      sourceSections.push(`  Source URL found in indexed chunk: ${source.url}`);
-    }
-  });
-
-  return `${answer}\n${sourceSections.join("\n")}`;
+  return `${answer}\n${sourceStatus.join("\n")}`;
 }
 
 export function buildCimaResponse({
