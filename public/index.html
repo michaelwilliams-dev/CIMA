@@ -4175,132 +4175,49 @@ body {
       ].join("\n");
     }
 
-    async function askQuestion() {
-      if (!accessConfirmed) {
-        alert("Access has not been confirmed.");
-        return;
-      }
+async function askQuestion() {
+  if (!accessConfirmed) {
+    alert("Access has not been confirmed.");
+    return;
+  }
 
-      const input = document.getElementById("questionInput");
-      const sendButton = document.getElementById("sendButton");
-      let question = input.value.trim();
-      let clarificationRunHtml = "";
-      let questionTitleOverride = "";
-      let originalQuestion = "";
-      let clarificationAnswer = "";
-      let clarificationQuestion = "";
-      let revisedQuestion = "";
+  const input = document.getElementById("questionInput");
+  const sendButton = document.getElementById("sendButton");
 
-      if (!question) {
-        return;
-      }
+  let question = input.value.trim();
 
-      if (
-        window.CimaClarification &&
-        typeof window.CimaClarification.hasActiveSession === "function" &&
-        typeof window.CimaClarification.recordAnswer === "function" &&
-        typeof window.CimaClarification.isComplete === "function" &&
-        typeof window.CimaClarification.buildCombinedQuestion === "function" &&
-        window.CimaClarification.hasActiveSession()
-      ) {
-        clarificationAnswer = question;
-        clarificationQuestion =
-          typeof window.CimaClarification.getCurrentQuestion === "function"
-            ? window.CimaClarification.getCurrentQuestion()
-            : "";
+  if (!question) {
+    return;
+  }
 
-        window.CimaClarification.recordAnswer(question);
+  let isClarificationCompletion = false;
+  let originalQuestion = "";
+  let clarificationQuestion = "";
+  let clarificationAnswer = "";
+  let revisedQuestion = "";
 
-        if (!window.CimaClarification.isComplete()) {
-          const nextQuestion = window.CimaClarification.getCurrentQuestion();
+  if (
+    window.CimaClarification &&
+    typeof window.CimaClarification.hasActiveSession === "function" &&
+    typeof window.CimaClarification.recordAnswer === "function" &&
+    typeof window.CimaClarification.isComplete === "function" &&
+    typeof window.CimaClarification.buildCombinedQuestion === "function" &&
+    window.CimaClarification.hasActiveSession()
+  ) {
+    clarificationAnswer = question;
 
-          input.value = "";
-          input.placeholder = "Answer this clarification question...";
+    clarificationQuestion =
+      typeof window.CimaClarification.getCurrentQuestion === "function"
+        ? window.CimaClarification.getCurrentQuestion()
+        : "";
 
-          addMessage(
-            "agent",
-            "Clarification needed",
-            `
-              <p><strong>Please answer this next clarification question:</strong></p>
-              <p>${escapeHtml(nextQuestion)}</p>
-            `
-          );
+    window.CimaClarification.recordAnswer(question);
 
-          document.getElementById("lastOutput").textContent =
-            "Answer the clarification question shown in the main reply area.";
+    if (!window.CimaClarification.isComplete()) {
+      const nextQuestion = window.CimaClarification.getCurrentQuestion();
 
-          return;
-        }
-
-        const combinedQuestion = window.CimaClarification.buildCombinedQuestion();
-        const combinedText = String(combinedQuestion || "");
-
-        originalQuestion = combinedText;
-        let sessionFactBase = "";
-
-        const originalLabel = "Original question:";
-        const sessionLabel = "Session fact base:";
-        const originalStart = combinedText.indexOf(originalLabel);
-        const sessionStart = combinedText.indexOf(sessionLabel);
-
-        if (originalStart !== -1 && sessionStart !== -1 && sessionStart > originalStart) {
-          originalQuestion = combinedText
-            .slice(originalStart + originalLabel.length, sessionStart)
-            .trim();
-
-          sessionFactBase = combinedText
-            .slice(sessionStart + sessionLabel.length)
-            .trim();
-        }
-
-        const sessionLines = sessionFactBase
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean);
-
-        const answerLines = [];
-
-        for (const line of sessionLines) {
-          const answerMatch =
-            line.match(/^answer\s*\d*\s*:\s*(.+)$/i) ||
-            line.match(/^a\s*\d*\s*:\s*(.+)$/i) ||
-            line.match(/^clarification answer\s*\d*\s*:\s*(.+)$/i);
-
-          if (answerMatch && answerMatch[1]) {
-            answerLines.push(answerMatch[1].trim());
-          }
-        }
-
-        const combinedClarificationAnswers = answerLines.length
-          ? answerLines.join(" ")
-          : sessionFactBase;
-
-        clarificationAnswer = combinedClarificationAnswers || clarificationAnswer;
-
-        revisedQuestion = [originalQuestion, combinedClarificationAnswers]
-          .join(" ")
-          .replace(/\s+/g, " ")
-          .trim();
-
-        question = revisedQuestion;
-        questionTitleOverride = "Question 1";
-
-        clarificationRunHtml = `
-          <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
-          <p>${escapeHtml(originalQuestion)}</p>
-
-          <p><strong>Clarification needed</strong></p>
-          <p>${escapeHtml(clarificationQuestion)}</p>
-
-          <p><strong>Clarification answer</strong></p>
-          <p>${escapeHtml(clarificationAnswer)}</p>
-
-          <p><strong>Revised search question sent to CIMA</strong></p>
-          <p>${escapeHtml(revisedQuestion)}</p>
-        `;
-      }
-
-      activeReplyView = "standard";
+      input.value = "";
+      input.placeholder = "Answer this clarification question...";
 
       const replyArea = document.getElementById("replyArea");
       if (replyArea) {
@@ -4308,348 +4225,450 @@ body {
         replyArea.innerHTML = "";
       }
 
-      questions.push(question);
+      addMessage(
+        "agent",
+        "Clarification needed",
+        `
+          <p><strong>Please answer this next clarification question:</strong></p>
+          <p>${escapeHtml(nextQuestion)}</p>
+        `
+      );
 
-      const predictedPath = determinePath(question);
-      const context = getContext();
+      document.getElementById("lastOutput").textContent =
+        "Answer the clarification question shown in the main reply area.";
 
-      document.getElementById("questionCount").textContent = String(questions.length);
-      document.getElementById("pathStatus").textContent = predictedPath;
-      document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
-      document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
+      return;
+    }
 
-      document.getElementById("processStepAccess").className = "process-step active";
-      document.getElementById("processStepContext").className = "process-step active";
-      document.getElementById("processStepQuestion").className = "process-step active";
-      document.getElementById("processStepResponse").className = "process-step active";
-      document.getElementById("processStepDelivery").className = "process-step muted";
+    const combinedQuestion = window.CimaClarification.buildCombinedQuestion();
+    const combinedText = String(combinedQuestion || "");
 
-      updateContextFromControls();
+    originalQuestion = combinedText;
 
-      document.getElementById("deliveryQuestionStatus").textContent = "Submitted";
-      document.getElementById("deliveryQuestionStatus").className = "";
+    let sessionFactBase = "";
 
-      document.getElementById("deliveryResponseStatus").textContent = "Preparing";
-      document.getElementById("deliveryResponseStatus").className = "pending";
+    const originalLabel = "Original question:";
+    const sessionLabel = "Session fact base:";
+    const originalStart = combinedText.indexOf(originalLabel);
+    const sessionStart = combinedText.indexOf(sessionLabel);
 
-const questionMessageTitle = questionTitleOverride || `Question ${questions.length}`;
+    if (originalStart !== -1 && sessionStart !== -1 && sessionStart > originalStart) {
+      originalQuestion = combinedText
+        .slice(originalStart + originalLabel.length, sessionStart)
+        .trim();
 
-const questionMessageBody = clarificationRunHtml || `
-  <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
-  <p>${escapeHtml(question)}</p>
-`;
+      sessionFactBase = combinedText
+        .slice(sessionStart + sessionLabel.length)
+        .trim();
+    }
 
-if (questionTitleOverride) {
-  addMessage(
-    "user",
-    "Question 1 - clarified",
-    `
-      <p><strong>Original question:</strong></p>
-      <p>${escapeHtml(originalQuestion)}</p>
+    const sessionLines = sessionFactBase
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
 
-      <p><strong>Clarification answer:</strong></p>
-      <p>${escapeHtml(clarificationAnswer)}</p>
+    const answerLines = [];
 
-      <p><strong>Final question sent to CIMA:</strong></p>
-      <p>${escapeHtml(revisedQuestion)}</p>
-    `
-  );
-} else {
-  addMessage(
-    "user",
-    questionMessageTitle,
-    questionMessageBody
-  );
-}
-    input.value = "Searching the CIMA database and preparing the response...";
-    document.getElementById("lastOutput").textContent = "Searching the CIMA database and preparing the response...";
+    for (const line of sessionLines) {
+      const answerMatch =
+        line.match(/^answer\s*\d*\s*:\s*(.+)$/i) ||
+        line.match(/^a\s*\d*\s*:\s*(.+)$/i) ||
+        line.match(/^clarification answer\s*\d*\s*:\s*(.+)$/i);
 
-      let answer = "";
-      let finalPath = predictedPath;
-      let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
-      let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
-      let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
-
-      let debugStage = "before fetch";
-      let cimaPayload = null;
-
-      try {
-        sendButton.disabled = true;
-
-        debugStage = "fetch /cima-chat";
-
-          cimaPayload = {
-          question,
-          original_question: questionTitleOverride ? question : "",
-          clarification_follow_up: Boolean(questionTitleOverride),
-          clarification_complete: Boolean(questionTitleOverride),
-          session_id: cimaBrowserSessionId,
-          context,
-          access: {
-            mode: accessMode,
-            email: gateEmailOne
-          },
-          terms: {
-            accepted: true,
-            accepted_at: new Date().toISOString()
-          },
-          session: {
-            session_id: cimaBrowserSessionId,
-            question_count: questions.length,
-            include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false,
-            clarification_follow_up: Boolean(questionTitleOverride),
-            clarification_complete: Boolean(questionTitleOverride)
-          }
-        };
-
-        async function postCimaChatOnce() {
-            const response = await fetch("/cima-chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(cimaPayload)
-          });
-
-          const rawText = await response.text();
-
-          try {
-            return {
-              res: response,
-              data: JSON.parse(rawText)
-            };
-          } catch (parseError) {
-            throw new Error(
-              "Could not parse /cima-chat JSON. HTTP status: " +
-              response.status +
-              ". First response text: " +
-              String(rawText || "").slice(0, 300)
-            );
-          }
-        }
-
-        let res;
-        let data;
-
-        try {
-          debugStage = "fetch /cima-chat first attempt";
-          const firstAttempt = await postCimaChatOnce();
-          res = firstAttempt.res;
-          data = firstAttempt.data;
-        } catch (firstError) {
-          debugStage = "fetch /cima-chat retry after parse failure";
-          await new Promise((resolve) => setTimeout(resolve, 700));
-          const secondAttempt = await postCimaChatOnce();
-          res = secondAttempt.res;
-          data = secondAttempt.data;
-        }
-
-        debugStage = "validate /cima-chat json";
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Backend response failed.");
-        }
-
-                if (!data.answer) {
-          throw new Error(
-            "Backend returned ok:true but no answer field. Response keys: " +
-            Object.keys(data || {}).join(", ")
-          );
-        }
-
-        answer = data.answer;
-        finalPath = data.response_path || data.path || predictedPath;
-        hitl = data.hitl || data.human_in_the_loop || hitl;
-        confidence = data.confidence || confidence;
-        rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
-
-        const answerForRagCheck = String(answer || "").toUpperCase();
-        const questionForRagCheck = String(question || "").toUpperCase();
-
-        const isLiveConfirmedRisk =
-          (
-            questionForRagCheck.includes("LIVE") ||
-            questionForRagCheck.includes("CONFIRMED") ||
-            questionForRagCheck.includes("NOW")
-          ) &&
-          (
-            questionForRagCheck.includes("DRONE") ||
-            questionForRagCheck.includes("TERRORIST") ||
-            questionForRagCheck.includes("THREAT")
-          );
-
-        if (isLiveConfirmedRisk) {
-          rag = "RED";
-        } else if (
-          answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
-          questionForRagCheck.includes("UNCONFIRMED")
-        ) {
-          rag = "AMBER";
-        }
-
-        latestSources = data.sources || [];
-
-        if (
-          window.CimaClarification &&
-          typeof window.CimaClarification.extractQuestionsFromAnswer === "function" &&
-          typeof window.CimaClarification.start === "function"
-        ) {
-          const backendClarificationQuestions = Array.isArray(data.clarification_questions)
-            ? data.clarification_questions
-            : [];
-
-          const clarificationQuestions = backendClarificationQuestions.length > 0
-            ? backendClarificationQuestions
-            : window.CimaClarification.extractQuestionsFromAnswer(answer);
-
-          const answerTextForClarification = String(answer || "").toUpperCase();
-
-          if (
-            (
-              data.pending_clarification === true ||
-              answerTextForClarification.includes("CLARIFICATION REQUIRED")
-            ) &&
-            clarificationQuestions.length > 0
-          ) {
-            window.CimaClarification.start(question, context, clarificationQuestions);
-
-            const firstClarificationQuestion =
-              typeof window.CimaClarification.getCurrentQuestion === "function"
-                ? window.CimaClarification.getCurrentQuestion()
-                : clarificationQuestions[0];
-
-            const replyArea = document.getElementById("replyArea");
-            if (replyArea) {
-              replyArea.className = "";
-              replyArea.innerHTML = "";
-            }
-
-            addMessage(
-              "agent",
-              "Clarification needed",
-              `
-                <p><strong>Please answer this clarification question:</strong></p>
-                <p>${escapeHtml(firstClarificationQuestion)}</p>
-              `
-            );
-
-            input.value = "";
-            input.placeholder = "Answer this clarification question...";
-
-            document.getElementById("deliveryResponseStatus").textContent = "Clarification needed";
-            document.getElementById("deliveryResponseStatus").className = "pending";
-
-            document.getElementById("lastOutput").textContent =
-              "Answer the clarification question shown in the main reply area.";
-
-            return;
-          }
-        }
-      } catch (error) {
-        answer = [
-          "## Backend Connection Error",
-          "",
-          "CIMA did not receive a usable response from /cima-chat.",
-          "",
-          "## Error Detail",
-          "",
-          `- Stage: ${debugStage}`,
-          `- Error name: ${error.name || "Not supplied"}`,
-          `- Error message: ${error.message || "Not supplied"}`,
-          `- Browser page URL: ${window.location.href}`,
-          `- Backend URL: https://cima-7fj2.onrender.com/cima-chat`,
-          `- Payload length: ${JSON.stringify(cimaPayload).length}`,
-          `- Browser online: ${navigator.onLine ? "Yes" : "No"}`,
-          "",
-          "## What This Means",
-          "",
-          "The browser is using the frontend error path. The backend may not have redeployed, the browser may be hitting an old service, or the frontend may not be calling the same /cima-chat route tested successfully in Render Shell.",
-          "",
-          "## Safety Note",
-          "",
-          "CIMA has not generated an operational response for this question."
-        ].join("\n");
-
-        finalPath = "BACKEND CONNECTION ERROR";
-        rag = "AMBER";
-        hitl = "Required";
-        confidence = "Backend response not received";
-
-        latestSources = [
-          {
-            title: "Frontend error",
-            note: error.message
-          }
-        ];
-      } finally {
-        sendButton.disabled = false;
+      if (answerMatch && answerMatch[1]) {
+        answerLines.push(answerMatch[1].trim());
       }
+    }
 
-      const universalHitlNotice = [
-        "",
-        "## Human in the loop required before reliance",
-        "All CIMA outputs are draft support only. An authorised human lead must review the output before operational use, onward communication, escalation, de-escalation, public statement or record entry."
-      ].join("\n");
+    const combinedClarificationAnswers = answerLines.length
+      ? answerLines.join(" ")
+      : sessionFactBase;
 
-      if (!String(answer || "").includes("Human in the loop required before reliance")) {
-        answer = `${answer}${universalHitlNotice}`;
+    clarificationAnswer = combinedClarificationAnswers || clarificationAnswer;
+
+    revisedQuestion = [originalQuestion, combinedClarificationAnswers]
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    question = revisedQuestion;
+    isClarificationCompletion = true;
+
+    if (typeof window.CimaClarification.reset === "function") {
+      window.CimaClarification.reset();
+    }
+  }
+
+  activeReplyView = "standard";
+
+  const replyArea = document.getElementById("replyArea");
+  if (replyArea) {
+    replyArea.className = "";
+    replyArea.innerHTML = "";
+  }
+
+  const questionNumber = questions.length + 1;
+  const predictedPath = determinePath(question);
+  const context = getContext();
+
+  document.getElementById("pathStatus").textContent = predictedPath;
+  document.getElementById("threadTitle").textContent = "Active CIMA Incident Thread";
+  document.getElementById("lastOutput").textContent = "CIMA is preparing the response...";
+
+  document.getElementById("processStepAccess").className = "process-step active";
+  document.getElementById("processStepContext").className = "process-step active";
+  document.getElementById("processStepQuestion").className = "process-step active";
+  document.getElementById("processStepResponse").className = "process-step active";
+  document.getElementById("processStepDelivery").className = "process-step muted";
+
+  updateContextFromControls();
+
+  document.getElementById("deliveryQuestionStatus").textContent = "Submitted";
+  document.getElementById("deliveryQuestionStatus").className = "";
+
+  document.getElementById("deliveryResponseStatus").textContent = "Preparing";
+  document.getElementById("deliveryResponseStatus").className = "pending";
+
+  if (isClarificationCompletion) {
+    addMessage(
+      "user",
+      `Question ${questionNumber} - clarified`,
+      `
+        <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+
+        <p><strong>Original question:</strong></p>
+        <p>${escapeHtml(originalQuestion)}</p>
+
+        <p><strong>Clarification answer:</strong></p>
+        <p>${escapeHtml(clarificationAnswer)}</p>
+
+        <p><strong>Final question sent to CIMA:</strong></p>
+        <p>${escapeHtml(revisedQuestion)}</p>
+      `
+    );
+  } else {
+    addMessage(
+      "user",
+      `Question ${questionNumber}`,
+      `
+        <p><strong>Timestamp:</strong> ${escapeHtml(new Date().toISOString())}</p>
+        <p>${escapeHtml(question)}</p>
+      `
+    );
+  }
+
+  input.value = "Searching the CIMA database and preparing the response...";
+  document.getElementById("lastOutput").textContent =
+    "Searching the CIMA database and preparing the response...";
+
+  let answer = "";
+  let finalPath = predictedPath;
+  let hitl = predictedPath === "ASSURANCE PATH" ? "May be required" : "Not triggered";
+  let confidence = predictedPath === "ASSURANCE PATH" ? "Requires source check" : "Provisional";
+  let rag = predictedPath === "ASSURANCE PATH" ? "AMBER" : "GREEN";
+
+  let debugStage = "before fetch";
+  let cimaPayload = null;
+  let shouldCommitQuestion = true;
+
+  try {
+    sendButton.disabled = true;
+
+    debugStage = "build /cima-chat payload";
+
+    cimaPayload = {
+      question,
+      original_question: isClarificationCompletion ? originalQuestion : "",
+      clarification_answer: isClarificationCompletion ? clarificationAnswer : "",
+      clarification_follow_up: isClarificationCompletion,
+      clarification_complete: isClarificationCompletion,
+      session_id: cimaBrowserSessionId,
+      context,
+      access: {
+        mode: accessMode,
+        email: gateEmailOne
+      },
+      terms: {
+        accepted: true,
+        accepted_at: new Date().toISOString()
+      },
+      session: {
+        session_id: cimaBrowserSessionId,
+        question_count: questionNumber,
+        include_transcript_in_email: document.getElementById("includeTranscriptToggle")?.checked !== false,
+        clarification_follow_up: isClarificationCompletion,
+        clarification_complete: isClarificationCompletion
       }
+    };
 
-      latestAnswer = answer;
-
-      const trainingModeBtn = document.getElementById("trainingModeBtn");
-      if (trainingModeBtn) {
-        trainingModeBtn.disabled = false;
-      }
-
-      document.getElementById("pathStatus").textContent = finalPath;
-      document.getElementById("hitlStatus").textContent = hitl;
-      document.getElementById("confidenceStatus").textContent = confidence;
-
-      updateResponseDashboard({
-        path: finalPath,
-        rag,
-        hitl,
-        confidence,
-        answer
+    async function postCimaChatOnce() {
+      const response = await fetch("/cima-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(cimaPayload)
       });
 
-      latestStandardHtml = `
-        ${markdownToHtml(answer)}
-      `;
+      const rawText = await response.text();
 
-      document.getElementById("cimaSearchNotice")?.remove();
+      try {
+        return {
+          res: response,
+          data: JSON.parse(rawText)
+        };
+      } catch (parseError) {
+        throw new Error(
+          "Could not parse /cima-chat JSON. HTTP status: " +
+          response.status +
+          ". First response text: " +
+          String(rawText || "").slice(0, 300)
+        );
+      }
+    }
+
+    let res;
+    let data;
+
+    try {
+      debugStage = "fetch /cima-chat first attempt";
+      const firstAttempt = await postCimaChatOnce();
+      res = firstAttempt.res;
+      data = firstAttempt.data;
+    } catch (firstError) {
+      debugStage = "fetch /cima-chat retry after parse failure";
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const secondAttempt = await postCimaChatOnce();
+      res = secondAttempt.res;
+      data = secondAttempt.data;
+    }
+
+    debugStage = "validate /cima-chat json";
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Backend response failed.");
+    }
+
+    const backendClarificationQuestions = Array.isArray(data.clarification_questions)
+      ? data.clarification_questions
+      : [];
+
+    const answerTextForClarification = String(data.answer || "").toUpperCase();
+
+    let clarificationQuestions = backendClarificationQuestions;
+
+    if (
+      !clarificationQuestions.length &&
+      window.CimaClarification &&
+      typeof window.CimaClarification.extractQuestionsFromAnswer === "function"
+    ) {
+      clarificationQuestions = window.CimaClarification.extractQuestionsFromAnswer(data.answer || "");
+    }
+
+    if (
+      !isClarificationCompletion &&
+      (
+        data.pending_clarification === true ||
+        answerTextForClarification.includes("CLARIFICATION REQUIRED")
+      ) &&
+      clarificationQuestions.length > 0 &&
+      window.CimaClarification &&
+      typeof window.CimaClarification.start === "function"
+    ) {
+      shouldCommitQuestion = false;
+
+      window.CimaClarification.start(question, context, clarificationQuestions);
+
+      const firstClarificationQuestion =
+        typeof window.CimaClarification.getCurrentQuestion === "function"
+          ? window.CimaClarification.getCurrentQuestion()
+          : clarificationQuestions[0];
+
+      if (replyArea) {
+        replyArea.className = "";
+        replyArea.innerHTML = "";
+      }
 
       addMessage(
         "agent",
-        "CIMA Assistant",
-        latestStandardHtml
+        "Clarification needed",
+        `
+          <p><strong>Original question:</strong></p>
+          <p>${escapeHtml(question)}</p>
+
+          <p><strong>Please answer this clarification question:</strong></p>
+          <p>${escapeHtml(firstClarificationQuestion)}</p>
+        `
       );
-      transcriptEntries.push({
-        at: new Date().toISOString(),
-        question,
-        path: finalPath,
-        rag,
-        hitl,
-        confidence,
-        answer
-      });
-
-      document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
-
-      document.getElementById("deliveryResponseStatus").textContent = "Complete";
-      document.getElementById("deliveryResponseStatus").className = "";
-
-      const humanReviewCheck = document.getElementById("humanReviewCheck");
-      if (humanReviewCheck) {
-        humanReviewCheck.disabled = false;
-      }
 
       input.value = "";
+      input.placeholder = "Answer this clarification question...";
 
-      renderSessionQa();
-      setRightTab("thread");
+      document.getElementById("deliveryResponseStatus").textContent = "Clarification needed";
+      document.getElementById("deliveryResponseStatus").className = "pending";
+
+      document.getElementById("questionCount").textContent = String(questions.length);
+
+      document.getElementById("lastOutput").textContent =
+        "Answer the clarification question shown in the main reply area.";
+
+      return;
     }
+
+    if (!data.answer) {
+      throw new Error(
+        "Backend returned ok:true but no answer field. Response keys: " +
+        Object.keys(data || {}).join(", ")
+      );
+    }
+
+    answer = data.answer;
+    finalPath = data.response_path || data.path || predictedPath;
+    hitl = data.hitl || data.human_in_the_loop || hitl;
+    confidence = data.confidence || confidence;
+    rag = data.rag || data.rag_status || inferRagFromText(answer, finalPath);
+
+    const answerForRagCheck = String(answer || "").toUpperCase();
+    const questionForRagCheck = String(question || "").toUpperCase();
+
+    const isLiveConfirmedRisk =
+      (
+        questionForRagCheck.includes("LIVE") ||
+        questionForRagCheck.includes("CONFIRMED") ||
+        questionForRagCheck.includes("NOW")
+      ) &&
+      (
+        questionForRagCheck.includes("DRONE") ||
+        questionForRagCheck.includes("TERRORIST") ||
+        questionForRagCheck.includes("THREAT")
+      );
+
+    if (isLiveConfirmedRisk) {
+      rag = "RED";
+    } else if (
+      answerForRagCheck.includes("CLARIFICATION REQUIRED") ||
+      questionForRagCheck.includes("UNCONFIRMED")
+    ) {
+      rag = "AMBER";
+    }
+
+    latestSources = data.sources || [];
+  } catch (error) {
+    answer = [
+      "## Backend Connection Error",
+      "",
+      "CIMA did not receive a usable response from /cima-chat.",
+      "",
+      "## Error Detail",
+      "",
+      `- Stage: ${debugStage}`,
+      `- Error name: ${error.name || "Not supplied"}`,
+      `- Error message: ${error.message || "Not supplied"}`,
+      `- Browser page URL: ${window.location.href}`,
+      `- Backend URL: https://cima-7fj2.onrender.com/cima-chat`,
+      `- Payload length: ${JSON.stringify(cimaPayload || {}).length}`,
+      `- Browser online: ${navigator.onLine ? "Yes" : "No"}`,
+      "",
+      "## What This Means",
+      "",
+      "The browser is using the frontend error path. The backend may not have redeployed, the browser may be hitting an old service, or the frontend may not be calling the same /cima-chat route tested successfully in Render Shell.",
+      "",
+      "## Safety Note",
+      "",
+      "CIMA has not generated an operational response for this question."
+    ].join("\n");
+
+    finalPath = "BACKEND CONNECTION ERROR";
+    rag = "AMBER";
+    hitl = "Required";
+    confidence = "Backend response not received";
+
+    latestSources = [
+      {
+        title: "Frontend error",
+        note: error.message
+      }
+    ];
+  } finally {
+    sendButton.disabled = false;
+  }
+
+  if (!shouldCommitQuestion) {
+    return;
+  }
+
+  questions.push(question);
+  document.getElementById("questionCount").textContent = String(questions.length);
+
+  const universalHitlNotice = [
+    "",
+    "## Human in the loop required before reliance",
+    "All CIMA outputs are draft support only. An authorised human lead must review the output before operational use, onward communication, escalation, de-escalation, public statement or record entry."
+  ].join("\n");
+
+  if (!String(answer || "").includes("Human in the loop required before reliance")) {
+    answer = `${answer}${universalHitlNotice}`;
+  }
+
+  latestAnswer = answer;
+
+  const trainingModeBtn = document.getElementById("trainingModeBtn");
+  if (trainingModeBtn) {
+    trainingModeBtn.disabled = false;
+  }
+
+  document.getElementById("pathStatus").textContent = finalPath;
+  document.getElementById("hitlStatus").textContent = hitl;
+  document.getElementById("confidenceStatus").textContent = confidence;
+
+  updateResponseDashboard({
+    path: finalPath,
+    rag,
+    hitl,
+    confidence,
+    answer
+  });
+
+  latestStandardHtml = `
+    ${markdownToHtml(answer)}
+  `;
+
+  document.getElementById("cimaSearchNotice")?.remove();
+
+  addMessage(
+    "agent",
+    "CIMA Assistant",
+    latestStandardHtml
+  );
+
+  transcriptEntries.push({
+    at: new Date().toISOString(),
+    question,
+    path: finalPath,
+    rag,
+    hitl,
+    confidence,
+    answer
+  });
+
+  document.getElementById("lastOutput").textContent = `Answered Q${questions.length} using ${finalPath}.`;
+
+  document.getElementById("deliveryResponseStatus").textContent = "Complete";
+  document.getElementById("deliveryResponseStatus").className = "";
+
+  const humanReviewCheck = document.getElementById("humanReviewCheck");
+  if (humanReviewCheck) {
+    humanReviewCheck.disabled = false;
+  }
+
+  input.value = "";
+  input.placeholder = "Ask CIMA a question...";
+
+  renderSessionQa();
+  setRightTab("thread");
+}
+
+
 
     function renderSessionQa() {
       const list = document.getElementById("sessionQaList");
